@@ -1,4 +1,55 @@
-export default function NewCustomerPage() {
+"use client";
+
+import { useEffect, useState } from "react";
+
+type Customer = {
+  name: string;
+  vatNumber: string;
+  status: "READY" | "NOT_READY";
+  eLocation: string;
+  format: string;
+  isFavorite?: boolean;
+};
+
+export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem("customers") || "[]");
+    setCustomers(saved);
+  }, []);
+
+  const filteredCustomers = customers.filter((customer) => {
+    const query = search.toLowerCase();
+
+    return (
+      customer.name.toLowerCase().includes(query) ||
+      customer.vatNumber.toLowerCase().includes(query) ||
+      customer.eLocation.toLowerCase().includes(query)
+    );
+  });
+
+  function toggleFavorite(vatNumber: string) {
+    const updated = customers.map((customer) =>
+      customer.vatNumber === vatNumber
+        ? { ...customer, isFavorite: !customer.isFavorite }
+        : customer
+    );
+
+    setCustomers(updated);
+    localStorage.setItem("customers", JSON.stringify(updated));
+  }
+
+  function deleteCustomer(vatNumber: string) {
+    const updated = customers.filter(
+      (customer) => customer.vatNumber !== vatNumber
+    );
+
+    setCustomers(updated);
+    localStorage.setItem("customers", JSON.stringify(updated));
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="flex min-h-screen">
@@ -20,76 +71,117 @@ export default function NewCustomerPage() {
         </aside>
 
         <section className="flex-1 p-10">
-          <div className="mb-8">
-            <a href="/customers" className="text-sm text-blue-300 hover:text-blue-200">
-              ← Nazaj na stranke
-            </a>
-
-            <h2 className="mt-4 text-4xl font-bold">Nova stranka</h2>
-
-            <p className="mt-2 text-slate-400">
-              Poiščite podjetje po davčni številki, preverite prejem e-računov in ga shranite v šifrant.
-            </p>
-          </div>
-
-          <div className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <label className="mb-2 block text-sm text-slate-300">
-              Davčna številka
-            </label>
-
-            <div className="flex gap-3">
-              <input
-                className="flex-1 rounded-lg border border-slate-700 bg-slate-800 p-3"
-                placeholder="SI12345678"
-              />
-
-              <button className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500">
-                Poišči v eImeniku
-              </button>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/10 p-5">
-              <div className="text-sm text-green-300">Podjetje najdeno v eImeniku</div>
-
-              <h3 className="mt-2 text-2xl font-bold">ABC d.o.o.</h3>
-
-              <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                <div><span className="text-slate-500">Davčna:</span> SI12345678</div>
-                <div><span className="text-slate-500">Status:</span> Prejema e-račune</div>
-                <div><span className="text-slate-500">eLokacija:</span> C:SI12345678</div>
-                <div><span className="text-slate-500">Format:</span> eSLOG 2.0</div>
-              </div>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <a
-                  href="/customers"
-                  className="rounded-lg bg-green-600 px-6 py-3 text-center font-semibold hover:bg-green-500"
-                >
-                  Shrani v šifrant strank
-                </a>
-
-                <a
-                  href="/customers"
-                  className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-6 py-3 text-center font-semibold text-yellow-200 hover:bg-yellow-500/20"
-                >
-                  ⭐ Shrani kot priljubljeno
-                </a>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
-              <div className="text-sm text-amber-300">Primer opozorila</div>
-
-              <h3 className="mt-2 text-xl font-bold">
-                Podjetje ni pripravljeno za prejem e-računov
-              </h3>
-
-              <p className="mt-3 text-slate-300">
-                Prejemnika nismo našli v omrežju ali trenutno ne sprejema izbranega tipa dokumenta.
-                Predlagamo, da se obrnete na stranko in jo obvestite, da ji želite račun poslati
-                po elektronski in varni poti.
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h2 className="text-4xl font-bold">Stranke</h2>
+              <p className="mt-2 text-slate-400">
+                Iskanje, priljubljene stranke in šifrant kupcev.
               </p>
             </div>
+
+            <a
+              href="/customers/new"
+              className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+            >
+              + Poišči v eImeniku
+            </a>
+          </div>
+
+          <div className="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <label className="mb-2 block text-sm text-slate-400">
+              Išči po nazivu, davčni številki ali eLokaciji
+            </label>
+
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="npr. ABC, SI12345678, C:SI12345678"
+              className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="mb-8 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-6">
+            <h3 className="text-xl font-bold text-blue-100">
+              ⭐ Priljubljene stranke
+            </h3>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {customers.filter((c) => c.isFavorite).length === 0 && (
+                <p className="text-slate-400">Ni še priljubljenih strank.</p>
+              )}
+
+              {customers
+                .filter((customer) => customer.isFavorite)
+                .map((customer) => (
+                  <a
+                    key={customer.vatNumber}
+                    href={`/invoices/new?vat=${customer.vatNumber}`}
+                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 hover:bg-slate-800"
+                  >
+                    <div className="font-bold">{customer.name}</div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      {customer.vatNumber}
+                    </div>
+                    <div className="mt-3 text-sm text-green-300">
+                      ✓ Uporabi na novem računu
+                    </div>
+                  </a>
+                ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900">
+            <div className="grid grid-cols-5 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
+              <div>Naziv</div>
+              <div>Davčna</div>
+              <div>Status</div>
+              <div>eLokacija</div>
+              <div>Akcije</div>
+            </div>
+
+            {filteredCustomers.length === 0 && (
+              <div className="p-6 text-slate-400">
+                Ni zadetkov. Dodaj stranko prek eImenika.
+              </div>
+            )}
+
+            {filteredCustomers.map((customer) => (
+              <div
+                key={customer.vatNumber}
+                className="grid grid-cols-5 items-center border-b border-slate-800 px-6 py-4 last:border-b-0"
+              >
+                <div className="font-medium">{customer.name}</div>
+                <div className="text-slate-300">{customer.vatNumber}</div>
+                <div>
+                  <span className="rounded-full bg-green-500/10 px-3 py-1 text-sm text-green-300">
+                    Prejema e-račune
+                  </span>
+                </div>
+                <div className="text-slate-300">{customer.eLocation}</div>
+                <div className="flex gap-2">
+                  <a
+                    href={`/invoices/new?vat=${customer.vatNumber}`}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500"
+                  >
+                    Račun
+                  </a>
+
+                  <button
+                    onClick={() => toggleFavorite(customer.vatNumber)}
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+                  >
+                    {customer.isFavorite ? "⭐" : "☆"}
+                  </button>
+
+                  <button
+                    onClick={() => deleteCustomer(customer.vatNumber)}
+                    className="rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                  >
+                    Izbriši
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       </div>
