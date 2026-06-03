@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       });
 
     const response = await fetch(loginUrl, {
-      method: "GET",
+      method: "POST",
       cache: "no-store",
     });
 
