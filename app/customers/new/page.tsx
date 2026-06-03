@@ -11,7 +11,8 @@ export default function NewCustomerPage() {
           <nav className="space-y-2">
             <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Dashboard</a>
             <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Inbox</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
+            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
+            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
             <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">➕ Nov račun</a>
             <a href="/customers" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">👥 Stranke</a>
             <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
@@ -27,7 +28,7 @@ export default function NewCustomerPage() {
             <h2 className="mt-4 text-4xl font-bold">Nova stranka</h2>
 
             <p className="mt-2 text-slate-400">
-              Poiščite podjetje po davčni številki in preverite, ali lahko prejema e-račune.
+              Poiščite podjetje po davčni številki, preverite prejem e-računov in ga shranite v šifrant.
             </p>
           </div>
 
@@ -43,7 +44,7 @@ export default function NewCustomerPage() {
               />
 
               <button className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500">
-                Poišči
+                Poišči v eImeniku
               </button>
             </div>
 
@@ -53,23 +54,27 @@ export default function NewCustomerPage() {
               <h3 className="mt-2 text-2xl font-bold">ABC d.o.o.</h3>
 
               <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                <div>
-                  <span className="text-slate-500">Davčna:</span> SI12345678
-                </div>
-                <div>
-                  <span className="text-slate-500">Status:</span> Prejema e-račune
-                </div>
-                <div>
-                  <span className="text-slate-500">eLokacija:</span> C:SI12345678
-                </div>
-                <div>
-                  <span className="text-slate-500">Format:</span> eSLOG 2.0
-                </div>
+                <div><span className="text-slate-500">Davčna:</span> SI12345678</div>
+                <div><span className="text-slate-500">Status:</span> Prejema e-račune</div>
+                <div><span className="text-slate-500">eLokacija:</span> C:SI12345678</div>
+                <div><span className="text-slate-500">Format:</span> eSLOG 2.0</div>
               </div>
 
-              <button className="mt-6 rounded-lg bg-green-600 px-6 py-3 font-semibold hover:bg-green-500">
-                Shrani v šifrant strank
-              </button>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href="/customers"
+                  className="rounded-lg bg-green-600 px-6 py-3 text-center font-semibold hover:bg-green-500"
+                >
+                  Shrani v šifrant strank
+                </a>
+
+                <a
+                  href="/customers"
+                  className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-6 py-3 text-center font-semibold text-yellow-200 hover:bg-yellow-500/20"
+                >
+                  ⭐ Shrani kot priljubljeno
+                </a>
+              </div>
             </div>
 
             <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
@@ -80,7 +85,7 @@ export default function NewCustomerPage() {
               </h3>
 
               <p className="mt-3 text-slate-300">
-                Prejemnika nismo našli v omrežju ali pa trenutno ne sprejema izbranega tipa dokumenta.
+                Prejemnika nismo našli v omrežju ali trenutno ne sprejema izbranega tipa dokumenta.
                 Predlagamo, da se obrnete na stranko in jo obvestite, da ji želite račun poslati
                 po elektronski in varni poti.
               </p>
