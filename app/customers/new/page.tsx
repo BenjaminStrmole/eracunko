@@ -26,81 +26,43 @@ type Suggestion = {
 };
 
 const SUPPORTED_COUNTRY_PREFIXES = [
-  "SI",
-  "HR",
-  "RS",
-  "BA",
-  "BIH",
-  "BE",
-  "IT",
-  "DE",
-  "AT",
-  "HU",
-  "FR",
-  "NL",
-  "CZ",
-  "SK",
-  "PL",
+  "SI", "HR", "RS", "BA", "BIH", "BE", "IT", "DE", "AT", "HU", "FR", "NL", "CZ", "SK", "PL",
 ];
 
 function normalizeSearchValue(value: string) {
   const cleaned = value.trim().toUpperCase().replace(/\s+/g, "");
-
-  if (cleaned.startsWith("BIH")) {
-    return `BA${cleaned.slice(3)}`;
-  }
-
+  if (cleaned.startsWith("BIH")) return `BA${cleaned.slice(3)}`;
   return cleaned;
 }
 
 function looksLikeVat(value: string) {
   const cleaned = normalizeSearchValue(value);
-
-  return SUPPORTED_COUNTRY_PREFIXES.some((prefix) =>
-    cleaned.startsWith(prefix)
-  );
+  return SUPPORTED_COUNTRY_PREFIXES.some((prefix) => cleaned.startsWith(prefix));
 }
 
 function validateVatNumber(value: string) {
   const cleaned = normalizeSearchValue(value);
+  if (!cleaned) return { valid: false, value: cleaned, message: "Vnesi davčno številko ali naziv podjetja." };
 
-  if (!cleaned) {
-    return {
-      valid: false,
-      value: cleaned,
-      message: "Vnesi davčno številko ali naziv podjetja.",
-    };
-  }
-
-  const matchedPrefix = SUPPORTED_COUNTRY_PREFIXES.find((prefix) =>
-    cleaned.startsWith(prefix)
-  );
-
+  const matchedPrefix = SUPPORTED_COUNTRY_PREFIXES.find((prefix) => cleaned.startsWith(prefix));
   if (!matchedPrefix) {
     return {
       valid: false,
       value: cleaned,
-      message:
-        "Za direktno iskanje po davčni mora biti dodana oznaka države, npr. SI66666666. Za iskanje po nazivu vpiši vsaj 3 črke naziva.",
+      message: "Za direktno iskanje po davčni mora biti dodana oznaka države, npr. SI66666666.",
     };
   }
 
   const numberPart = cleaned.slice(matchedPrefix.length);
-
   if (numberPart.length < 2 || !/^[A-Z0-9]+$/.test(numberPart)) {
     return {
       valid: false,
       value: cleaned,
-      message:
-        "Davčna številka ni v pravilni obliki. Začni z oznako države in nato vpiši številko.",
+      message: "Davčna številka ni v pravilni obliki.",
     };
   }
 
-  return {
-    valid: true,
-    value: cleaned,
-    message: "",
-  };
+  return { valid: true, value: cleaned, message: "" };
 }
 
 export default function NewCustomerPage() {
@@ -110,6 +72,7 @@ export default function NewCustomerPage() {
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsFinished, setSuggestionsFinished] = useState(false);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [hasError, setHasError] = useState(false);
@@ -119,11 +82,7 @@ export default function NewCustomerPage() {
 
   useEffect(() => {
     if (!toast) return;
-
-    const timer = setTimeout(() => {
-      setToast("");
-    }, 5000);
-
+    const timer = setTimeout(() => setToast(""), 5000);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -133,16 +92,19 @@ export default function NewCustomerPage() {
     setCustomer(null);
     setMessage("");
     setHasError(false);
+    setSuggestionsFinished(false);
 
     if (value.length < 3 || looksLikeVat(value)) {
       setSuggestions([]);
       setDropdownOpen(false);
+      setSuggestionsLoading(false);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      setSuggestionsLoading(true);
+    setDropdownOpen(true);
+    setSuggestionsLoading(true);
 
+    const timer = setTimeout(async () => {
       try {
         const response = await fetch(
           `/api/bizbox/search-companies?filter=${encodeURIComponent(value)}`
@@ -156,11 +118,11 @@ export default function NewCustomerPage() {
         }
 
         setSuggestions(data.companies || []);
-        setDropdownOpen(true);
       } catch {
         setSuggestions([]);
       } finally {
         setSuggestionsLoading(false);
+        setSuggestionsFinished(true);
       }
     }, 400);
 
@@ -196,11 +158,10 @@ export default function NewCustomerPage() {
       const data = await response.json();
 
       if (!data.success) {
-        setHasError(true);
-
         const errorMessage =
           data.message || "Podjetje ni najdeno ali ne prejema e-računov.";
 
+        setHasError(true);
         setMessage(errorMessage);
         setToast(errorMessage);
         return;
@@ -221,9 +182,10 @@ export default function NewCustomerPage() {
     const value = trimmedQuery;
 
     if (!value) {
+      const errorMessage = "Vnesi davčno številko ali naziv podjetja.";
       setHasError(true);
-      setMessage("Vnesi davčno številko ali naziv podjetja.");
-      setToast("Vnesi davčno številko ali naziv podjetja.");
+      setMessage(errorMessage);
+      setToast(errorMessage);
       return;
     }
 
@@ -243,9 +205,8 @@ export default function NewCustomerPage() {
 
     setDropdownOpen(true);
 
-    if (suggestions.length === 0) {
-      const errorMessage =
-        "Ni predlogov. Poskusi z daljšim nazivom ali davčno številko.";
+    if (!suggestionsLoading && suggestionsFinished && suggestions.length === 0) {
+      const errorMessage = "Ni predlogov. Poskusi z daljšim nazivom ali davčno številko.";
       setMessage(errorMessage);
       setToast(errorMessage);
     }
@@ -254,15 +215,12 @@ export default function NewCustomerPage() {
   async function selectSuggestion(suggestion: Suggestion) {
     setDropdownOpen(false);
     setSuggestions([]);
-    setQuery(suggestion.vatNumber || suggestion.eLocation.replace("C:", ""));
+    setSuggestionsFinished(false);
 
-    if (suggestion.vatNumber) {
-      await searchCustomerByVat(suggestion.vatNumber);
-      return;
-    }
+    const vat = suggestion.vatNumber || suggestion.eLocation.replace("C:", "");
+    setQuery(vat);
 
-    const cleanedFromELocation = suggestion.eLocation.replace("C:", "");
-    await searchCustomerByVat(cleanedFromELocation);
+    await searchCustomerByVat(vat);
   }
 
   function saveCustomer(favorite = false) {
@@ -333,32 +291,37 @@ export default function NewCustomerPage() {
 
             <div className="relative">
               <div className="flex gap-3">
-                <input
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    setHasError(false);
-                    setMessage("");
-                  }}
-                  onFocus={() => {
-                    if (suggestions.length > 0) setDropdownOpen(true);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      handleSearch();
-                    }
+                <div className="relative flex-1">
+                  <input
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setHasError(false);
+                      setMessage("");
+                    }}
+                    onFocus={() => {
+                      if (suggestions.length > 0 || suggestionsLoading) {
+                        setDropdownOpen(true);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") handleSearch();
+                      if (event.key === "Escape") setDropdownOpen(false);
+                    }}
+                    className={`w-full rounded-lg border bg-slate-800 p-3 pr-11 outline-none ${
+                      hasError
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-slate-700 focus:border-blue-500"
+                    }`}
+                    placeholder="SI66666666 ali Petrol, DARS, ZZI ..."
+                  />
 
-                    if (event.key === "Escape") {
-                      setDropdownOpen(false);
-                    }
-                  }}
-                  className={`flex-1 rounded-lg border bg-slate-800 p-3 outline-none ${
-                    hasError
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-slate-700 focus:border-blue-500"
-                  }`}
-                  placeholder="SI66666666 ali Petrol, DARS, ZZI ..."
-                />
+                  {(suggestionsLoading || loading) && (
+                    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-500 border-t-blue-400" />
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={handleSearch}
@@ -372,13 +335,14 @@ export default function NewCustomerPage() {
               {dropdownOpen && (
                 <div className="absolute left-0 right-28 top-14 z-40 overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl">
                   {suggestionsLoading && (
-                    <div className="p-4 text-sm text-slate-400">
-                      Iščem predloge ...
+                    <div className="flex items-center gap-3 px-4 py-4 text-sm text-slate-400">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-500 border-t-blue-400" />
+                      Iščem ustrezna podjetja ...
                     </div>
                   )}
 
-                  {!suggestionsLoading && suggestions.length === 0 && (
-                    <div className="p-4 text-sm text-slate-400">
+                  {!suggestionsLoading && suggestionsFinished && suggestions.length === 0 && (
+                    <div className="px-4 py-4 text-sm text-slate-400">
                       Ni predlogov za ta vnos.
                     </div>
                   )}
@@ -408,7 +372,7 @@ export default function NewCustomerPage() {
               Za direktno iskanje po davčni uporabi oznako države: SI, HR, RS, BA/BIH, BE, IT, DE ...
             </p>
 
-            {message && (
+            {message && !suggestionsLoading && !loading && (
               <div
                 className={`mt-5 rounded-lg border p-4 text-sm ${
                   hasError
