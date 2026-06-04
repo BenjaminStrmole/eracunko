@@ -67,6 +67,14 @@ function buildEnvelopeXml(data: {
 </envelope>`;
 }
 
+function normalizeEAddress(value: string | undefined | null, fallbackTaxId: string) {
+  const cleaned = String(value || "").trim();
+
+  if (cleaned) return cleaned;
+
+  return `${fallbackTaxId}.HQ`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!BASE_URL) {
@@ -112,26 +120,29 @@ export async function POST(request: NextRequest) {
 
     const xmlFileName = `${invoiceNumber}.xml`;
 
+    const sender = {
+      name: "ZZI T2",
+      taxId: "SI66666666",
+      eAddress: "SI66666666.HQ",
+      eLocation: "C:SI66666666",
+      address: "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE",
+    };
+
     const envelopeXml = buildEnvelopeXml({
       invoiceNumber,
       xmlFileName,
-      from: {
-        name: "eRačunko Demo d.o.o.",
-        taxId: "SI85190586",
-        eAddress: "SI85190586.HQ",
-        eLocation: "C:SI85190586",
-        address: "Demo ulica 1, 1000 Ljubljana",
-      },
+      from: sender,
       to: {
         name: buyer.name,
         taxId: buyer.vat,
-        eAddress: buyer.eAddress || `${buyer.vat}.HQ`,
+        eAddress: normalizeEAddress(buyer.eAddress, buyer.vat),
         eLocation: buyer.eLocation,
         address: buyer.address || "",
       },
     });
 
     const zip = new JSZip();
+
     zip.file("envelope.xml", envelopeXml);
     zip.file(xmlFileName, xml);
 
@@ -172,6 +183,7 @@ export async function POST(request: NextRequest) {
           success: false,
           message: "Pošiljanje v bizBox DEMO ni uspelo.",
           raw,
+          envelopeXml,
           debugUrl: url.replace(guid, "***"),
         },
         { status: 400 }
@@ -182,6 +194,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Dokument uspešno poslan v bizBox DEMO.",
       docId: text,
+      envelopeXml,
     });
   } catch (error: any) {
     return NextResponse.json(
