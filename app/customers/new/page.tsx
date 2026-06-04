@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Customer = {
   name: string;
@@ -17,6 +17,12 @@ type Customer = {
   receiverChannel?: string;
   format: string;
   isFavorite?: boolean;
+};
+
+type Suggestion = {
+  name: string;
+  vatNumber: string;
+  eLocation: string;
 };
 
 const SUPPORTED_COUNTRY_PREFIXES = [
@@ -37,7 +43,7 @@ const SUPPORTED_COUNTRY_PREFIXES = [
   "PL",
 ];
 
-function normalizeVatNumber(value: string) {
+function normalizeSearchValue(value: string) {
   const cleaned = value.trim().toUpperCase().replace(/\s+/g, "");
 
   if (cleaned.startsWith("BIH")) {
@@ -47,14 +53,22 @@ function normalizeVatNumber(value: string) {
   return cleaned;
 }
 
+function looksLikeVat(value: string) {
+  const cleaned = normalizeSearchValue(value);
+
+  return SUPPORTED_COUNTRY_PREFIXES.some((prefix) =>
+    cleaned.startsWith(prefix)
+  );
+}
+
 function validateVatNumber(value: string) {
-  const cleaned = normalizeVatNumber(value);
+  const cleaned = normalizeSearchValue(value);
 
   if (!cleaned) {
     return {
       valid: false,
       value: cleaned,
-      message: "Vnesi davčno številko prejemnika.",
+      message: "Vnesi davčno številko ali naziv podjetja.",
     };
   }
 
@@ -67,7 +81,7 @@ function validateVatNumber(value: string) {
       valid: false,
       value: cleaned,
       message:
-        "Davčna številka mora vsebovati predpono države, npr. SI66666666, HR12345678901, BE0123456789, RS123456789, BA123456789, IT12345678901.",
+        "Za direktno iskanje po davčni mora biti dodana oznaka države, npr. SI66666666. Za iskanje po nazivu vpiši vsaj 3 črke naziva.",
     };
   }
 
@@ -90,13 +104,18 @@ function validateVatNumber(value: string) {
 }
 
 export default function NewCustomerPage() {
-  const [vatNumber, setVatNumber] = useState("");
+  const [query, setQuery] = useState("");
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [hasError, setHasError] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const trimmedQuery = useMemo(() => query.trim(), [query]);
 
   useEffect(() => {
     if (!toast) return;
@@ -108,14 +127,48 @@ export default function NewCustomerPage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  async function searchCustomer() {
-    setSearched(true);
+  useEffect(() => {
+    const value = trimmedQuery;
+
     setCustomer(null);
     setMessage("");
-    setToast("");
     setHasError(false);
 
-    const validation = validateVatNumber(vatNumber);
+    if (value.length < 3 || looksLikeVat(value)) {
+      setSuggestions([]);
+      setDropdownOpen(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSuggestionsLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/bizbox/search-companies?filter=${encodeURIComponent(value)}`
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+          setSuggestions([]);
+          return;
+        }
+
+        setSuggestions(data.companies || []);
+        setDropdownOpen(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [trimmedQuery]);
+
+  async function searchCustomerByVat(vatValue: string) {
+    const validation = validateVatNumber(vatValue);
 
     if (!validation.valid) {
       setHasError(true);
@@ -126,7 +179,13 @@ export default function NewCustomerPage() {
 
     const cleanVat = validation.value;
 
-    setVatNumber(cleanVat);
+    setQuery(cleanVat);
+    setSearched(true);
+    setCustomer(null);
+    setMessage("");
+    setToast("");
+    setHasError(false);
+    setDropdownOpen(false);
     setLoading(true);
 
     try {
@@ -138,14 +197,6 @@ export default function NewCustomerPage() {
 
       if (!data.success) {
         setHasError(true);
-
-        setCustomer({
-          name: cleanVat,
-          vatNumber: cleanVat,
-          status: "NOT_READY",
-          eLocation: `C:${cleanVat}`,
-          format: "eSLOG 2.0",
-        });
 
         const errorMessage =
           data.message || "Podjetje ni najdeno ali ne prejema e-računov.";
@@ -164,6 +215,54 @@ export default function NewCustomerPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSearch() {
+    const value = trimmedQuery;
+
+    if (!value) {
+      setHasError(true);
+      setMessage("Vnesi davčno številko ali naziv podjetja.");
+      setToast("Vnesi davčno številko ali naziv podjetja.");
+      return;
+    }
+
+    if (looksLikeVat(value)) {
+      await searchCustomerByVat(value);
+      return;
+    }
+
+    if (value.length < 3) {
+      const errorMessage =
+        "Za iskanje po nazivu vpiši vsaj 3 znake ali vpiši davčno z oznako države.";
+      setHasError(true);
+      setMessage(errorMessage);
+      setToast(errorMessage);
+      return;
+    }
+
+    setDropdownOpen(true);
+
+    if (suggestions.length === 0) {
+      const errorMessage =
+        "Ni predlogov. Poskusi z daljšim nazivom ali davčno številko.";
+      setMessage(errorMessage);
+      setToast(errorMessage);
+    }
+  }
+
+  async function selectSuggestion(suggestion: Suggestion) {
+    setDropdownOpen(false);
+    setSuggestions([]);
+    setQuery(suggestion.vatNumber || suggestion.eLocation.replace("C:", ""));
+
+    if (suggestion.vatNumber) {
+      await searchCustomerByVat(suggestion.vatNumber);
+      return;
+    }
+
+    const cleanedFromELocation = suggestion.eLocation.replace("C:", "");
+    await searchCustomerByVat(cleanedFromELocation);
   }
 
   function saveCustomer(favorite = false) {
@@ -223,47 +322,90 @@ export default function NewCustomerPage() {
             <h2 className="mt-4 text-4xl font-bold">Poišči stranko v eImeniku</h2>
 
             <p className="mt-2 text-slate-400">
-              Vpiši davčno številko prejemnika z oznako države in preveri, ali prejema e-račune.
+              Vpiši davčno številko ali začni tipkati naziv podjetja. Predlogi se prikažejo samodejno.
             </p>
           </div>
 
-          <div className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="max-w-4xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
             <label className="mb-2 block text-sm text-slate-300">
-              Davčna številka prejemnika
+              Davčna številka ali naziv podjetja
             </label>
 
-            <div className="flex gap-3">
-              <input
-                value={vatNumber}
-                onChange={(event) => {
-                  setVatNumber(event.target.value);
-                  setHasError(false);
-                  setMessage("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    searchCustomer();
-                  }
-                }}
-                className={`flex-1 rounded-lg border bg-slate-800 p-3 outline-none ${
-                  hasError
-                    ? "border-red-500 focus:border-red-500"
-                    : "border-slate-700 focus:border-blue-500"
-                }`}
-                placeholder="SI66666666, HR12345678901, BE0123456789 ..."
-              />
+            <div className="relative">
+              <div className="flex gap-3">
+                <input
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setHasError(false);
+                    setMessage("");
+                  }}
+                  onFocus={() => {
+                    if (suggestions.length > 0) setDropdownOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      handleSearch();
+                    }
 
-              <button
-                onClick={searchCustomer}
-                disabled={loading}
-                className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
-              >
-                {loading ? "Iščem..." : "Poišči v eImeniku"}
-              </button>
+                    if (event.key === "Escape") {
+                      setDropdownOpen(false);
+                    }
+                  }}
+                  className={`flex-1 rounded-lg border bg-slate-800 p-3 outline-none ${
+                    hasError
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-700 focus:border-blue-500"
+                  }`}
+                  placeholder="SI66666666 ali Petrol, DARS, ZZI ..."
+                />
+
+                <button
+                  onClick={handleSearch}
+                  disabled={loading}
+                  className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
+                >
+                  {loading ? "Iščem..." : "Išči"}
+                </button>
+              </div>
+
+              {dropdownOpen && (
+                <div className="absolute left-0 right-28 top-14 z-40 overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl">
+                  {suggestionsLoading && (
+                    <div className="p-4 text-sm text-slate-400">
+                      Iščem predloge ...
+                    </div>
+                  )}
+
+                  {!suggestionsLoading && suggestions.length === 0 && (
+                    <div className="p-4 text-sm text-slate-400">
+                      Ni predlogov za ta vnos.
+                    </div>
+                  )}
+
+                  {!suggestionsLoading &&
+                    suggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.eLocation}-${suggestion.name}`}
+                        onClick={() => selectSuggestion(suggestion)}
+                        className="block w-full border-b border-slate-800 px-4 py-4 text-left last:border-b-0 hover:bg-slate-800"
+                      >
+                        <div className="font-semibold text-white">
+                          {suggestion.name || "Brez naziva"}
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-400">
+                          <span>{suggestion.vatNumber || "-"}</span>
+                          <span>{suggestion.eLocation || "-"}</span>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
 
             <p className="mt-2 text-xs text-slate-500">
-              Obvezno vpiši oznako države: SI, HR, RS, BA/BIH, BE, IT, DE ...
+              Za direktno iskanje po davčni uporabi oznako države: SI, HR, RS, BA/BIH, BE, IT, DE ...
             </p>
 
             {message && (
