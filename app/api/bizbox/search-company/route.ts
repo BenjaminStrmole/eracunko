@@ -190,6 +190,16 @@ export async function GET(request: NextRequest) {
     try {
       raw = JSON.parse(text);
     } catch {}
+if (!text || !text.trim()) {
+  return NextResponse.json({
+    success: false,
+    status: "NOT_READY",
+    message:
+      "API ni vrnil podatkov o prejemniku. Prejemnik morda obstaja v javnem eImeniku, vendar ta klic ne vrača podrobnosti.",
+    raw,
+    debugUrl: url.replace(guid, "***"),
+  });
+}
 
     if (!response.ok) {
       return NextResponse.json({
