@@ -192,7 +192,13 @@ ${linesXml}
 
 export default function InvoiceXmlPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{
+    success: boolean;
+    message: string;
+    docId?: string;
+    raw?: any;
+  } | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("eracunko_current_invoice");
@@ -209,6 +215,71 @@ export default function InvoiceXmlPage() {
     if (!invoice) return "";
     return generateEslogXml(invoice);
   }, [invoice]);
+
+  async function sendToBizBox() {
+    if (!invoice || !xml) return;
+
+    setSending(true);
+    setSendResult(null);
+
+    try {
+      const response = await fetch("/api/bizbox/send-invoice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          invoiceNumber: invoice.number,
+          xml,
+          buyer: invoice.buyer,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setSendResult({
+          success: false,
+          message: data.message || "Pošiljanje ni uspelo.",
+          raw: data.raw,
+        });
+        return;
+      }
+
+      const sentInvoice = {
+        ...invoice,
+        docId: data.docId,
+        status: "SENT",
+        sentAt: new Date().toISOString(),
+      };
+
+      const existingSent = JSON.parse(localStorage.getItem("sent") || "[]");
+      const filteredSent = existingSent.filter(
+        (item: any) => item.number !== invoice.number
+      );
+
+      localStorage.setItem("sent", JSON.stringify([...filteredSent, sentInvoice]));
+      localStorage.setItem(
+        "eracunko_current_invoice",
+        JSON.stringify(sentInvoice)
+      );
+
+      setInvoice(sentInvoice as Invoice);
+
+      setSendResult({
+        success: true,
+        message: data.message || "Dokument uspešno poslan.",
+        docId: data.docId,
+      });
+    } catch (error: any) {
+      setSendResult({
+        success: false,
+        message: error.message || "Napaka pri pošiljanju.",
+      });
+    } finally {
+      setSending(false);
+    }
+  }
 
   if (!invoice) {
     return (
@@ -265,22 +336,45 @@ export default function InvoiceXmlPage() {
             </button>
 
             <button
-              onClick={() => setSent(true)}
-              className="rounded-lg border border-white/15 px-6 py-3 font-semibold hover:bg-white/10"
+              onClick={sendToBizBox}
+              disabled={sending}
+              className="rounded-lg border border-white/15 px-6 py-3 font-semibold hover:bg-white/10 disabled:opacity-60"
             >
-              Pošlji v bizBox DEMO
+              {sending ? "Pošiljam..." : "Pošlji v bizBox DEMO"}
             </button>
           </div>
 
-          {sent && (
-            <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
-              <div className="font-semibold text-amber-300">
-                XML je pripravljen, pošiljanje API-ja še ni povezano.
+          {sendResult && (
+            <div
+              className={`mt-6 rounded-2xl border p-5 ${
+                sendResult.success
+                  ? "border-green-500/20 bg-green-500/10"
+                  : "border-red-500/20 bg-red-500/10"
+              }`}
+            >
+              <div
+                className={`font-semibold ${
+                  sendResult.success ? "text-green-300" : "text-red-300"
+                }`}
+              >
+                {sendResult.success ? "✓ " : "✕ "}
+                {sendResult.message}
               </div>
 
-              <div className="mt-3 text-slate-300">
-                Naslednji korak: povezava gumba na POST /documents ali /documents/json.
-              </div>
+              {sendResult.docId && (
+                <div className="mt-3 text-slate-300">
+                  Številka dokumenta:
+                  <span className="font-bold"> {sendResult.docId}</span>
+                </div>
+              )}
+
+              {!sendResult.success && sendResult.raw && (
+                <pre className="mt-4 overflow-auto rounded-xl bg-slate-950 p-4 text-sm text-red-100">
+                  {typeof sendResult.raw === "string"
+                    ? sendResult.raw
+                    : JSON.stringify(sendResult.raw, null, 2)}
+                </pre>
+              )}
             </div>
           )}
         </section>
