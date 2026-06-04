@@ -20,6 +20,14 @@ type Customer = {
   isFavorite?: boolean;
 };
 
+type DraftInvoice = Invoice & {
+  id: number;
+  createdAt: string;
+  paymentMethod?: string;
+  bankAccount?: string;
+  reference?: string;
+};
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -40,11 +48,30 @@ function formatAddress(customer: Customer) {
     .join(", ");
 }
 
+function generateInvoiceNumber() {
+  const year = new Date().getFullYear();
+  const saved = JSON.parse(localStorage.getItem("invoices") || "[]");
+  const drafts = JSON.parse(localStorage.getItem("drafts") || "[]");
+  const all = [...saved, ...drafts];
+
+  const sameYear = all.filter((invoice: any) =>
+    String(invoice.number || "").startsWith(`${year}-`)
+  );
+
+  const nextNumber = sameYear.length + 1;
+
+  return `${year}-${String(nextNumber).padStart(3, "0")}`;
+}
+
 export default function NewInvoicePage() {
-  const [invoiceNumber, setInvoiceNumber] = useState("2026-001");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(today());
   const [serviceDate, setServiceDate] = useState(today());
   const [dueDate, setDueDate] = useState(addDays(15));
+
+  const [paymentMethod, setPaymentMethod] = useState("TRR");
+  const [bankAccount, setBankAccount] = useState("SI56 0000 0000 0000 000");
+  const [reference, setReference] = useState("");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [buyer, setBuyer] = useState<Customer | null>(null);
@@ -62,6 +89,11 @@ export default function NewInvoicePage() {
   ]);
 
   useEffect(() => {
+    const number = generateInvoiceNumber();
+
+    setInvoiceNumber(number);
+    setReference(`SI00-${number.replace("-", "")}`);
+
     const savedCustomers: Customer[] = JSON.parse(
       localStorage.getItem("customers") || "[]"
     );
@@ -89,6 +121,11 @@ export default function NewInvoicePage() {
     const timer = setTimeout(() => setToast(""), 5000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!invoiceNumber) return;
+    setReference(`SI00-${invoiceNumber.replace("-", "")}`);
+  }, [invoiceNumber]);
 
   const favoriteCustomers = customers.filter((customer) => customer.isFavorite);
 
@@ -163,23 +200,12 @@ export default function NewInvoicePage() {
     setBuyerSearch(customer.name);
   }
 
-  function saveAndPreview() {
+  function buildInvoice(): Invoice {
     if (!buyer) {
-      setToast("Najprej izberi kupca iz šifranta strank.");
-      return;
+      throw new Error("Najprej izberi kupca iz šifranta strank.");
     }
 
-    if (!invoiceNumber.trim()) {
-      setToast("Vnesi številko računa.");
-      return;
-    }
-
-    if (lines.length === 0 || lines.some((line) => !line.description.trim())) {
-      setToast("Vsaka postavka mora imeti opis.");
-      return;
-    }
-
-    const invoice: Invoice = {
+    return {
       number: invoiceNumber,
       issueDate,
       serviceDate,
@@ -194,6 +220,64 @@ export default function NewInvoicePage() {
       lines,
       totals,
     };
+  }
+
+  function validateInvoice() {
+    if (!buyer) return "Najprej izberi kupca iz šifranta strank.";
+    if (!invoiceNumber.trim()) return "Vnesi številko računa.";
+    if (!bankAccount.trim()) return "Vnesi TRR.";
+    if (!reference.trim()) return "Vnesi referenco.";
+    if (lines.length === 0 || lines.some((line) => !line.description.trim())) {
+      return "Vsaka postavka mora imeti opis.";
+    }
+
+    return "";
+  }
+
+  function saveDraft() {
+    const error = validateInvoice();
+
+    if (error) {
+      setToast(error);
+      return;
+    }
+
+    const invoice = buildInvoice();
+
+    const draft: DraftInvoice = {
+      ...invoice,
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
+      paymentMethod,
+      bankAccount,
+      reference,
+    };
+
+    const existingDrafts = JSON.parse(localStorage.getItem("drafts") || "[]");
+
+    const filteredDrafts = existingDrafts.filter(
+      (item: DraftInvoice) => item.number !== draft.number
+    );
+
+    localStorage.setItem("drafts", JSON.stringify([...filteredDrafts, draft]));
+
+    setToast("Osnutek je shranjen.");
+  }
+
+  function saveAndPreview() {
+    const error = validateInvoice();
+
+    if (error) {
+      setToast(error);
+      return;
+    }
+
+    const invoice = {
+      ...buildInvoice(),
+      paymentMethod,
+      bankAccount,
+      reference,
+    };
 
     localStorage.setItem("eracunko_current_invoice", JSON.stringify(invoice));
     window.location.href = "/invoices/preview";
@@ -202,8 +286,8 @@ export default function NewInvoicePage() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       {toast && (
-        <div className="fixed right-5 top-5 z-50 max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200 shadow-xl backdrop-blur">
-          ❌ {toast}
+        <div className="fixed right-5 top-5 z-50 max-w-md rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-4 text-sm text-blue-100 shadow-xl backdrop-blur">
+          ℹ️ {toast}
         </div>
       )}
 
@@ -229,7 +313,7 @@ export default function NewInvoicePage() {
           <div className="mb-8">
             <h2 className="text-4xl font-bold">Nov e-račun</h2>
             <p className="mt-2 text-slate-400">
-              Izberi kupca iz eImenika, dodaj postavke in pripravi račun za predogled.
+              Izberi kupca, dodaj postavke, plačilne podatke in pripravi račun.
             </p>
           </div>
 
@@ -239,7 +323,7 @@ export default function NewInvoicePage() {
                 <div
                   key={step}
                   className={`rounded-xl border p-4 ${
-                    index <= 1
+                    index <= 2
                       ? "border-blue-500 bg-blue-500/10 text-blue-200"
                       : "border-slate-800 bg-slate-900 text-slate-400"
                   }`}
@@ -257,9 +341,7 @@ export default function NewInvoicePage() {
 
               <div className="mt-6 grid gap-4 md:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Številka
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Številka</label>
                   <input
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
@@ -268,9 +350,7 @@ export default function NewInvoicePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Datum izdaje
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Datum izdaje</label>
                   <input
                     type="date"
                     value={issueDate}
@@ -280,9 +360,7 @@ export default function NewInvoicePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Datum storitve
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Datum storitve</label>
                   <input
                     type="date"
                     value={serviceDate}
@@ -292,9 +370,7 @@ export default function NewInvoicePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Rok plačila
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Rok plačila</label>
                   <input
                     type="date"
                     value={dueDate}
@@ -323,9 +399,7 @@ export default function NewInvoicePage() {
 
                 {favoriteCustomers.length > 0 && (
                   <div className="mt-6 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                    <h4 className="text-lg font-bold text-blue-100">
-                      ⭐ Priljubljene stranke
-                    </h4>
+                    <h4 className="text-lg font-bold text-blue-100">⭐ Priljubljene stranke</h4>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {favoriteCustomers.map((customer) => (
@@ -339,12 +413,8 @@ export default function NewInvoicePage() {
                           }`}
                         >
                           <div className="font-bold">{customer.name}</div>
-                          <div className="mt-1 text-sm text-slate-400">
-                            {customer.vatNumber}
-                          </div>
-                          <div className="mt-2 text-sm text-green-300">
-                            ✓ Prejema e-račune
-                          </div>
+                          <div className="mt-1 text-sm text-slate-400">{customer.vatNumber}</div>
+                          <div className="mt-2 text-sm text-green-300">✓ Prejema e-račune</div>
                         </button>
                       ))}
                     </div>
@@ -402,46 +472,62 @@ export default function NewInvoicePage() {
 
                 {buyer && (
                   <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/10 p-5">
-                    <div className="text-sm text-green-300">
-                      Izbrani prejemnik
-                    </div>
-
+                    <div className="text-sm text-green-300">✓ Izbrana stranka</div>
                     <h4 className="mt-2 text-xl font-bold">{buyer.name}</h4>
 
                     <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                      <div>
-                        <span className="text-slate-500">Davčna:</span>{" "}
-                        {buyer.vatNumber}
-                      </div>
-                      <div>
-                        <span className="text-slate-500">eLokacija:</span>{" "}
-                        {buyer.eLocation}
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Naslov:</span>{" "}
-                        {buyer.address || "-"}
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Mesto:</span>{" "}
-                        {buyer.city || "-"}
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Država:</span>{" "}
-                        {buyer.country || "-"}
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Omrežje:</span>{" "}
-                        {buyer.network || "-"}
-                      </div>
+                      <div><span className="text-slate-500">Davčna:</span> {buyer.vatNumber}</div>
+                      <div><span className="text-slate-500">eLokacija:</span> {buyer.eLocation}</div>
+                      <div><span className="text-slate-500">Naslov:</span> {buyer.address || "-"}</div>
+                      <div><span className="text-slate-500">Mesto:</span> {buyer.city || "-"}</div>
+                      <div><span className="text-slate-500">Država:</span> {buyer.country || "-"}</div>
+                      <div><span className="text-slate-500">Omrežje:</span> {buyer.network || "-"}</div>
                     </div>
                   </div>
                 )}
               </div>
 
               <div className="mt-10 border-t border-slate-800 pt-8">
+                <h3 className="text-2xl font-bold">3. Plačilni podatki</h3>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Način plačila</label>
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
+                    >
+                      <option value="TRR">TRR</option>
+                      <option value="SEPA">SEPA</option>
+                      <option value="Gotovina">Gotovina</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">TRR</label>
+                    <input
+                      value={bankAccount}
+                      onChange={(e) => setBankAccount(e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Referenca</label>
+                    <input
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10 border-t border-slate-800 pt-8">
                 <div className="mb-5 flex items-center justify-between">
                   <div>
-                    <h3 className="text-2xl font-bold">3. Postavke računa</h3>
+                    <h3 className="text-2xl font-bold">4. Postavke računa</h3>
                     <p className="mt-2 text-slate-400">
                       Dodajte eno ali več postavk. Zneski se izračunajo samodejno.
                     </p>
@@ -462,14 +548,9 @@ export default function NewInvoicePage() {
                     const lineGross = lineNet + lineVat;
 
                     return (
-                      <div
-                        key={line.id}
-                        className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
-                      >
+                      <div key={line.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
                         <div className="mb-4 flex items-center justify-between">
-                          <div className="font-semibold">
-                            Postavka {index + 1}
-                          </div>
+                          <div className="font-semibold">Postavka {index + 1}</div>
 
                           {lines.length > 1 && (
                             <button
@@ -483,56 +564,40 @@ export default function NewInvoicePage() {
 
                         <div className="grid gap-4 md:grid-cols-4">
                           <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm text-slate-300">
-                              Opis
-                            </label>
+                            <label className="mb-2 block text-sm text-slate-300">Opis</label>
                             <input
                               value={line.description}
-                              onChange={(e) =>
-                                updateLine(line.id, "description", e.target.value)
-                              }
+                              onChange={(e) => updateLine(line.id, "description", e.target.value)}
                               className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                               placeholder="Opis storitve ali artikla"
                             />
                           </div>
 
                           <div>
-                            <label className="mb-2 block text-sm text-slate-300">
-                              Količina
-                            </label>
+                            <label className="mb-2 block text-sm text-slate-300">Količina</label>
                             <input
                               type="number"
                               value={line.quantity}
-                              onChange={(e) =>
-                                updateLine(line.id, "quantity", e.target.value)
-                              }
+                              onChange={(e) => updateLine(line.id, "quantity", e.target.value)}
                               className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                             />
                           </div>
 
                           <div>
-                            <label className="mb-2 block text-sm text-slate-300">
-                              Cena brez DDV
-                            </label>
+                            <label className="mb-2 block text-sm text-slate-300">Cena brez DDV</label>
                             <input
                               type="number"
                               value={line.price}
-                              onChange={(e) =>
-                                updateLine(line.id, "price", e.target.value)
-                              }
+                              onChange={(e) => updateLine(line.id, "price", e.target.value)}
                               className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                             />
                           </div>
 
                           <div>
-                            <label className="mb-2 block text-sm text-slate-300">
-                              DDV %
-                            </label>
+                            <label className="mb-2 block text-sm text-slate-300">DDV %</label>
                             <select
                               value={line.vatRate}
-                              onChange={(e) =>
-                                updateLine(line.id, "vatRate", e.target.value)
-                              }
+                              onChange={(e) => updateLine(line.id, "vatRate", e.target.value)}
                               className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                             >
                               <option value={22}>22 %</option>
@@ -562,12 +627,21 @@ export default function NewInvoicePage() {
                   Prekliči
                 </a>
 
-                <button
-                  onClick={saveAndPreview}
-                  className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
-                >
-                  Nadaljuj na predogled
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={saveDraft}
+                    className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-6 py-3 font-semibold text-blue-200 hover:bg-blue-500/20"
+                  >
+                    💾 Shrani osnutek
+                  </button>
+
+                  <button
+                    onClick={saveAndPreview}
+                    className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+                  >
+                    Nadaljuj na predogled
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -577,12 +651,25 @@ export default function NewInvoicePage() {
               <div className="mt-6 space-y-4 text-sm">
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-400">Kupec</span>
-                  <span className="text-right">
-                    {buyer?.name || "Ni izbran"}
-                  </span>
+                  <span className="text-right">{buyer?.name || "Ni izbran"}</span>
                 </div>
 
                 <div className="flex justify-between">
+                  <span className="text-slate-400">Številka</span>
+                  <span>{invoiceNumber || "-"}</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Plačilo</span>
+                  <span>{paymentMethod}</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Referenca</span>
+                  <span>{reference || "-"}</span>
+                </div>
+
+                <div className="flex justify-between border-t border-slate-800 pt-4">
                   <span className="text-slate-400">Osnova</span>
                   <span>{formatMoney(totals.net)}</span>
                 </div>
@@ -603,7 +690,7 @@ export default function NewInvoicePage() {
               </div>
 
               <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-200">
-                eSLOG XML bo v naslednjem koraku ustvarjen iz teh podatkov.
+                Osnutek lahko shraniš ali nadaljuješ na predogled.
               </div>
             </aside>
           </div>
