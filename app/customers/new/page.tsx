@@ -7,6 +7,12 @@ type Customer = {
   vatNumber: string;
   status: "READY" | "NOT_READY";
   eLocation: string;
+  eAddress?: string;
+  eAddress1?: string;
+  address?: string;
+  postCode?: string;
+  city?: string;
+  country?: string;
   format: string;
   isFavorite?: boolean;
 };
@@ -160,6 +166,12 @@ export default function NewCustomerPage() {
                   <div><span className="text-slate-500">Status:</span> Prejema e-račune</div>
                   <div><span className="text-slate-500">eLokacija:</span> {customer.eLocation}</div>
                   <div><span className="text-slate-500">Format:</span> {customer.format}</div>
+                  <div><span className="text-slate-500">eAddress:</span> {customer.eAddress || "-"}</div>
+                  <div><span className="text-slate-500">eAddress1:</span> {customer.eAddress1 || "-"}</div>
+                  <div><span className="text-slate-500">Naslov:</span> {customer.address || "-"}</div>
+                  <div><span className="text-slate-500">Poštna številka:</span> {customer.postCode || "-"}</div>
+                  <div><span className="text-slate-500">Mesto:</span> {customer.city || "-"}</div>
+                  <div><span className="text-slate-500">Država:</span> {customer.country || "-"}</div>
                 </div>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row">

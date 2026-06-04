@@ -92,13 +92,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       status: "READY",
-      customer: {
+        customer: {
         name,
         vatNumber: cleanVat,
         status: "READY",
-        eLocation: `C:${cleanVat}`,
+        eLocation: raw?.elocation || `C:${cleanVat}`,
+        eAddress: raw?.eaddress || "",
+        eAddress1: raw?.eaddress1 || "",
+        address: raw?.physicalAddress?.address || "",
+        postCode: raw?.physicalAddress?.poCode || "",
+        city: raw?.physicalAddress?.po || "",
+        country: raw?.physicalAddress?.country || "",
         format: "eSLOG 2.0",
-      },
+        },
       raw,
       debugUrl: url.replace(guid, "***"),
     });
