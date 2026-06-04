@@ -47,14 +47,13 @@ export async function GET(request: NextRequest) {
 
     const cleanVat = vatNumber.trim().toUpperCase();
 
-    const url =
-      `${BASE_URL}/elocations/ext?` +
-      new URLSearchParams({
-        guid,
-        eLocationId: `C:${cleanVat}`,
-        taxIdFrom: TAX_ID_FROM,
-        dotName: "INVOIC",
-      });
+    const params = new URLSearchParams();
+    params.set("guid", guid);
+    params.set("eLocationId", `C:${cleanVat}`);
+    params.set("taxIdFrom", TAX_ID_FROM);
+    params.set("dotName", "INVOIC");
+
+    const url = `${BASE_URL}/elocations/ext?${params.toString()}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -75,6 +74,7 @@ export async function GET(request: NextRequest) {
         status: "NOT_READY",
         message: "Podjetje ni najdeno ali ne prejema e-računov.",
         raw,
+        debugUrl: url.replace(guid, "***"),
       });
     }
 
@@ -100,10 +100,14 @@ export async function GET(request: NextRequest) {
         format: "eSLOG 2.0",
       },
       raw,
+      debugUrl: url.replace(guid, "***"),
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: error.message || "Napaka pri eImenik klicu." },
+      {
+        success: false,
+        message: error.message || "Napaka pri eImenik klicu.",
+      },
       { status: 500 }
     );
   }
