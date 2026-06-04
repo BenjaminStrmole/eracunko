@@ -1,13 +1,55 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { InvoiceLine, Invoice } from "../../../types/invoice";
+
+type Customer = {
+  name: string;
+  vatNumber: string;
+  status: "READY" | "NOT_READY";
+  eLocation: string;
+  eAddress?: string;
+  eAddress1?: string;
+  address?: string;
+  postCode?: string;
+  city?: string;
+  country?: string;
+  network?: string;
+  receiverChannel?: string;
+  format: string;
+  isFavorite?: boolean;
+};
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatAddress(customer: Customer) {
+  return [
+    customer.address,
+    [customer.postCode, customer.city].filter(Boolean).join(" "),
+    customer.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
 
 export default function NewInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState("2026-001");
-  const [issueDate, setIssueDate] = useState("2026-06-03");
-  const [serviceDate, setServiceDate] = useState("2026-06-03");
-  const [dueDate, setDueDate] = useState("2026-06-18");
+  const [issueDate, setIssueDate] = useState(today());
+  const [serviceDate, setServiceDate] = useState(today());
+  const [dueDate, setDueDate] = useState(addDays(15));
+
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [buyer, setBuyer] = useState<Customer | null>(null);
+  const [buyerSearch, setBuyerSearch] = useState("");
+  const [toast, setToast] = useState("");
 
   const [lines, setLines] = useState<InvoiceLine[]>([
     {
@@ -19,8 +61,52 @@ export default function NewInvoicePage() {
     },
   ]);
 
+  useEffect(() => {
+    const savedCustomers: Customer[] = JSON.parse(
+      localStorage.getItem("customers") || "[]"
+    );
+
+    setCustomers(savedCustomers);
+
+    const params = new URLSearchParams(window.location.search);
+    const vat = params.get("vat");
+
+    if (vat) {
+      const selected = savedCustomers.find(
+        (customer) => customer.vatNumber === vat
+      );
+
+      if (selected) {
+        setBuyer(selected);
+        setBuyerSearch(selected.name);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timer = setTimeout(() => setToast(""), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const favoriteCustomers = customers.filter((customer) => customer.isFavorite);
+
+  const filteredCustomers = customers.filter((customer) => {
+    const query = buyerSearch.toLowerCase();
+
+    if (!query) return true;
+
+    return (
+      customer.name.toLowerCase().includes(query) ||
+      customer.vatNumber.toLowerCase().includes(query) ||
+      customer.eLocation.toLowerCase().includes(query)
+    );
+  });
+
   const totals = useMemo(() => {
     const net = lines.reduce((sum, line) => sum + line.quantity * line.price, 0);
+
     const vat = lines.reduce(
       (sum, line) => sum + line.quantity * line.price * (line.vatRate / 100),
       0
@@ -72,7 +158,27 @@ export default function NewInvoicePage() {
     setLines((current) => current.filter((line) => line.id !== id));
   }
 
+  function selectBuyer(customer: Customer) {
+    setBuyer(customer);
+    setBuyerSearch(customer.name);
+  }
+
   function saveAndPreview() {
+    if (!buyer) {
+      setToast("Najprej izberi kupca iz šifranta strank.");
+      return;
+    }
+
+    if (!invoiceNumber.trim()) {
+      setToast("Vnesi številko računa.");
+      return;
+    }
+
+    if (lines.length === 0 || lines.some((line) => !line.description.trim())) {
+      setToast("Vsaka postavka mora imeti opis.");
+      return;
+    }
+
     const invoice: Invoice = {
       number: invoiceNumber,
       issueDate,
@@ -80,10 +186,10 @@ export default function NewInvoicePage() {
       dueDate,
       currency: "EUR",
       buyer: {
-        name: "ABC d.o.o.",
-        vat: "SI12345678",
-        address: "Testna ulica 10, 1000 Ljubljana",
-        eLocation: "C:SI12345678",
+        name: buyer.name,
+        vat: buyer.vatNumber,
+        address: formatAddress(buyer),
+        eLocation: buyer.eLocation,
       },
       lines,
       totals,
@@ -95,6 +201,12 @@ export default function NewInvoicePage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
+      {toast && (
+        <div className="fixed right-5 top-5 z-50 max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200 shadow-xl backdrop-blur">
+          ❌ {toast}
+        </div>
+      )}
+
       <div className="flex min-h-screen">
         <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
           <div className="mb-10">
@@ -117,24 +229,26 @@ export default function NewInvoicePage() {
           <div className="mb-8">
             <h2 className="text-4xl font-bold">Nov e-račun</h2>
             <p className="mt-2 text-slate-400">
-              Ustvarite račun po korakih. Na koncu bo pripravljen PDF in eSLOG XML.
+              Izberi kupca iz eImenika, dodaj postavke in pripravi račun za predogled.
             </p>
           </div>
 
           <div className="mb-8 grid max-w-5xl grid-cols-5 gap-3">
-            {["Kupec", "Postavke", "Plačilo", "Predogled", "Pošiljanje"].map((step, index) => (
-              <div
-                key={step}
-                className={`rounded-xl border p-4 ${
-                  index <= 1
-                    ? "border-blue-500 bg-blue-500/10 text-blue-200"
-                    : "border-slate-800 bg-slate-900 text-slate-400"
-                }`}
-              >
-                <div className="text-sm">Korak {index + 1}</div>
-                <div className="mt-1 font-semibold">{step}</div>
-              </div>
-            ))}
+            {["Kupec", "Postavke", "Plačilo", "Predogled", "Pošiljanje"].map(
+              (step, index) => (
+                <div
+                  key={step}
+                  className={`rounded-xl border p-4 ${
+                    index <= 1
+                      ? "border-blue-500 bg-blue-500/10 text-blue-200"
+                      : "border-slate-800 bg-slate-900 text-slate-400"
+                  }`}
+                >
+                  <div className="text-sm">Korak {index + 1}</div>
+                  <div className="mt-1 font-semibold">{step}</div>
+                </div>
+              )
+            )}
           </div>
 
           <div className="grid max-w-7xl gap-6 lg:grid-cols-3">
@@ -143,88 +257,185 @@ export default function NewInvoicePage() {
 
               <div className="mt-6 grid gap-4 md:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">Številka</label>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Številka
+                  </label>
                   <input
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">Datum izdaje</label>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Datum izdaje
+                  </label>
                   <input
                     type="date"
                     value={issueDate}
                     onChange={(e) => setIssueDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">Datum storitve</label>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Datum storitve
+                  </label>
                   <input
                     type="date"
                     value={serviceDate}
                     onChange={(e) => setServiceDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">Rok plačila</label>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Rok plačila
+                  </label>
                   <input
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div className="mt-10 border-t border-slate-800 pt-8">
-                <h3 className="text-2xl font-bold">2. Podatki kupca</h3>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold">2. Kupec</h3>
+                    <p className="mt-2 text-slate-400">
+                      Izberi kupca iz šifranta ali dodaj novega iz eImenika.
+                    </p>
+                  </div>
 
-                <div className="mt-6 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-lg font-bold text-blue-100">⭐ Priljubljene stranke</h4>
-                      <p className="text-sm text-slate-300">
-                        Hitro izberite pogosto uporabljeno stranko.
-                      </p>
+                  <a
+                    href="/customers/new"
+                    className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200 hover:bg-blue-500/20"
+                  >
+                    + Dodaj kupca
+                  </a>
+                </div>
+
+                {favoriteCustomers.length > 0 && (
+                  <div className="mt-6 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
+                    <h4 className="text-lg font-bold text-blue-100">
+                      ⭐ Priljubljene stranke
+                    </h4>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {favoriteCustomers.map((customer) => (
+                        <button
+                          key={customer.vatNumber}
+                          onClick={() => selectBuyer(customer)}
+                          className={`rounded-xl border p-4 text-left hover:bg-slate-800 ${
+                            buyer?.vatNumber === customer.vatNumber
+                              ? "border-green-500 bg-green-500/10"
+                              : "border-slate-700 bg-slate-900"
+                          }`}
+                        >
+                          <div className="font-bold">{customer.name}</div>
+                          <div className="mt-1 text-sm text-slate-400">
+                            {customer.vatNumber}
+                          </div>
+                          <div className="mt-2 text-sm text-green-300">
+                            ✓ Prejema e-račune
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Poišči v shranjenih strankah
+                  </label>
+
+                  <input
+                    value={buyerSearch}
+                    onChange={(event) => setBuyerSearch(event.target.value)}
+                    placeholder="Naziv, davčna ali eLokacija"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
+                  />
+
+                  <div className="mt-4 max-h-72 space-y-2 overflow-auto">
+                    {filteredCustomers.length === 0 && (
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                        Ni shranjenih strank. Najprej dodaj kupca iz eImenika.
+                      </div>
+                    )}
+
+                    {filteredCustomers.map((customer) => (
+                      <button
+                        key={customer.vatNumber}
+                        onClick={() => selectBuyer(customer)}
+                        className={`block w-full rounded-xl border p-4 text-left hover:bg-slate-800 ${
+                          buyer?.vatNumber === customer.vatNumber
+                            ? "border-green-500 bg-green-500/10"
+                            : "border-slate-800 bg-slate-900"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="font-bold">{customer.name}</div>
+                            <div className="mt-1 text-sm text-slate-400">
+                              {customer.vatNumber} · {customer.eLocation}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {formatAddress(customer) || "Naslov ni shranjen"}
+                            </div>
+                          </div>
+
+                          <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-300">
+                            e-računi
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {buyer && (
+                  <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/10 p-5">
+                    <div className="text-sm text-green-300">
+                      Izbrani prejemnik
                     </div>
 
-                    <a href="/customers" className="text-sm text-blue-300 hover:text-blue-200">
-                      Upravljaj stranke
-                    </a>
+                    <h4 className="mt-2 text-xl font-bold">{buyer.name}</h4>
+
+                    <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
+                      <div>
+                        <span className="text-slate-500">Davčna:</span>{" "}
+                        {buyer.vatNumber}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">eLokacija:</span>{" "}
+                        {buyer.eLocation}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Naslov:</span>{" "}
+                        {buyer.address || "-"}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Mesto:</span>{" "}
+                        {buyer.city || "-"}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Država:</span>{" "}
+                        {buyer.country || "-"}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Omrežje:</span>{" "}
+                        {buyer.network || "-"}
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <button className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-left hover:bg-slate-800">
-                      <div className="font-bold">ABC d.o.o.</div>
-                      <div className="mt-1 text-sm text-slate-400">SI12345678</div>
-                      <div className="mt-2 text-sm text-green-300">✓ Prejema e-račune</div>
-                    </button>
-
-                    <button className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-left hover:bg-slate-800">
-                      <div className="font-bold">Testni kupec d.o.o.</div>
-                      <div className="mt-1 text-sm text-slate-400">SI87654321</div>
-                      <div className="mt-2 text-sm text-green-300">✓ Prejema e-račune</div>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/10 p-5">
-                  <div className="text-sm text-green-300">Prejemnik najden</div>
-                  <h4 className="mt-2 text-xl font-bold">ABC d.o.o.</h4>
-
-                  <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                    <div><span className="text-slate-500">Davčna:</span> SI12345678</div>
-                    <div><span className="text-slate-500">Status:</span> Prejema e-račune</div>
-                    <div><span className="text-slate-500">eLokacija:</span> C:SI12345678</div>
-                    <div><span className="text-slate-500">Format:</span> eSLOG 2.0</div>
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="mt-10 border-t border-slate-800 pt-8">
@@ -251,9 +462,14 @@ export default function NewInvoicePage() {
                     const lineGross = lineNet + lineVat;
 
                     return (
-                      <div key={line.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                      <div
+                        key={line.id}
+                        className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                      >
                         <div className="mb-4 flex items-center justify-between">
-                          <div className="font-semibold">Postavka {index + 1}</div>
+                          <div className="font-semibold">
+                            Postavka {index + 1}
+                          </div>
 
                           {lines.length > 1 && (
                             <button
@@ -267,41 +483,57 @@ export default function NewInvoicePage() {
 
                         <div className="grid gap-4 md:grid-cols-4">
                           <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm text-slate-300">Opis</label>
+                            <label className="mb-2 block text-sm text-slate-300">
+                              Opis
+                            </label>
                             <input
                               value={line.description}
-                              onChange={(e) => updateLine(line.id, "description", e.target.value)}
-                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                              onChange={(e) =>
+                                updateLine(line.id, "description", e.target.value)
+                              }
+                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                               placeholder="Opis storitve ali artikla"
                             />
                           </div>
 
                           <div>
-                            <label className="mb-2 block text-sm text-slate-300">Količina</label>
+                            <label className="mb-2 block text-sm text-slate-300">
+                              Količina
+                            </label>
                             <input
                               type="number"
                               value={line.quantity}
-                              onChange={(e) => updateLine(line.id, "quantity", e.target.value)}
-                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                              onChange={(e) =>
+                                updateLine(line.id, "quantity", e.target.value)
+                              }
+                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                             />
                           </div>
 
                           <div>
-                            <label className="mb-2 block text-sm text-slate-300">Cena brez DDV</label>
+                            <label className="mb-2 block text-sm text-slate-300">
+                              Cena brez DDV
+                            </label>
                             <input
                               type="number"
                               value={line.price}
-                              onChange={(e) => updateLine(line.id, "price", e.target.value)}
-                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                              onChange={(e) =>
+                                updateLine(line.id, "price", e.target.value)
+                              }
+                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                             />
                           </div>
 
                           <div>
-                            <label className="mb-2 block text-sm text-slate-300">DDV %</label>
+                            <label className="mb-2 block text-sm text-slate-300">
+                              DDV %
+                            </label>
                             <select
                               value={line.vatRate}
-                              onChange={(e) => updateLine(line.id, "vatRate", e.target.value)}
-                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+                              onChange={(e) =>
+                                updateLine(line.id, "vatRate", e.target.value)
+                              }
+                              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500"
                             >
                               <option value={22}>22 %</option>
                               <option value={9.5}>9,5 %</option>
@@ -343,9 +575,11 @@ export default function NewInvoicePage() {
               <h3 className="text-xl font-bold">Povzetek računa</h3>
 
               <div className="mt-6 space-y-4 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-slate-400">Kupec</span>
-                  <span>ABC d.o.o.</span>
+                  <span className="text-right">
+                    {buyer?.name || "Ni izbran"}
+                  </span>
                 </div>
 
                 <div className="flex justify-between">
