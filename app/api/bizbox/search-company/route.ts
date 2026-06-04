@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     params.set("taxIdFrom", TAX_ID_FROM);
     params.set("dotName", "INVOIC");
 
-    const url = `${BASE_URL}/elocations/ext?${params.toString()}`;
+    const url = `${BASE_URL}/elocations?${params.toString()}`;
 
     const response = await fetch(url, {
       method: "GET",
