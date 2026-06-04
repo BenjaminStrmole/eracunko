@@ -30,15 +30,15 @@ export async function POST(request: NextRequest) {
     }
 
     const loginUrl =
-      `${BASE_URL}/login?` +
-      new URLSearchParams({
-        username,
+    `${BASE_URL}/login?` +
+    new URLSearchParams({
+        userName: username,
         password,
-      });
+    });
 
     const response = await fetch(loginUrl, {
-      method: "POST",
-      cache: "no-store",
+    method: "POST",
+    cache: "no-store",
     });
 
     const text = await response.text();

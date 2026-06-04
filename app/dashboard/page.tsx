@@ -1,3 +1,4 @@
+import LogoutButton from "../components/LogoutButton";
 export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -57,16 +58,8 @@ export default function DashboardPage() {
             >
               ⚙️ Nastavitve
             </a>
+            <LogoutButton />
           </nav>
-
-          <div className="mt-10 border-t border-slate-800 pt-6">
-            <a
-              href="/login"
-              className="block rounded-lg px-4 py-3 text-red-300 hover:bg-slate-800"
-            >
-              🚪 Odjava
-            </a>
-          </div>
         </aside>
 
         <section className="flex-1 p-10">
