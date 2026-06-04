@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import CompanySelector from "../../components/CompanySelector";
 import type { Invoice } from "../../../types/invoice";
 
 function escapeXml(value: string | number | undefined | null) {
@@ -139,13 +140,13 @@ function generateEslogXml(invoice: Invoice) {
       <S_NAD>
         <D_3035>SE</D_3035>
         <C_C082>
-          <D_3039>SI85190586</D_3039>
+          <D_3039>SI66666666</D_3039>
         </C_C082>
         <C_C080>
-          <D_3036>eRačunko Demo d.o.o.</D_3036>
+          <D_3036>ZZI T2</D_3036>
         </C_C080>
         <C_C059>
-          <D_3042>Demo ulica 1, 1000 Ljubljana</D_3042>
+          <D_3042>POT V TEST 2, 1231 LJUBLJANA - ČRNUČE</D_3042>
         </C_C059>
       </S_NAD>
     </G_SG2>
@@ -219,6 +220,10 @@ export default function InvoiceXmlPage() {
   async function sendToBizBox() {
     if (!invoice || !xml) return;
 
+    const activeCompany = JSON.parse(
+      localStorage.getItem("activeCompany") || "null"
+    );
+
     setSending(true);
     setSendResult(null);
 
@@ -232,6 +237,7 @@ export default function InvoiceXmlPage() {
           invoiceNumber: invoice.number,
           xml,
           buyer: invoice.buyer,
+          sender: activeCompany,
         }),
       });
 
@@ -259,10 +265,7 @@ export default function InvoiceXmlPage() {
       );
 
       localStorage.setItem("sent", JSON.stringify([...filteredSent, sentInvoice]));
-      localStorage.setItem(
-        "eracunko_current_invoice",
-        JSON.stringify(sentInvoice)
-      );
+      localStorage.setItem("eracunko_current_invoice", JSON.stringify(sentInvoice));
 
       setInvoice(sentInvoice as Invoice);
 
@@ -309,6 +312,10 @@ export default function InvoiceXmlPage() {
           <p className="mt-2 text-slate-400">
             XML dokument je ustvarjen iz trenutnega računa in pripravljen za pošiljanje v bizBox DEMO.
           </p>
+
+          <div className="mt-6 max-w-3xl">
+            <CompanySelector />
+          </div>
 
           <pre className="mt-8 max-h-[650px] overflow-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-blue-100">
             {xml}
