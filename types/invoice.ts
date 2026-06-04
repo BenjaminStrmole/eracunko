@@ -24,4 +24,10 @@ export type Invoice = {
     vat: number;
     gross: number;
   };
+  paymentMethod?: string;
+  bankAccount?: string;
+  reference?: string;
+  docId?: string;
+  status?: "DRAFT" | "READY" | "SENT" | "ERROR";
+  createdAt?: string;
 };
