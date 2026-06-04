@@ -54,7 +54,6 @@ export async function GET(request: NextRequest) {
         eLocationId: `C:${cleanVat}`,
         taxIdFrom: TAX_ID_FROM,
         dotName: "INVOIC",
-        dofName: "ESLOG.2_0",
       });
 
     const response = await fetch(url, {
