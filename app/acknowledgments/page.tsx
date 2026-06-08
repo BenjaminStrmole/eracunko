@@ -35,7 +35,20 @@ function isAcknowledgement(item: DocumentItem) {
 function isErrorAck(item: DocumentItem) {
   const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
 
-  return confirmation.startsWith("27") || confirmation.includes("-99");
+  const title = String(
+    item.number ||
+      item.raw?.title ||
+      item.raw?.externalid ||
+      item.raw?.filename ||
+      ""
+  ).toLowerCase();
+
+  return (
+    confirmation.startsWith("27") ||
+    confirmation.includes("-99") ||
+    title.includes("povratnica(-99)") ||
+    title.includes("-99")
+  );
 }
 
 function getBadgeStyle(value: string) {
