@@ -35,13 +35,13 @@ function isAcknowledgement(item: DocumentItem) {
 }
 
 function isErrorAck(item: DocumentItem) {
-  const confirmation = getParam(item, "VrstaPotrditve").toLowerCase();
+  const confirmation = (
+    getParam(item, "VrstaPotrditve") || ""
+  ).toLowerCase();
+
   return (
-    confirmation.includes("-99") ||
-    confirmation.includes("27") ||
-    confirmation.includes("29") ||
-    confirmation.includes("zavrn") ||
-    confirmation.includes("napak")
+    confirmation.startsWith("27") ||
+    confirmation.includes("-99")
   );
 }
 

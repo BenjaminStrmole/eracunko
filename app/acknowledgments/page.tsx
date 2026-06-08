@@ -21,7 +21,8 @@ function getParam(item: any, name: string) {
 function isAcknowledgement(item: DocumentItem) {
   const actualType = getParam(item, "ACTUAL_TYPE");
   const roleType = getParam(item, "DOC_ROLE_TYPE");
-  const classification = item.raw?.classificationname || item.raw?.classificationName || "";
+  const classification =
+    item.raw?.classificationname || item.raw?.classificationName || "";
 
   return (
     item.type === "Povratnica" ||
@@ -31,16 +32,20 @@ function isAcknowledgement(item: DocumentItem) {
   );
 }
 
+function isErrorAck(item: DocumentItem) {
+  const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
+
+  return confirmation.startsWith("27") || confirmation.includes("-99");
+}
+
 function getBadgeStyle(value: string) {
   const text = value.toLowerCase();
 
-  if (text.includes("prevzet") || text.includes("12")) {
-    return "bg-green-500/10 text-green-300";
-  }
-
-  if (text.includes("zavrn") || text.includes("-99") || text.includes("27") || text.includes("29")) {
-    return "bg-red-500/10 text-red-300";
-  }
+  if (text.startsWith("12")) return "bg-green-500/10 text-green-300";
+  if (text.startsWith("29")) return "bg-green-500/10 text-green-300";
+  if (text.startsWith("27")) return "bg-red-500/10 text-red-300";
+  if (text.includes("-99")) return "bg-red-500/10 text-red-300";
+  if (text.startsWith("43")) return "bg-yellow-500/10 text-yellow-300";
 
   return "bg-blue-500/10 text-blue-200";
 }
@@ -49,6 +54,7 @@ export default function AcknowledgementsPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"all" | "error">("all");
 
   async function loadDocuments() {
     setLoading(true);
@@ -85,13 +91,30 @@ export default function AcknowledgementsPage() {
   }
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+
+    if (status === "error") {
+      setFilter("error");
+    }
+
     loadDocuments();
   }, []);
 
-  const acknowledgements = useMemo(
+  const allAcknowledgements = useMemo(
     () => documents.filter(isAcknowledgement),
     [documents]
   );
+
+  const errorAcknowledgements = useMemo(
+    () => allAcknowledgements.filter(isErrorAck),
+    [allAcknowledgements]
+  );
+
+  const acknowledgements = useMemo(() => {
+    if (filter === "error") return errorAcknowledgements;
+    return allAcknowledgements;
+  }, [allAcknowledgements, errorAcknowledgements, filter]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -103,13 +126,13 @@ export default function AcknowledgementsPage() {
           </div>
 
           <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Dashboard</a>
+            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
             <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgements" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📨 Povratnice</a>
+            <a href="/acknowledgments" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📨 Povratnice</a>
             <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
             <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">➕ Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Stranke</a>
+            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
+            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
             <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
           </nav>
         </aside>
@@ -129,6 +152,30 @@ export default function AcknowledgementsPage() {
               className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
             >
               {loading ? "Osvežujem..." : "Osveži"}
+            </button>
+          </div>
+
+          <div className="mt-8 flex gap-3">
+            <button
+              onClick={() => setFilter("all")}
+              className={`rounded-full px-5 py-2 text-sm font-semibold ${
+                filter === "all"
+                  ? "bg-blue-600 text-white"
+                  : "border border-slate-700 text-slate-300 hover:bg-slate-800"
+              }`}
+            >
+              Vse povratnice ({allAcknowledgements.length})
+            </button>
+
+            <button
+              onClick={() => setFilter("error")}
+              className={`rounded-full px-5 py-2 text-sm font-semibold ${
+                filter === "error"
+                  ? "bg-red-600 text-white"
+                  : "border border-red-500/30 text-red-300 hover:bg-red-500/10"
+              }`}
+            >
+              Napake ({errorAcknowledgements.length})
             </button>
           </div>
 
@@ -156,13 +203,16 @@ export default function AcknowledgementsPage() {
 
             {!loading && acknowledgements.length === 0 && !error && (
               <div className="px-6 py-8 text-slate-400">
-                Ni povratnic za izbrano podjetje.
+                {filter === "error"
+                  ? "Ni povratnic z napako za izbrano podjetje."
+                  : "Ni povratnic za izbrano podjetje."}
               </div>
             )}
 
             {!loading &&
               acknowledgements.map((doc) => {
-                const confirmationType = getParam(doc, "VrstaPotrditve") || doc.number;
+                const confirmationType =
+                  getParam(doc, "VrstaPotrditve") || doc.number;
                 const refMsgId = getParam(doc, "RefMsgId") || "-";
                 const issueDate = getParam(doc, "DatumIzdaje") || doc.date;
                 const roleType = getParam(doc, "DOC_ROLE_TYPE") || doc.type;
@@ -177,7 +227,11 @@ export default function AcknowledgementsPage() {
                     <div className="text-slate-300">{roleType}</div>
                     <div className="text-slate-300">{refMsgId}</div>
                     <div>
-                      <span className={`rounded-full px-3 py-1 text-sm ${getBadgeStyle(confirmationType)}`}>
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm ${getBadgeStyle(
+                          confirmationType
+                        )}`}
+                      >
                         {confirmationType}
                       </span>
                     </div>
