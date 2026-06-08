@@ -103,11 +103,35 @@ export default function AcknowledgementsPage() {
   const [deepScanning, setDeepScanning] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "error">("all");
+  const [scanLimit, setScanLimit] = useState(25);
+  const [scannedCount, setScannedCount] = useState(0);
 
-  async function loadDocuments() {
+  async function scanMetadata(acks: DocumentItem[], limit: number) {
+    setDeepScanning(true);
+    setScannedCount(0);
+
+    const toScan = acks.slice(0, limit);
+    const scanned: DocumentItem[] = [];
+
+    for (const doc of toScan) {
+      const enriched = await loadMetadataForDocument(doc);
+      scanned.push(enriched);
+      setScannedCount(scanned.length);
+
+      setDocuments([
+        ...scanned,
+        ...acks.slice(scanned.length),
+      ]);
+    }
+
+    setDeepScanning(false);
+  }
+
+  async function loadDocuments(limit = scanLimit) {
     setLoading(true);
     setDeepScanning(false);
     setError("");
+    setScannedCount(0);
 
     try {
       const activeCompany = JSON.parse(
@@ -135,21 +159,11 @@ export default function AcknowledgementsPage() {
       const onlyAcks = list.filter(isAcknowledgement);
 
       setDocuments(onlyAcks);
+      setLoading(false);
 
-      setDeepScanning(true);
-
-      const scanLimit = 80;
-      const toScan = onlyAcks.slice(0, scanLimit);
-
-      const scanned = await Promise.all(toScan.map(loadMetadataForDocument));
-
-      setDocuments([
-        ...scanned,
-        ...onlyAcks.slice(scanLimit),
-      ]);
+      scanMetadata(onlyAcks, limit);
     } catch (err: any) {
       setError(err.message || "Napaka pri pridobivanju povratnic.");
-    } finally {
       setLoading(false);
       setDeepScanning(false);
     }
@@ -164,6 +178,7 @@ export default function AcknowledgementsPage() {
     }
 
     loadDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const allAcknowledgements = useMemo(
@@ -209,20 +224,40 @@ export default function AcknowledgementsPage() {
               <p className="mt-2 text-slate-400">
                 Pregled povratnic za izbrano aktivno podjetje.
               </p>
+
               {deepScanning && (
                 <p className="mt-2 text-sm text-blue-300">
-                  Pregledujem metadata zadnjih povratnic za zaznavo napak ...
+                  Pregledujem metadata: {scannedCount}/{scanLimit}
                 </p>
               )}
             </div>
 
-            <button
-              onClick={loadDocuments}
-              disabled={loading || deepScanning}
-              className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
-            >
-              {loading || deepScanning ? "Osvežujem..." : "Osveži"}
-            </button>
+            <div className="flex items-center gap-3">
+              <select
+                value={scanLimit}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setScanLimit(value);
+                  loadDocuments(value);
+                }}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-200 outline-none"
+              >
+                <option value={25}>25 rezultatov</option>
+                <option value={50}>50 rezultatov</option>
+                <option value={75}>75 rezultatov</option>
+                <option value={100}>100 rezultatov</option>
+                <option value={150}>150 rezultatov</option>
+                <option value={300}>300 rezultatov</option>
+              </select>
+
+              <button
+                onClick={() => loadDocuments(scanLimit)}
+                disabled={loading || deepScanning}
+                className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
+              >
+                {loading || deepScanning ? "Osvežujem..." : "Osveži"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-8 flex gap-3">
@@ -265,22 +300,21 @@ export default function AcknowledgementsPage() {
               <div>Akcija</div>
             </div>
 
-            {(loading || deepScanning) && (
+            {loading && (
               <div className="px-6 py-8 text-slate-400">
                 Nalagam povratnice ...
               </div>
             )}
 
-            {!loading && !deepScanning && acknowledgements.length === 0 && !error && (
+            {!loading && acknowledgements.length === 0 && !error && (
               <div className="px-6 py-8 text-slate-400">
                 {filter === "error"
-                  ? "Ni povratnic z napako za izbrano podjetje."
+                  ? "Ni povratnic z napako med trenutno pregledanimi rezultati."
                   : "Ni povratnic za izbrano podjetje."}
               </div>
             )}
 
             {!loading &&
-              !deepScanning &&
               acknowledgements.map((doc) => {
                 const confirmationType =
                   getParam(doc, "VrstaPotrditve") || getTitle(doc);
@@ -314,6 +348,12 @@ export default function AcknowledgementsPage() {
                   </a>
                 );
               })}
+          </div>
+
+          <div className="mt-4 text-sm text-slate-500">
+            Napake se zaznajo iz metadata povratnic. Trenutno pregledano:{" "}
+            {Math.min(scannedCount, allAcknowledgements.length)} /{" "}
+            {Math.min(scanLimit, allAcknowledgements.length)}.
           </div>
         </section>
       </div>
