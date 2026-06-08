@@ -6,8 +6,9 @@ const BASE_URL = process.env.BIZBOX_BASE_URL;
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     if (!BASE_URL) {
       return NextResponse.json(
@@ -25,7 +26,7 @@ export async function GET(
       );
     }
 
-    const url = `${BASE_URL}/documents/${params.id}/metaData?guid=${encodeURIComponent(
+    const url = `${BASE_URL}/documents/${id}/metaData?guid=${encodeURIComponent(
       guid
     )}`;
 
