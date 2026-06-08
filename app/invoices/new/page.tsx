@@ -211,12 +211,13 @@ export default function NewInvoicePage() {
       serviceDate,
       dueDate,
       currency: "EUR",
-      buyer: {
+        buyer: {
         name: buyer.name,
         vat: buyer.vatNumber,
         address: formatAddress(buyer),
         eLocation: buyer.eLocation,
-      },
+        eAddress: buyer.eAddress || buyer.eAddress1,
+        },
       lines,
       totals,
     };

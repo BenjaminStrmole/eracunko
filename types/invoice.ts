@@ -17,6 +17,7 @@ export type Invoice = {
     vat: string;
     address: string;
     eLocation: string;
+    eAddress?: string;
   };
   lines: InvoiceLine[];
   totals: {

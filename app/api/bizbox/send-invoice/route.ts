@@ -69,10 +69,14 @@ function buildEnvelopeXml(data: {
 
 function normalizeEAddress(value: string | undefined | null, fallbackTaxId: string) {
   const cleaned = String(value || "").trim();
-
   if (cleaned) return cleaned;
-
   return `${fallbackTaxId}.HQ`;
+}
+
+function normalizeELocation(value: string | undefined | null, fallbackTaxId: string) {
+  const cleaned = String(value || "").trim();
+  if (cleaned) return cleaned;
+  return `C:${fallbackTaxId}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -99,6 +103,7 @@ export async function POST(request: NextRequest) {
       invoiceNumber,
       xml,
       buyer,
+      sender,
     }: {
       invoiceNumber: string;
       xml: string;
@@ -107,6 +112,14 @@ export async function POST(request: NextRequest) {
         vat: string;
         address: string;
         eLocation: string;
+        eAddress?: string;
+      };
+      sender?: {
+        name?: string;
+        vatNumber?: string;
+        taxId?: string;
+        address?: string;
+        eLocation?: string;
         eAddress?: string;
       };
     } = body;
@@ -118,20 +131,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const xmlFileName = `${invoiceNumber}.xml`;
+    const senderTaxId = sender?.vatNumber || sender?.taxId || "SI66666666";
 
-    const sender = {
-      name: "ZZI T2",
-      taxId: "SI66666666",
-      eAddress: "SI66666666.HQ",
-      eLocation: "C:SI66666666",
-      address: "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE",
+    const finalSender = {
+      name: sender?.name || "ZZI T2",
+      taxId: senderTaxId,
+      eAddress: normalizeEAddress(sender?.eAddress, senderTaxId),
+      eLocation: normalizeELocation(sender?.eLocation, senderTaxId),
+      address: sender?.address || "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE",
     };
+
+    const xmlFileName = `${invoiceNumber}.xml`;
 
     const envelopeXml = buildEnvelopeXml({
       invoiceNumber,
       xmlFileName,
-      from: sender,
+      from: finalSender,
       to: {
         name: buyer.name,
         taxId: buyer.vat,
