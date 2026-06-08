@@ -3,68 +3,43 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const BASE_URL = process.env.BIZBOX_BASE_URL;
+const TAX_ID_FROM = process.env.BIZBOX_TAX_ID_FROM;
+
+function formatDate(value: any) {
+  if (!value) return "-";
+
+  const date = new Date(Number(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return new Intl.DateTimeFormat("sl-SI", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
 
 function normalizeDocument(item: any, index: number) {
   return {
-    id:
-      item.id ||
-      item.docId ||
-      item.documentId ||
-      item.envelopeId ||
-      item.external_id ||
-      String(index),
-    number:
-      item.external_id ||
-      item.externalId ||
-      item.number ||
-      item.subject ||
-      item.fileName ||
-      item.file_name ||
-      `Dokument ${index + 1}`,
-    sender:
-      item.from?.name ||
-      item.sender?.name ||
-      item.fromName ||
-      item.senderName ||
-      item.from ||
-      "-",
-    type:
-      item.type ||
-      item.documentType ||
-      item.docType ||
-      item.format ||
-      "Dokument",
-    status:
-      item.status ||
-      item.state ||
-      item.documentStatus ||
-      "Prejet",
-    date:
-      item.date ||
-      item.created ||
-      item.createdAt ||
-      item.timestamp ||
-      item.receivedAt ||
-      "-",
+    id: String(item.id || item.docid || item.docId || index),
+    number: item.externalid || item.title || item.filename || `Dokument ${index + 1}`,
+    sender: item.organization || item.creationlocation || "-",
+    type: item.type || item.classificationname || "Dokument",
+    status: item.status || "Prejet",
+    date: formatDate(item.creationtime || item.insertdate),
     raw: item,
   };
 }
 
 function normalizeResponse(raw: any) {
-  if (Array.isArray(raw)) {
-    return raw.map(normalizeDocument);
+  if (Array.isArray(raw?.document)) {
+    return raw.document.map(normalizeDocument);
   }
 
   if (Array.isArray(raw?.documents)) {
     return raw.documents.map(normalizeDocument);
   }
 
-  if (Array.isArray(raw?.items)) {
-    return raw.items.map(normalizeDocument);
-  }
-
-  if (Array.isArray(raw?.data)) {
-    return raw.data.map(normalizeDocument);
+  if (Array.isArray(raw)) {
+    return raw.map(normalizeDocument);
   }
 
   return [];
@@ -72,9 +47,9 @@ function normalizeResponse(raw: any) {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!BASE_URL) {
+    if (!BASE_URL || !TAX_ID_FROM) {
       return NextResponse.json(
-        { success: false, message: "Manjka BIZBOX_BASE_URL." },
+        { success: false, message: "Manjka BIZBOX_BASE_URL ali BIZBOX_TAX_ID_FROM." },
         { status: 500 }
       );
     }
@@ -90,16 +65,27 @@ export async function GET(request: NextRequest) {
 
     const params = new URLSearchParams();
     params.set("guid", guid);
+    params.set("taxNumber", TAX_ID_FROM);
 
-    const url = `${BASE_URL}/documents?${params.toString()}`;
+    const url = `${BASE_URL}/documents/list?${params.toString()}`;
 
     const response = await fetch(url, {
-      method: "GET",
+      method: "POST",
       headers: {
         accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json; charset=utf-8",
       },
+      body: JSON.stringify({}),
       cache: "no-store",
     });
+
+    if (response.status === 204) {
+      return NextResponse.json({
+        success: true,
+        documents: [],
+        raw: null,
+      });
+    }
 
     const text = await response.text();
 
@@ -121,11 +107,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const documents = normalizeResponse(raw);
-
     return NextResponse.json({
       success: true,
-      documents,
+      documents: normalizeResponse(raw),
       raw,
       debugUrl: url.replace(guid, "***"),
     });
