@@ -3,9 +3,17 @@
 import { useEffect, useState } from "react";
 import type { Invoice } from "../../../types/invoice";
 
+type ActiveCompany = {
+  name?: string;
+  vatNumber?: string;
+  taxId?: string;
+  address?: string;
+  eLocation?: string;
+  eAddress?: string;
+};
+
 function formatDate(value: string) {
   if (!value) return "-";
-
   return new Intl.DateTimeFormat("sl-SI").format(new Date(value));
 }
 
@@ -18,6 +26,7 @@ function formatMoney(value: number) {
 
 export default function InvoicePreviewPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("eracunko_current_invoice");
@@ -28,6 +37,9 @@ export default function InvoicePreviewPage() {
     }
 
     setInvoice(JSON.parse(saved));
+
+    const savedCompany = localStorage.getItem("activeCompany");
+    setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
   }, []);
 
   if (!invoice) {
@@ -37,6 +49,12 @@ export default function InvoicePreviewPage() {
       </main>
     );
   }
+
+  const senderName = activeCompany?.name || "ZZI T2";
+  const senderTaxId =
+    activeCompany?.vatNumber || activeCompany?.taxId || "SI66666666";
+  const senderAddress =
+    activeCompany?.address || "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE";
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -95,11 +113,9 @@ export default function InvoicePreviewPage() {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xl font-bold">eRačunko Demo d.o.o.</div>
-                  <div className="text-slate-500">SI85190586</div>
-                  <div className="text-slate-500">
-                    Demo ulica 1, 1000 Ljubljana
-                  </div>
+                  <div className="text-xl font-bold">{senderName}</div>
+                  <div className="text-slate-500">{senderTaxId}</div>
+                  <div className="text-slate-500">{senderAddress}</div>
                 </div>
               </div>
 
@@ -111,9 +127,10 @@ export default function InvoicePreviewPage() {
                   <div className="font-bold">{invoice.buyer.name}</div>
                   <div className="text-slate-500">{invoice.buyer.vat}</div>
                   <div className="text-slate-500">{invoice.buyer.address}</div>
-                  <div className="text-slate-500">
-                    {invoice.buyer.eLocation}
-                  </div>
+                  <div className="text-slate-500">{invoice.buyer.eLocation}</div>
+                  {invoice.buyer.eAddress && (
+                    <div className="text-slate-500">{invoice.buyer.eAddress}</div>
+                  )}
                 </div>
 
                 <div className="text-right">
@@ -194,7 +211,7 @@ export default function InvoicePreviewPage() {
 
               <div className="mt-6 space-y-4 text-sm">
                 <div className="rounded-xl bg-green-500/10 p-4 text-green-300">
-                  ✓ Podatki izdajatelja izpolnjeni
+                  ✓ Podatki izdajatelja iz aktivnega podjetja
                 </div>
                 <div className="rounded-xl bg-green-500/10 p-4 text-green-300">
                   ✓ Prejemnik izbran iz šifranta

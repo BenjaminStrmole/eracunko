@@ -4,6 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import CompanySelector from "../../components/CompanySelector";
 import type { Invoice } from "../../../types/invoice";
 
+type SenderCompany = {
+  name?: string;
+  vatNumber?: string;
+  taxId?: string;
+  address?: string;
+  eLocation?: string;
+  eAddress?: string;
+};
+
 function escapeXml(value: string | number | undefined | null) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -21,7 +30,12 @@ function formatDate(value: string) {
   return String(value || "").replaceAll("-", "");
 }
 
-function generateEslogXml(invoice: Invoice) {
+function generateEslogXml(invoice: Invoice, sender?: SenderCompany | null) {
+  const senderTaxId = sender?.vatNumber || sender?.taxId || "SI66666666";
+  const senderName = sender?.name || "ZZI T2";
+  const senderAddress =
+    sender?.address || "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE";
+
   const linesXml = invoice.lines
     .map((line, index) => {
       const lineNet = line.quantity * line.price;
@@ -140,13 +154,13 @@ function generateEslogXml(invoice: Invoice) {
       <S_NAD>
         <D_3035>SE</D_3035>
         <C_C082>
-          <D_3039>SI66666666</D_3039>
+          <D_3039>${escapeXml(senderTaxId)}</D_3039>
         </C_C082>
         <C_C080>
-          <D_3036>ZZI T2</D_3036>
+          <D_3036>${escapeXml(senderName)}</D_3036>
         </C_C080>
         <C_C059>
-          <D_3042>POT V TEST 2, 1231 LJUBLJANA - ČRNUČE</D_3042>
+          <D_3042>${escapeXml(senderAddress)}</D_3042>
         </C_C059>
       </S_NAD>
     </G_SG2>
@@ -194,6 +208,7 @@ ${linesXml}
 export default function InvoiceXmlPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [sending, setSending] = useState(false);
+  const [activeCompany, setActiveCompany] = useState<SenderCompany | null>(null);
   const [sendResult, setSendResult] = useState<{
     success: boolean;
     message: string;
@@ -210,17 +225,20 @@ export default function InvoiceXmlPage() {
     }
 
     setInvoice(JSON.parse(saved));
+
+    const savedCompany = localStorage.getItem("activeCompany");
+    setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
   }, []);
 
   const xml = useMemo(() => {
     if (!invoice) return "";
-    return generateEslogXml(invoice);
-  }, [invoice]);
+    return generateEslogXml(invoice, activeCompany);
+  }, [invoice, activeCompany]);
 
   async function sendToBizBox() {
     if (!invoice || !xml) return;
 
-    const activeCompany = JSON.parse(
+    const currentActiveCompany = JSON.parse(
       localStorage.getItem("activeCompany") || "null"
     );
 
@@ -237,7 +255,7 @@ export default function InvoiceXmlPage() {
           invoiceNumber: invoice.number,
           xml,
           buyer: invoice.buyer,
-          sender: activeCompany,
+          sender: currentActiveCompany,
         }),
       });
 
@@ -315,6 +333,14 @@ export default function InvoiceXmlPage() {
 
           <div className="mt-6 max-w-3xl">
             <CompanySelector />
+          </div>
+
+          <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
+            Izdajatelj v XML:{" "}
+            <strong>
+              {activeCompany?.name || "ZZI T2"} (
+              {activeCompany?.vatNumber || activeCompany?.taxId || "SI66666666"})
+            </strong>
           </div>
 
           <pre className="mt-8 max-h-[650px] overflow-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-blue-100">
