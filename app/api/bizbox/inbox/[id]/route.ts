@@ -6,9 +6,8 @@ const BASE_URL = process.env.BIZBOX_BASE_URL;
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await context.params;
   try {
     if (!BASE_URL) {
       return NextResponse.json(
@@ -26,7 +25,7 @@ export async function GET(
       );
     }
 
-    const url = `${BASE_URL}/documents/${id}?guid=${encodeURIComponent(
+    const url = `${BASE_URL}/documents/${params.id}?guid=${encodeURIComponent(
       guid
     )}`;
 
@@ -57,7 +56,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="bizbox-document-${id}.zip"`,
+        "Content-Disposition": `attachment; filename="bizbox-document-${params.id}.zip"`,
       },
     });
   } catch (error: any) {
