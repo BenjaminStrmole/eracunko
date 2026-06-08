@@ -88,10 +88,10 @@ export default function InboxPage() {
           <nav className="space-y-2">
             <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
             <a href="/inbox" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📥 Prejeti računi</a>
-            <a href="/acknowledgements" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
+            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
             <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
             <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">➕ Nov račun</a>
+            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
             <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
             <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
           </nav>
@@ -100,9 +100,9 @@ export default function InboxPage() {
         <section className="flex-1 p-10">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-4xl font-bold">Inbox</h2>
+              <h2 className="text-4xl font-bold">Prejeti računi</h2>
               <p className="mt-2 text-slate-400">
-                Pregled dokumentov iz bizBox DEMO okolja.
+                Pregled prejetih računov iz bizBox DEMO okolja.
               </p>
             </div>
 
