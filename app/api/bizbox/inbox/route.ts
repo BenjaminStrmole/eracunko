@@ -65,7 +65,10 @@ export async function GET(request: NextRequest) {
 
     const params = new URLSearchParams();
     params.set("guid", guid);
-    params.set("taxNumber", TAX_ID_FROM);
+        const taxNumber =
+    request.nextUrl.searchParams.get("taxNumber") || TAX_ID_FROM;
+
+    params.set("taxNumber", taxNumber);
 
     const url = `${BASE_URL}/documents/list?${params.toString()}`;
 

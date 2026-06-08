@@ -23,7 +23,15 @@ export default function InboxPage() {
     setError("");
 
     try {
-      const response = await fetch("/api/bizbox/inbox", {
+            const activeCompany = JSON.parse(
+        localStorage.getItem("activeCompany") || "null"
+        );
+
+        const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
+
+        const response = await fetch(
+        `/api/bizbox/inbox?taxNumber=${encodeURIComponent(taxNumber)}`,
+        {
         method: "GET",
         cache: "no-store",
       });
@@ -116,10 +124,11 @@ export default function InboxPage() {
 
             {!loading &&
               documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="grid grid-cols-5 border-b border-slate-800 px-6 py-4 last:border-b-0"
-                >
+                    <a
+                    key={doc.id}
+                    href={`/inbox/${doc.id}`}
+                    className="grid grid-cols-5 border-b border-slate-800 px-6 py-4 last:border-b-0 hover:bg-slate-800/70"
+                    >
                   <div className="font-medium">{doc.number}</div>
                   <div className="text-slate-300">{doc.sender}</div>
                   <div className="text-slate-300">{doc.type}</div>
@@ -129,7 +138,7 @@ export default function InboxPage() {
                     </span>
                   </div>
                   <div className="text-slate-300">{doc.date}</div>
-                </div>
+                </a>
               ))}
           </div>
 
