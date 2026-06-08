@@ -10,22 +10,43 @@ type DocumentItem = {
   status: string;
   date: string;
   raw?: any;
+  metadata?: any;
 };
 
 function getParam(item: any, name: string) {
-  const params = item?.raw?.parameters?.param || item?.parameters?.param || [];
+  const params =
+    item?.metadata?.parameters?.param ||
+    item?.raw?.parameters?.param ||
+    item?.parameters?.param ||
+    [];
+
   const found = params.find((param: any) => param.parameterName === name);
   return found?.parameterValue || "";
+}
+
+function getTitle(item: DocumentItem) {
+  return String(
+    item.metadata?.title ||
+      item.raw?.title ||
+      item.number ||
+      item.raw?.externalid ||
+      item.raw?.filename ||
+      "-"
+  );
 }
 
 function isAcknowledgement(item: DocumentItem) {
   const actualType = getParam(item, "ACTUAL_TYPE");
   const roleType = getParam(item, "DOC_ROLE_TYPE");
   const classification =
-    item.raw?.classificationname || item.raw?.classificationName || "";
+    item.metadata?.classificationName ||
+    item.raw?.classificationname ||
+    item.raw?.classificationName ||
+    "";
 
   return (
     item.type === "Povratnica" ||
+    item.metadata?.type === "Povratnica" ||
     actualType === "IFTMAN" ||
     roleType.toLowerCase().includes("povratnica") ||
     classification.toLowerCase().includes("iftman")
@@ -34,14 +55,7 @@ function isAcknowledgement(item: DocumentItem) {
 
 function isErrorAck(item: DocumentItem) {
   const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
-
-  const title = String(
-    item.number ||
-      item.raw?.title ||
-      item.raw?.externalid ||
-      item.raw?.filename ||
-      ""
-  ).toLowerCase();
+  const title = getTitle(item).toLowerCase();
 
   return (
     confirmation.startsWith("27") ||
@@ -63,14 +77,36 @@ function getBadgeStyle(value: string) {
   return "bg-blue-500/10 text-blue-200";
 }
 
+async function loadMetadataForDocument(doc: DocumentItem) {
+  try {
+    const response = await fetch(`/api/bizbox/document/${doc.id}/metadata`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await response.json();
+
+    if (!data.success) return doc;
+
+    return {
+      ...doc,
+      metadata: data.metadata,
+    };
+  } catch {
+    return doc;
+  }
+}
+
 export default function AcknowledgementsPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deepScanning, setDeepScanning] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "error">("all");
 
   async function loadDocuments() {
     setLoading(true);
+    setDeepScanning(false);
     setError("");
 
     try {
@@ -95,11 +131,27 @@ export default function AcknowledgementsPage() {
         return;
       }
 
-      setDocuments(data.documents || []);
+      const list: DocumentItem[] = data.documents || [];
+      const onlyAcks = list.filter(isAcknowledgement);
+
+      setDocuments(onlyAcks);
+
+      setDeepScanning(true);
+
+      const scanLimit = 80;
+      const toScan = onlyAcks.slice(0, scanLimit);
+
+      const scanned = await Promise.all(toScan.map(loadMetadataForDocument));
+
+      setDocuments([
+        ...scanned,
+        ...onlyAcks.slice(scanLimit),
+      ]);
     } catch (err: any) {
       setError(err.message || "Napaka pri pridobivanju povratnic.");
     } finally {
       setLoading(false);
+      setDeepScanning(false);
     }
   }
 
@@ -157,14 +209,19 @@ export default function AcknowledgementsPage() {
               <p className="mt-2 text-slate-400">
                 Pregled povratnic za izbrano aktivno podjetje.
               </p>
+              {deepScanning && (
+                <p className="mt-2 text-sm text-blue-300">
+                  Pregledujem metadata zadnjih povratnic za zaznavo napak ...
+                </p>
+              )}
             </div>
 
             <button
               onClick={loadDocuments}
-              disabled={loading}
+              disabled={loading || deepScanning}
               className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
             >
-              {loading ? "Osvežujem..." : "Osveži"}
+              {loading || deepScanning ? "Osvežujem..." : "Osveži"}
             </button>
           </div>
 
@@ -208,13 +265,13 @@ export default function AcknowledgementsPage() {
               <div>Akcija</div>
             </div>
 
-            {loading && (
+            {(loading || deepScanning) && (
               <div className="px-6 py-8 text-slate-400">
                 Nalagam povratnice ...
               </div>
             )}
 
-            {!loading && acknowledgements.length === 0 && !error && (
+            {!loading && !deepScanning && acknowledgements.length === 0 && !error && (
               <div className="px-6 py-8 text-slate-400">
                 {filter === "error"
                   ? "Ni povratnic z napako za izbrano podjetje."
@@ -223,12 +280,16 @@ export default function AcknowledgementsPage() {
             )}
 
             {!loading &&
+              !deepScanning &&
               acknowledgements.map((doc) => {
                 const confirmationType =
-                  getParam(doc, "VrstaPotrditve") || doc.number;
+                  getParam(doc, "VrstaPotrditve") || getTitle(doc);
                 const refMsgId = getParam(doc, "RefMsgId") || "-";
                 const issueDate = getParam(doc, "DatumIzdaje") || doc.date;
-                const roleType = getParam(doc, "DOC_ROLE_TYPE") || doc.type;
+                const roleType =
+                  getParam(doc, "DOC_ROLE_TYPE") ||
+                  doc.metadata?.type ||
+                  doc.type;
 
                 return (
                   <a
@@ -236,7 +297,7 @@ export default function AcknowledgementsPage() {
                     href={`/inbox/${doc.id}`}
                     className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 last:border-b-0 hover:bg-slate-800/70"
                   >
-                    <div className="font-medium">{doc.number}</div>
+                    <div className="font-medium">{getTitle(doc)}</div>
                     <div className="text-slate-300">{roleType}</div>
                     <div className="text-slate-300">{refMsgId}</div>
                     <div>
