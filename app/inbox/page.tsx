@@ -1,4 +1,23 @@
 "use client";
+function getParam(item: any, name: string) {
+  const params = item?.raw?.parameters?.param || item?.parameters?.param || [];
+  const found = params.find((param: any) => param.parameterName === name);
+  return found?.parameterValue || "";
+}
+
+function isAcknowledgement(item: any) {
+  const actualType = getParam(item, "ACTUAL_TYPE");
+  const roleType = getParam(item, "DOC_ROLE_TYPE");
+  const classification =
+    item.raw?.classificationname || item.raw?.classificationName || "";
+
+  return (
+    item.type === "Povratnica" ||
+    actualType === "IFTMAN" ||
+    roleType.toLowerCase().includes("povratnica") ||
+    classification.toLowerCase().includes("iftman")
+  );
+}
 
 import { useEffect, useState } from "react";
 
@@ -67,12 +86,13 @@ export default function InboxPage() {
           </div>
 
           <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Dashboard</a>
-            <a href="/inbox" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📥 Inbox</a>
+            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
+            <a href="/inbox" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📥 Prejeti računi</a>
+            <a href="/acknowledgements" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
             <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
             <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
             <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">➕ Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Stranke</a>
+            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
             <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
           </nav>
         </aside>
@@ -116,14 +136,14 @@ export default function InboxPage() {
               </div>
             )}
 
-            {!loading && documents.length === 0 && !error && (
+            {!loading && documents.filter((doc) => !isAcknowledgement(doc)).length === 0 && !error && (
               <div className="px-6 py-8 text-slate-400">
                 Ni prejetih dokumentov ali pa endpoint vrača drugačno strukturo.
               </div>
             )}
 
             {!loading &&
-              documents.map((doc) => (
+              documents.filter((doc) => !isAcknowledgement(doc)).map((doc) => (
                     <a
                     key={doc.id}
                     href={`/inbox/${doc.id}`}
