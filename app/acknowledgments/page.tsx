@@ -26,6 +26,14 @@ function getParam(item: any, name: string) {
   return found?.parameterValue || "";
 }
 
+function cleanErrorText(value: string) {
+  return value
+    .replace("[ERROR:", "")
+    .replace("[ERROR", "")
+    .replace("]", "")
+    .trim();
+}
+
 function getTitle(item: DocumentItem) {
   return String(
     item.metadata?.title ||
@@ -348,7 +356,7 @@ export default function AcknowledgementsPage() {
 
                       {description && isErrorAck(doc) && (
                         <div className="mt-2 max-w-xs truncate text-xs text-red-300">
-                          {description.replace("[ERROR:", "").replace("]", "")}
+                          {cleanErrorText(description)}
                         </div>
                       )}
                     </div>
