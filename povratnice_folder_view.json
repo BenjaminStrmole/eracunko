@@ -1,0 +1,518 @@
+[
+    {
+        "pattern": "Referenca na naročilo, na katerega se potrditev naročila navezuje \\(BT-9\\), je obvezen podatek.",
+        "response": "Napaka pomeni, da v XML dokumentu manjka podatek Referenca na naročilo (BT-9). Preverite XML dokument in vnesite manjkajočo referenco."
+    },
+    {
+        "pattern": "cvc-type.3.1.3: The value '(.*?)' of element '(.*?)' is not valid\\. \\((\\d+), (\\d+)\\)",
+        "response": "Napako prejmete zaradi praznega polja <strong>${2}</strong>. Praznih polj po standardu eSlog 2.0 v XML računa ne sme vsebovati. Napaka se nahaja v vrstici ${3} in stolpcu ${4}."
+    },
+    {
+        "pattern": "\\[¨cvc-datatype-valid\\.1\\.2\\.1: `(.*?)` is not a valid value for `date`\\. cvc-type\\.3\\.1\\.3: The value `(.*?)` of element `(.*?)` is not valid.*¨\\]",
+        "response": "Napaka pomeni, da je bila napačno določena vrednost datuma `{1}`. Element `{3}` vsebuje vrednost `{2}`, ki ni ustrezna. Preverite, da je datum v obliki YYYY-MM-DD in da so vsi elementi pravilno nastavljeni."
+    },
+    {
+        "pattern": "(.*)?AdditionalBuyerID element SOAP poruke se ne nalazi kao vrijednost nekog od XML PartyIdentification Buyer elemenata(.*)?",
+        "response": "Napako prejmete zaradi odvečnega segmenta »Šifra poslovne enote« v XML datoteki računa. V kolikor podjetje nima šifre poslovne enote je potrebno omenjen podatek izpustiti."
+    },
+    {
+        "pattern": "(.*)?An Invoice shall have the Sum of Invoice line net amount \\(BT-106\\)(.*)?",
+        "response": "Napako prejmete saj vam v XML dokumentu računa manjka skupni znesek postavk. BT-106 se navezuje na podatek v e-SLOG 2.0 standardu za eRačun, kjer je skupni znesek postavk obvezen podatek."
+    },
+    {
+        "pattern": "(.*)?BIC prejemnika (\\[?(.*?)\\]?) ni registriran v Bankart omrežju!(.*)?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br> - Ali imate vpisano pravilno BIC kodo? Pravilno BIC kodo glede na banko prejemnika lahko preverite na naslednji povezavi:<br> <a href='https://www.bsi.si/placila-in-infrastruktura/placilne-storitve-in-elektronski-denar/identifikacijske-oznake-in-kode-bic' target='_blank'>BSI – Kode BIC</a>.<br> - BIC koda mora vsebovati 11 mest. V kolikor ne vsebuje 11 mest, dodajte XXX.<br> - Ali imate označeno, da je prejemnik računa fizična oseba? Označite, da gre za pravno osebo."
+    },
+    {
+        "pattern": "(.*)?Supplier GLN is mandatory(\\.|\\s)?(.*)?",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjka podatek »GLN številka pošiljatelja«."
+    },
+    {
+        "pattern": "(.*)?Invoice\\.ID\\.Value: (.*?)(, .*\\.+)?",
+        "response": "Napako prejmete, saj so bile v času pošiljanja računa  motnje na eSEF omrežju. Račun se iz tega razloga ni mogel zapisati. Potrebno bi bilo preveriti v kakšnem statusu je račun na eSEF portalu. V primeru, da je v statusu DRAFT, ga lahko tam samo pobrišete in ponovno pošljete. V primeru, da pa je račun v statusu poslan, pa bo potrebno samo posodobiti status v internem programu. Preverite še ali imate v eSEF portalu možnost »Storno« dokumenta, v tem primeru lahko dokument stornirate in račun ponovno pošljete iz vašega programa."
+    },
+    {
+        "pattern": "(.*)?DAVČNA ŠTEVILKA PREJEMNIKA DOKUMENTA JE ZARADI USMERJANJA OBVEZEN PODATEK(.*)?",
+        "response": "Napako prejmete, ker v XML dokumentu manjka davčna številka prejemnika. Preverite, ali je davčna številka ustrezno vpisana v vašem eRačunu in poskusite znova."
+    },
+    {
+        "pattern": "(.*)?Datoteka ni v eSlogu 2\\.0(.*)?",
+        "response": "Napako prejmete, ker datoteka ni v pravilni eSlog 2.0 strukturi. Preverite, ali je XML dokument skladen s standardom eSlog 2.0 in poskusite znova."
+    },
+    {
+        "pattern": "(.*)?Račun s prilogama presega dovoljeno velikost \\d{1,8} KB\\.(.*)?",
+        "response": "Napako prejmete, saj velikost poslanega paketa presega maksimalno dovoljeno mejo. V kolikor pošiljate na UJP omrežje je maksimalna velikost celega paketa 20 MB, v BANKART omrežju je 2 MB, v bizBox omrežju pa je neomejeno."
+    },
+    {
+        "pattern": "(.*)?Datoteka vsebuje napačen format(.*)?",
+        "response": "Napako najverjetneje prejmete, saj imate XML računa v eSlog 1.6, v ovojnici pa imate zapisano, da je XML računa v eSlogu 2.0."
+    },
+    {
+        "pattern": "(.*)?Datoteka XML je prazna(.*)?",
+        "response": "Napako prejmete, saj je XML datoteka računa prazna (velikost 0 KB)."
+    },
+    {
+        "pattern": "(.*)?Datoteke ni mogoče odpreti(.*)?",
+        "response": "Napako prejmete, saj priloge PDF ni mogoče odpreti (velikost 0 KB)."
+    },
+    {
+        "pattern": "(.*)?Datoteke XML in PDF ni mogoče najti!(.*)?",
+        "response": "Napako prejmete, saj je v ovojnici računa zabeleženo, da je v paketu računa priložena tudi PDF priloga ali račun v XML obliki. V paketu, ki je prispel do našega omrežja pa navedenih PDF prilog oziroma XMLjev ni priloženih."
+    },
+    {
+        "pattern": "(.*)?Deliver to information shall occur maximum once; Due Date shall occur maximum once(.*)?",
+        "response": "Napako prejmete, saj v XML datoteki računa manjka »Datum zapadlosti plačila«."
+    },
+    {
+        "pattern": "(.*)?Document reference shall occur maximum once(.*)?",
+        "response": "Napako prejmete, saj imate v računu vpisan enak referenčni podatek (pogodba, naročilo ali dobavnica) v glavi računa in na postavkah. Omrežje FINA le tega ne sprejema, v kolikor imate enak podatek, je potrebno izbrisati referenčni podatek na postavki in ga vpisati samo na glavi računa."
+    },
+    {
+        "pattern": "(.*)?Dokument je prevelik!(.*)?",
+        "response": "Napako prejmete, saj velikost poslanega paketa presega maksimalno. V kolikor pošiljate na UJP omrežje je maksimalna velikost celega paketa 20 MB, v BANKART omrežju je 2MB, v bizBox omrežju pa je neomejeno."
+    },
+    {
+        "pattern": "(.*)?Dokument mora sadržavati XML Buyer EndpointID element(.*)?",
+        "response": "Napako prejmete zaradi pomanjkljivega ali manjkajočega IC elementa v XML datoteki računa, ki je obvezen za pošiljanje HR prejemnikom."
+    },
+    {
+        "pattern": "(.*)?SupplierId element SOAP poruke različit od XML Supplier EndpointID elementa(.*)?",
+        "response": "Napako prejmete zaradi pomanjkljivega ali manjkajočega IC elementa v XML datoteki računa, ki je obvezen za pošiljanje HR prejemnikom."
+    },
+    {
+        "pattern": "(.*?)Priloga pod zaporedno št. 1: Dokument ne ustreza predpisani shemi. Dovoljeni dokumenti: UBL 2.1, CEFACT 100.D16B, eSlog 2.00(.*?)",
+        "response": "Dokument ni poslan v ustrezni obliki oz. poslani eSlog 2.0 ni zapisan po predpisani XSD shemi – kontaktiraj ponudnika informacijske rešitve."
+    },
+    {
+        "pattern": "(.*?)Dokument ne zadovoljava XSD schemu: (.*?) for (.*?)",
+        "response": "Napako prejmete, saj kreirate račun v Excelu, kateri že vrsto let ni več v uporabi, se ne posodablja, niti zanj ne nudimo podpore. Kot substitut smo razvili portalno rešitev: <a href='https://support.bizbox.eu/sl/support/solutions/202000104436' target='_blank' style='color: blue; text-decoration: underline;'>Pošiljanje eRačuna</a>."
+    },
+    {
+        "pattern": "(.*?)Dokument vsebuje dvojni zapis znotraj xml datoteke(.*?)",
+        "response": "Napako prejmete, saj imate v XML datoteki računa dvakrat enak zapis vsebine računa."
+    },
+    {
+        "pattern": "(.*?)Transakcije \\(recipient_account=`(.*?)`, XXX_EXT_ORDER\\.DOC_ID=`(.*?)`, XXX_EXT_ORDER\\.EXTERNAL_ID=`(.*?)`\\) ni mogoče usmeriti\\.",
+        "response": "Napako prejmete s strani bančnega omrežja, saj dokumenta ni mogoče usmeriti v prejemnikov predal. Predlagam, da preverite pri prejemniku ali ima dejansko omogočen prejem na zapisan IBAN."
+    },
+    {
+        "pattern": "¨-99¨ \\[¨HALICL0033: (.*?)`(.*?)`\\. Recipient agent BIC `(.*?)` for transaction \\(sequence number=`(.*?)`, doc_id=`(.*?)`\\) does not match any of the active participants\\.¨\\]",
+        "response": "Napako prejmete s strani bančnega omrežja, saj dokumenta ni mogoče v prejemnikov predal zaradi napačne BIC kode."
+    },
+    {
+        "pattern": "(.*?)\\[¨(.*?)\\sZA RAČUN\\s(.*?)\\sBIC BANKE\\s(.*?)\\sIN DAVČNO ŠTEVILKO\\s(.*?)\\s(.*?)¨\\](.*?)",
+        "response": "Napako prejmete, saj računa ni bilo mogoče usmeriti zaradi napačne BIC kode prejemnika."
+    },
+    {
+        "pattern": "(.*?)Ime datoteke, ki je dodana kot priloga (\\d+), ne sme vsebovati presledkov in šumnikov\\. Ime lahko vsebuje le male in velike črke, številke in podčrtaje(.*?)",
+        "response": "Napako prejmete, saj imate PDF prilogo poimenovano s »posebnimi« znaki, šumniki ali presledki. PDF priloga k računu je lahko poimenovana le s malimi in velikimi črkami, številkami in podčrtaji."
+    },
+    {
+        "pattern": "(.*?)Imetnik računa ni registriran prejemnik eRačuna(.*?)",
+        "response": "Napako prejmete, saj dokumenta ni mogoče usmeriti v prejemnikov predal. Predlagam, da preverite pri prejemniku, ali ima dejansko omogočen prejem na zapisan IBAN."
+    },
+    {
+        "pattern": ".*?invoice\\.AccountingSupplierParty\\.Party\\.EndpointID\\.schemeID: SchemeID for sender company identifier invlid\\. Allowed values:.*?",
+        "response": "Napako prejmete zaradi pomanjkljivega ali manjkajočega IC elementa v XML datoteki računa, ki je obvezen za pošiljanje HR prejemnikom."
+    },
+    {
+        "pattern": ".*?Invoice\\.BillingReference\\.InvoiceDocumentReference\\.ID: Cannot be defined InvoiceDocumentReference\\.ID with the InvoicePeriod\\.StartDate and InvoicePeriod\\.EndDate parameters.*?",
+        "response": "Napako prejmete, saj morate v XML datoteki računa odstraniti začetek in konec obdobja računa ter dodati samo dejanski datum dobave oziroma storitve."
+    },
+    {
+        "pattern": ".*?Item description shall occur maximum once.*?",
+        "response": "Napako prejmete zaradi segmenta »A« v XML datoteki računa. Omenjen segment odstranite ali pa ga zapišete tako, da bo v sklopu enega segmenta."
+    },
+    {
+        "pattern": ".*?The allowed maximum number of decimals for the Document level allowance amount \\(BT-92\\).*?",
+        "response": "Napako prejmete, saj ste v XML datoteki računa izbrali davčno stopnjo »S-standardna stopnja« in 0% DDV. V kolikor želite imeti DDV enak 0% je potrebno izbrati »E – oproščene transakcije s pravico do odbitka DDV«."
+    },
+    {
+        "pattern": ".*?Iznos ukupnog PDV-a računa \\(BT-110\\) = (.*?) iznosa kategorije PDV-a \\(BT-117\\).*?",
+        "response": "Napako prejmete, saj ima prejemnikovo omrežje (FINA) toleranco do 0,01 eura. Preverite ali imate zneske v računu zapisane na več kot dve decimalni mesti, kar lahko povzroči, da se ne ujemajo."
+    },
+    {
+        "pattern": ".*?Manjkajo bančni podatki prejemnika!.*?",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjkajo bančni podatki prejemnika (BIC in IBAN)."
+    },
+    {
+        "pattern": ".*?Manjkajoča priloga!.*?",
+        "response": "Napako prejmete, saj je v ovojnici računa zabeleženo, da je v paketu računa priložena tudi PDF priloga. V paketu, ki je prispel do našega omrežja, pa navedenih PDF prilog ni priloženih."
+    },
+    {
+        "pattern": ".*?Opozorilo: Priloga pod zaporedno št\\. \\d+: XML dokument v prilogi ni podpisan\\. Napaka: (.*?) mora biti navedeno natanko enkrat!.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka matična številka prejemnika/pošiljatelja eRačuna."
+    },
+    {
+        "pattern": ".*?Na stavci računa \\(BG-25\\), gdje je šifra kategorije PDV-a obračunate stavke \\(BT-151\\) \"Standard rated\", stopa PDV-a obračunate stavke \\(BT-152\\) mora biti veća od nule.*?",
+        "response": "Napako prejmete, saj ste v XML datoteki računa izbrali davčno stopnjo »S-standardna stopnja« in 0% DDV. V kolikor želite imeti DDV enak 0% je potrebno izbrati »E – oproščene transakcije s pravico do odbitka DDV«. V nasprotnem primeru pa izberite davčno stopnjo »S-standardna stopnja« in 22% DDV."
+    },
+    {
+        "pattern": ".*?(Napačen|Napacen) zapis formata v ovojnici!.*?",
+        "response": "Napako prejmete, saj imate v ovojnici napačen zapis formata. Obrnite se na ponudnika programske opreme."
+    },
+    {
+        "pattern": ".*?cvc-datatype-valid\\.1\\.2\\.1: '(.*?)' is not a valid value for 'date'.*?",
+        "response": "Napako prejmete zaradi napačnega zapisa datuma v XML datoteki. Pravilen zapis datuma je YYYY-MM-DD (Y-leto, M-mesec, D-dan)."
+    },
+    {
+        "pattern": ".*?Napaka pri validaciji: Velikost prilog je prevelika: (\\d+). Največja dovoljena velikost je (\\d+).*?",
+        "response": "Napako prejmete, saj je velikost prilog <strong>${1}</strong> KB, kar presega največjo dovoljeno velikost <strong>${2}</strong> KB. Poskusite zmanjšati velikost prilog ali jih razdeliti na več delov."
+    },
+    {
+        "pattern": ".*?Napaka: Ovojnica e-računa lahko vsebuje največ tri priponke.*?",
+        "response": "Napako prejmete, saj ima prejemnik računa urejen prejem v <strong>BANČNO omrežje</strong>, katero ima omejitev glede maksimalnega števila prilog. V BANČNO omrežje lahko pošljete največ <strong>tri priloge</strong> v paketu računa."
+    },
+    {
+        "pattern": ".*?Napaka: Preveri element: envelope\\.payment_data\\.amount = (-?[0-9]+\\.?[0-9]*) ni v zalogi vrednosti \\[0-9]{1,13}(\\.\\[0-9]{0,2})?.*?",
+        "response": "Napako prejmete, saj ste želeli poslati dobropis, v XML dokumentu računa pa je označeno, da gre za račun."
+    },
+    {
+        "pattern": ".*?Napačen format IBAN!.*?",
+        "response": "Napako prejmete, saj imate napačno zapisan IBAN. IBAN se mora začeti s SI56 in nadaljevati s številkami, brez presledkov. Preverite zapis IBAN in poskusite ponovno."
+    },
+    {
+        "pattern": ".*?Napačen zapis \"Type\" v ovojnici!.*?",
+        "response": "Napako prejmete, saj imate v ovojnici računa napačno zapisan »Type« dokumenta. Pravilen zapis »Type« v ovojnici je INVOIC."
+    },
+    {
+        "pattern": ".*?Napačen zapis formata datuma.*?",
+        "response": "Napako prejmete zaradi napačnega zapisa datuma v XML datoteki. Pravilen zapis datuma je YYYY-MM-DD."
+    },
+    {
+        "pattern": ".*?Napačen zapis formata v ovojnici!.*?",
+        "response": "Napako prejmete, saj imate v ovojnici računa napačno zapisan »Format« dokumenta."
+    },
+    {
+        "pattern": ".*?Ne postoji pretinac za naručitelja.*?",
+        "response": "Napako prejmete, saj imate v vpisano šifro poslovne enote oz. lokacije, ki onemogoča pošiljanje računa, saj prejemnik nima določene šifre poslovne enote."
+    },
+    {
+        "pattern": ".*?Neispravna vrijednost podatka `AccountingCustomerParty/Party/PartyLegalEntity/CompanyID`, na početku i/ili na kraju se ne smije nalaziti razmak.*?",
+        "response": "Napako prejmete, saj v ovojnici računa manjkata podatka <package> </package> in <timestamp> </timestamp>."
+    },
+    {
+        "pattern": ".*?Napaka: Nepoznata kombinacija procesa i šifre tipa dokumenta.*?",
+        "response": "Napako prejmete s strani omrežja FINA. Prosim, da nam posredujete XML dokument računa, da preverimo razlog zavrnitve."
+    },
+    {
+        "pattern": ".*?Not implemented logic for 385 document type.*?",
+        "response": "Napako prejmete, saj v ovojnici računa manjkata podatka &lt;package&gt; &lt;/package&gt; in &lt;timestamp&gt; &lt;/timestamp&gt;."
+    },
+    {
+        "pattern": ".*?PDV identifikacijski broj Prodavatelja \\(BT-31\\), PDV identifikacijski broj poreznog zastupnika Prodavatelja \\(BT-63\\) i PDV identifikacijski broj Kupca \\(BT-48\\) (.*?) Raspodjela PDV-a \\(BG-23\\) sa šifrom kategorije PDV-a (.*?)",
+        "response": "Napako prejmete, saj imate v XML dokumentu računa označeno davčno stopnjo 0%, nimate pa vpisanega davčnega besedila. V kolikor je DDV enak 0% je za uspešno pošiljanje računa davčno besedilo obvezen podatek."
+    },
+    {
+        "pattern": ".*?Parameter pd_purpose \\(koda namena\\) je obvezen podatek!.*?",
+        "response": "Napako prejmete zaradi manjkajočega podatka »Koda namena« v XML datoteki računa."
+    },
+    {
+        "pattern": ".*?Payee name shall occur maximum once, if the Payee is different from the Seller(; Payee identifier shall occur maximum once, if the Payee is different from the Seller; Payee legal registration identifier shall occur maximum once, if the Payee is different from the Seller)?.*?",
+        "response": "Napako prejmete, saj vam v XML dokumenti manjkajo določeni segmenti, ki so uspešni za pošiljanje v prejemnikovo omrežje."
+    },
+    {
+        "pattern": ".*?Pdf priloge ni mogoče najti!.*?",
+        "response": "Napako prejmete, saj je v ovojnici računa zabeleženo, da je v paketu računa priložena tudi PDF priloga. V paketu, ki je prispel do našega omrežja pa navedenih PDF prilog ni priloženih."
+    },
+     {
+        "pattern": ".*?Pri dostavi v bančno omrežje je parameter ri_account_id \\(IBAN prejemnika\\) obvezen podatek.*?",
+        "response": "Napako prejmete, saj pri dostavi v bančno omrežje manjka obvezen podatek IBAN prejemnika."
+    },
+    {
+        "pattern": ".*?Pri dostavi v bančno omrežje je parameter ri_receiver_agent,ri_account_id \\(BIC,IBAN prejemnika\\) obvezen podatek.*?",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjkajo bančni podatki prejemnika (BIC in IBAN)."
+    },
+    {
+        "pattern": ".*?Priloga z enakom imenom \\((.*?)\\) že obstaja na tem e-računu.*?",
+        "response": "Napako prejmete, saj imate v paketu računa dve enaki prilogi PDF."
+    },
+    {
+        "pattern": ".*?Priloge (.*?)\\.pdf ni mogoce najti.*?",
+        "response": "Napako prejmete, saj je v ovojnici računa zabeleženo, da je v paketu računa priložena tudi PDF priloga. V paketu, ki je prispel do našega omrežja pa navedenih PDF prilog ni priloženih."
+    },
+    {
+        "pattern": ".*?Račun koji sadrži stavku računa \\(BG-25\\) gdje je šifra kategorije PDV-a obračunate stavke \\(BT-151\\) \"Exempt from VAT\".*?",
+        "response": "Napako prejmete, saj imate v XML dokumentu računa označeno davčno stopnjo 0%, nimate pa vpisanega davčnega besedila. V kolikor je DDV enak 0% je za uspešno pošiljanje računa davčno besedilo obvezen podatek."
+    },
+    {
+        "pattern": ".*?Račun ni podpisan\\. Podpis je obvezen.*?",
+        "response": "Napako prejmete, saj pošiljate XML datoteko računa v eSlogu 1.6, kjer je podpis dokumenta obvezen."
+    },
+    {
+        "pattern": ".*?SupplierID element SOAP poruke različit od XML Supplier PartyIdentification elementa.*?",
+        "response": "Napako prejmete zaradi pomanjkljivega ali manjkajočega IC elementa v XML datoteki računa, ki je obvezen za pošiljanje HR prejemnikom."
+    },
+    {
+        "pattern": ".*?Svaka stavka računa \\(BG-25\\) mora sadržavati neto \\(jediničnu\\) cijenu artikla \\(BT-146\\); Neto \\(jedinična\\) cijena artikla \\(BT-146\\) neće biti negativna.*?",
+        "response": "Račun ne sme vsebovati negativnih predznakov. V primeru, da želite kreirati račun negativne vrednosti je potrebno stranki poslati dobropis (ta pa mora zaradi standarda eSlog2.0 vsebovati pozitivne predznake)."
+    },
+    {
+        "pattern": ".*?Svojstvo pretinca primatelja nije ispravno.*?",
+        "response": "Napako prejmete, saj v XML dokumentu računa ni zavedene šifre poslovne enote prejemnika oziroma lokacije."
+    },
+    {
+        "pattern": ".*?TaxTotal\\.TaxSubtotal\\.TaxCategory\\.Percent: For a tax exemption reason \"Exempt From VAT\" the percent of taxable amount \\d+ is greater than 0.*?",
+        "response": "Napako prejmete, saj ste v XML datoteki računa izbrali davčno stopnjo »S-standardna stopnja« in 0% DDV. V kolikor želite imeti DDV enak 0% je potrebno izbrati »E – oproščene transakcije s pravico do odbitka DDV«."
+    },
+    {
+        "pattern": ".*?TaxTotal\\.TaxSubtotal\\.TaxCategory\\.TaxExemptionReasonCode: Tax exemption reason key is not defined.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka podatek »Razlog oprostitve davka«, ki je obvezen v kolikor je davčna stopnja enaka 0%."
+    },
+    {
+        "pattern": ".*?The given key `(.*?)` was not present in the dictionary.*?",
+        "response": "Napako prejmete, saj imate k računu dodano prilogo, ki ni v PDF formatu."
+    },
+    {
+        "pattern": ".*?The string `(.*?)` is not a valid Decimal value.*?",
+        "response": "Omenjena napaka se pojavi pri pretvorbi v UBL in se vrednost ne zapiše v polje: &lt;cbc:taxableamount currencyid=RSD&gt;&lt;/cbc:taxableamount&gt;."
+    },
+    {
+        "pattern": ".*?\\[ERROR: Atribut <(.*?)> je obvezen\\.\\].*?",
+        "response": "Napako prejmete, saj priloga številka <strong>{1}</strong>, ki je navedena v ovojnici, ni priložena v paketu posredovanega dokumenta."
+    },
+    {
+        "pattern": ".*?\\[ERROR: Atribut (Attachment No\\. \\d+) je obvezen\\.\\].*?",
+        "response": "Napako prejmete, saj priloga številka <strong>1</strong>, ki je navedena v ovojnici, ni priložena v paketu posredovanega dokumenta."
+    },
+    {
+        "pattern": ".*?\\[ERROR: Banka izdajatelja RVUALT2VXXX ni v SEPA območju!\\].*?",
+        "response": "Napako prejmete, saj ste pokušali poslati prejemniku v spletno banko <strong>Revolut</strong>, katera še ni v omrežju SEPA."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: (.*?), tip vozlišča: (.*?), opis: The '(.*?)' element is invalid - The value '(.*?)' is invalid according to its datatype '(.*?)' - The actual length is greater than the MaxLength.*?",
+        "response": "Napako prejmete, saj imate preveliko število znakov v naslovu PDF priloge. Največja dovoljena dolžina imena priloge je 100 znakov."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(.*? List of possible elements expected: 'sender_mailbox'\\.*?",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjka transakcijski račun (TRR) pošiljatelja."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: .*?, tip vozlišča: .*?, opis: The element .*? has incomplete content\\. List of possible elements expected: `sender_eddress(.*?)",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjka BIC koda pošiljatelja."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: sender_mailbox, tip vozlišča: EndElement, opis: The 'sender_mailbox' element is invalid - The value (.*?) is invalid according to its datatype 'hal_IBANIdentifier' - The Pattern constraint failed(.*?)",
+        "response": "Napako prejmete, saj imate v XML dokumentu računa napačen zapis transakcijskega računa (TRR). Pravilna oblika transakcijskega računa je SI56XXXXXXXXXXXXXXX."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: email_id, tip vozlišča: EndElement, opis: The 'email_id' element is invalid - The value (.*?) is invalid according to its datatype 'hal_Email' - The Pattern constraint failed(.*?)",
+        "response": "Napako prejmete, saj imate na mestu kjer sistem pričakuje elektronski naslov vpisan drug podatek."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: country, tip vozlišča: EndElement, opis: The 'country' element is invalid - The value '(.*?)' is invalid according to its datatype 'hal_Country' - The Pattern constraint failed(.*?)",
+        "response": "Napako prejmete, saj imate napačno zapisano državo, in sicer namesto naprimer SLO, vpišite SI. V kolikor gre za drugo državo vnesite drugačno predpono."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: receiver_mailbox, tip vozlišča: EndElement, opis: The 'receiver_mailbox' element is invalid - The value (.*?) is invalid according to its datatype 'hal_IBANIdentifier' - The Pattern constraint failed.*?",
+        "response": "Napako prejmete, saj imate v XML dokumentu računa napačen zapis transakcijskega računa (TRR). Pravilna oblika transakcijskega računa je SI56XXXXXXXXXXXXXXX."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: receiver_eddress, tip vozlišča: EndElement, opis: The element 'receiver_eddress' has incomplete content\\. List of possible elements expected: 'receiver_mailbox.*?",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjka transakcijski račun (TRR) prejemnika."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: timestamp, (.*?)\\)",
+        "response": "Napako prejmete, saj imate napačen zapis podatka »timestamp« v .XML dokumentu."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: creditor, tip vozlišča: Element, opis: The element 'payment_data' has invalid child element 'creditor'\\. List of possible elements expected: 'payment_method'(.*?)\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka način plačila računa, ki je obvezen podatek."
+    },
+    {
+        "pattern": ".*?Napaka pri validaciji: cvc-complex-type\\.2\\.4\\.a: Najden neveljaven začetek vsebine z elementom `creditor`\\. Pričakuje se en od `\\{\"hal:icl:01\":payment_method\\}`(.*?)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka način plačila računa, ki je obvezen podatek."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: debtor_account, tip vozlišča: Element, opis: The element 'debtor' has invalid child element 'debtor_account'\\. List of possible elements expected: 'address, identification, debtor_agent(.*?)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka BIC koda prejemnika računa."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: debtor_agent, tip vozlišča: EndElement, opis: The 'debtor_agent' element is invalid - The value '(.*?)' is invalid according to its datatype 'hal_BICIdentifier' - The Pattern constraint failed(.*?)",
+        "response": "Napako prejmete, saj imate v eRačunu napačen zapis formata BIC kode plačnika računa. BIC koda mora vsebovati 11 znakov."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (.*?) in stolpcu (.*?)! \\(Ime vozlišča: currency, tip vozlišča: Element, opis: The element [`']payment_data[`'] has invalid child element [`']currency[`']\\. List of possible elements expected: [`']amount[`'](.*?)",
+        "response": "Napako prejmete, saj vam v eRačunu manjka (ali pa je ta napačno izpolnjen) podatek, ki označuje skupni znesek za plačilo."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: payment_data, tip vozlišča: EndElement, opis: The element 'payment_data' has incomplete content\\. List of possible elements expected: 'purpose'\\..*?\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka namen plačila."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: remittance_information, tip vozlišča: EndElement, opis: The element 'remittance_information' has incomplete content\\. List of possible elements expected: 'additional_remittance_information'\\..*?\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka namen plačila."
+    },
+    {
+        "pattern": ".*?Napaka v strukturi ovojnice: java\\.lang\\.RuntimeException: DocType \\[(.*?)\\] is not supported.*?",
+        "response": "Napako prejmete, saj se ovojnica ni pravilno kreirala. V sami ovojnici manjkajo parametri, ki so pomembni za usmerjanje paketa v drugo omrežje. Obrnite se na ponudnika programske opreme."
+    },
+    {
+        "pattern": ".*?Napaka: Podatki o izdajatelju (.*?) so obvezni.*?",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjkajo podatki o izdajatelju. Preverite, ali je pravilno izpolnjen segment <strong>{1}</strong> in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Postavka (\\d+) - Vozlišče enota mere (.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka enota mere zaračunane količine. Preverite alii imate pravilno izpolnjen segment <strong>{2}</strong> in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Postavka (\\d+) - Vozlišče naziv (.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka naziv za postavko ali opomba vrstice računa. Preverite ali imate pravilno izpolnjen segment <strong>{2}</strong> in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče datum plačila (.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka datum plačila. Preverite pravilno izpolnjen segment <strong>{1}</strong> in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče datum računa (.*?) je navedeno napačno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu eRačuna manjka datum začetka in konca obdobja računa. Preverite ali imate pravilno izpolnjen segment <strong>{1}</strong> in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče davčna št\\. prejemnika (.*?) mora biti navedeno natanko enkrat.*?",
+        "response": "Napako prejmete zaradi več razlogov:<br>- V XML dokumentu računa manjka davčna številka prejemnika ali<br>- V XML dokumentu računa imate segment, ki je namenjen zgolj davčnim zavezancem. Preverite ali imate pravilno izpolnjen segment in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče matična št\\. izdajatelja \\(pravne osebe\\) (.*?) mora biti navedeno natanko enkrat.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu eRačuna manjka matična številka pošiljatelja. Preverite ali imate pravilno izpolnjene podatke in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče naziv izdajatelja (.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka naziv izdajatelja računa. Preverite pravilno izpolnjene podatke in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče račun (prejemnik\\S*) (.*?) je obvezno.*?",
+        "response": "Napako prejmete zaradi manjkajočega podatka IBAN. Napaka se lahko pojavi tudi, če imate segment, v katerem je naveden IBAN zapisan več kot enkrat!"
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče s povzetki davkov (.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka davčna stopnja za kategorijo DDV."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče referenčni dokument(.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka eden od referenčnih dokumentov (pogodba/dobavnica/naročilo)."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče znesek davka(.*?) je obvezno.*?",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka skupni znesek davka za dano kategorijo DDV."
+    },
+    {
+        "pattern": ".*?Napačen model v referenci plačila \\((\\d+)\\).*?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br>- Referenca plačila se lahko začne le s predpono <strong>SI</strong> ali <strong>RF</strong>.<br>- Vsebuje lahko le alfanumerične znake, minus/pomišljaj (na petem mestu v sklicu ne sme biti posebnih znakov).<br><strong>PRIMER:</strong> SI00123456"
+    },
+    {
+        "pattern": ".*?Napačna SWIFT/BIC koda banke izdajatelja: ([A-Z0-9]+).*?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br>- Ali imate vpisano pravilno BIC kodo? Pravilno BIC kodo glede na banko prejemnika lahko preverite na naslednji povezavi: <a href='https://www.bsi.si/placila-in-infrastruktura/placilne-storitve-in-elektronski-denar/identifikacijske-oznake-in-kode-bic' target='_blank'>BSI - BIC kode</a>.<br>- BIC koda mora vsebovati 8 ali 11 znakov. Če ne vsebuje 11 znakov, dodajte <strong>XXX</strong>."
+    },
+    {
+        "pattern": ".*?Nezadosten nivo pravic ali pa izdajatelja za davčno številko ([A-Z0-9]+) ni mogoče najti!.*?",
+        "response": "Napako prejmete, saj še niste dodani na seznam proračunskih uporabnikov kot izdajatelj. Obrnite se na naš naročninski oddelek <a href='mailto:narocnine@zzi.si'>narocnine@zzi.si</a>."
+    },
+    {
+        "pattern": ".*?Strukturirana referenca mora imeti obliko SI ali RF*?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br>- Referenca plačila se lahko začne le s predpono <strong>SI</strong> ali <strong>RF</strong>.<br>- Vsebuje lahko le alfanumerične znake, minus/pomišljaj (na petem mestu v sklicu ne sme biti čudnih znakov).<br>PRIMER: <strong>SI00123456</strong>."
+    },
+    {
+        "pattern": ".*?Opozorilo: Navedene (\\d+) mestne SWIFT/BIC kode banke izdajatelja (\\S+) ni mogoče najti.*?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br>- Ali imate vpisano pravilno BIC kodo? Pravilno BIC kodo glede na banko prejemnika lahko preverite na naslednji povezavi: <a href='https://www.bsi.si/placila-in-infrastruktura/placilne-storitve-in-elektronski-denar/identifikacijske-oznake-in-kode-bic' target='_blank'>BSI - Identifikacijske oznake in kode BIC</a>.<br>- BIC koda mora vsebovati 11 mest. V kolikor ne vsebuje 11 mest, dodajte <strong>XXX</strong>."
+    },
+    {
+        "pattern": ".*?Opozorilo: Račun (.*?) ne pripada izdajatelju z davčno številko *?",
+        "response": "Napako prejmete, saj imate zapisan napačen TRR/IBAN. S prejemnikom računa preverite veljavnost navedenega podatka."
+    },
+    {
+        "pattern": ".*?Ovojnica ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: receiver_eddress, tip vozlišča: EndElement, opis: The element 'receiver_eddress' has incomplete content\\. List of possible elements expected: 'receiver_mailbox'.*?\\)",
+        "response": "Napako prejmete, saj v XML dokumentu računa manjka transakcijski račun (TRR) prejemnika."
+    },
+    {
+        "pattern": ".*?Ovojnica ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: creditor, tip vozlišča: Element, opis: The element 'payment_data' has invalid child element 'creditor'\\. List of possible elements expected: 'payment_method'.*?\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka način plačila računa, ki je obvezen podatek."
+    },
+    {
+        "pattern": ".*?Ovojnica ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: address, tip vozlišča: Element, opis: The element 'debtor' has invalid child element 'address'\\. List of possible elements expected: 'country'.*?\\)",
+        "response": "Napako prejmete, saj imate v XML dokumentu računa napačno zapisan podatek država pri prejemniku računa."
+    },
+    {
+        "pattern": ".*?Ovojnica ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: debtor_account, tip vozlišča: Element, opis: The element 'debtor' has invalid child element 'debtor_account'\\. List of possible elements expected: 'address, identification, debtor_agent'.*?\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka BIC koda prejemnika računa."
+    },
+    {
+        "pattern": ".*?Ovojnica ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: remittance_information, tip vozlišča: EndElement, opis: The element 'remittance_information' has incomplete content\\. List of possible elements expected: 'additional_remittance_information'.*?\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka namen plačila."
+    },
+    {
+        "pattern": ".*?Prejemnika z računom (.*?) in davčno številko (.*?) ni mogoče najti znotraj sistema UJPnet.*?",
+        "response": "Napako prejmete, saj imate zapisan napačen TRR prejemnika računa. Pravilen TRR prejemnika znotraj UJP omrežja lahko preverite na naslednji povezavi: <a href='https://storitve.ujp.gov.si/docdir/eracunpu/eRacunPU_Dnevni.xml' target='_blank'>UJP omrežje</a>."
+    },
+    {
+        "pattern": ".*?Priloga pod zaporedno št\\.?\\s*(\\d+)[:]? Certifikat v podpisu pod zap\\. številko (\\d+) je bil preklican! \\(Podpisnik: (.*?)\\).*?",
+        "response": "Napako prejmete, saj je certifikat <strong>{3}</strong>, ki ste ga izbrali za podpis eDokumentov preklican. Preverite veljavnost in poskusite znova."
+    },
+    {
+        "pattern": ".*?Priloga pod zaporedno št\\.?\\s*(\\d+)[:]? Certifikat v podpisu pod zap\\. številko (\\d+) ni veljaven, razlog: (.*?)! \\(Podpisnik: \\\"?(.*?)\\\"?\\).*?",
+        "response": "Napako prejmete zaradi napačnega certifikata za podpisovanje. Razlog: <strong>{3}</strong>. Certifikat pripada podpisniku <strong>{4}</strong>. Preverite, ali je izbran pravilen in veljaven certifikat."
+    },
+    {
+        "pattern": ".*?Priloga pod zaporedno št\\.?\\s*(\\d+)[:]? Certifikat v podpisu pod zap\\. številko (\\d+) velja samo za obdobje od (.*?) do (.*?)! \\(Podpisnik: (.*?)\\).*?",
+        "response": "Napako prejmete, saj vam je potekel certifikat za podpisovanje eDokumentov. Certifikat podpisnika <strong>{5}</strong> je bil veljaven le od <strong>{3}</strong> do <strong>{4}</strong>. Preverite veljavnost in uporabite drug certifikat."
+    },
+    {
+        "pattern": ".*?Prva dva znaka številke računa izdajatelja morata biti enaka (\\d{1,2})\\. in (\\d{1,2})\\. znaku BIC kode banke.*?",
+        "response": "Napako prejmete, saj imate v XML dokumentu napačen zapis BIC kode. Preverite, ali sta prva dva znaka številke računa enaka <strong>{1}</strong> in <strong>{2}</strong>."
+    },
+    {
+        "pattern": ".*?Račun (.*?) ne ustreza IBAN formatu*?",
+        "response": "Napako prejmete, saj imate v XML dokumentu računa napačen zapis transakcijskega računa (TRR). Pravilna oblika transakcijskega računa je <strong>SI56XXXXXXXXXXXXXXX</strong>. Preverite zapis in poskusite znova."
+    },
+    {
+        "pattern": ".*?Račun prejemnika \\((.*?)\\) ali njegov naslednik ne obstaja ali ni aktiven.*?Prejemnika z računom (.*?) in davčno številko (.*?) ni mogoče najti znotraj sistema UJPnet.*?Račun plačnika \\((.*?)\\) ali njegov naslednik ne obstaja ali ni aktiven.*?Opozorilo: RF referenca plačila ima napačno kontrolno številko \\(MOD 97\\)!.*?",
+        "response": "Napako prejmete, saj imate zapisan napačen TRR. S prejemnikom računa preverite veljavnost navedenega TRR-ja <strong>{2}</strong> in davčno številko <strong>{3}</strong>. Prav tako preverite TRR plačnika <strong>{4}</strong>."
+    },
+    {
+        "pattern": ".*?Račun prejemnika (.*?) ne pripada udeležencu UJP (.*?)\\. Neustrezna BIC koda.*?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br>- Ali imate vpisano pravilno BIC kodo? Pravilno BIC kodo glede na banko prejemnika lahko preverite na naslednji povezavi: <a href='https://www.bsi.si/placila-in-infrastruktura/placilne-storitve-in-elektronski-denar/identifikacijske-oznake-in-kode-bic' target='_blank'>BSI - Identifikacijske oznake in kode BIC</a>.<br>- BIC koda mora vsebovati 11 mest. V kolikor ne vsebuje 11 mest, dodajte <strong>XXX</strong>."
+    },
+    {
+        "pattern": ".*?(Izdajatelj ni registriran za izdajanje e-dokumentov fizičnim in pravnim osebam!).*?",
+        "response": "Napako prejmete, saj na UJP omrežju nimate še urejenih vseh pravic. Predlagam, da se obrnete na UJP omrežje."
+    },
+    {
+        "pattern": ".*?Račun in BIC koda \\((.*?)\\) izdajatelja računa mora biti enaka kot račun in BIC koda \\((.*?)\\) prejemnika plačila!.*?",
+        "response": "Napako prejmete, saj imate zapisan napačen TRR. S prejemnikom računa preverite veljavnost navedenega TRRja."
+    },
+    {
+        "pattern": ".*?Ne najdem prejemnika, ker izdajatelj ni znan!.*?",
+        "response": "Napako lahko prejmete zaradi več razlogov. Preverite:<br>- Ali imate vpisano pravilno BIC kodo? Pravilno BIC kodo glede na banko prejemnika lahko preverite na naslednji povezavi: <a href='https://www.bsi.si/placila-in-infrastruktura/placilne-storitve-in-elektronski-denar/identifikacijske-oznake-in-kode-bic' target='_blank'>BSI - Identifikacijske oznake in kode BIC</a>.<br>- BIC koda mora vsebovati 11 mest. V kolikor ne vsebuje 11 mest, dodajte <strong>XXX</strong>."
+    },
+    {
+        "pattern": ".*?Račun izdajatelja \\((.*?)\\) ali njegov naslednik ne obstaja ali ni aktiven!.*?",
+        "response": "Napako prejmete, saj imate zapisan napačen TRR <strong>{1}</strong>. S prejemnikom računa preverite veljavnost navedenega TRR-ja."
+    },
+    {
+        "pattern": ".*?Napačna oblika reference plačila: (Sklic DOBRO:.*?) \\((.*?)\\).*?",
+        "response": "Napako prejmete, saj imate v podatku <strong>{1}</strong> vpisanih preveč pomišljajev (-). V zapisu sklica sta lahko največ dva pomišljaja. Pomišljaj v zapisu sklica ne sme biti zapisan na petem mestu."
+    },
+    {
+        "pattern": ".*?Dokument v prilogi ne ustreza predpisani shemi\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)! \\(Ime vozlišča: amount, tip vozlišča: Element, opis: The element 'payment_data' has invalid child element 'amount'\\. List of possible elements expected: 'ultimate_debtor, requested_execution_date'\\..*?\\)",
+        "response": "Napako prejmete, saj vam v XML dokumentu računa manjka <strong>Datum zapadlosti račun/rok plačila</strong>. Napaka se nahaja v vrstici <strong>{1}</strong> in stolpcu <strong>{2}</strong>."
+    },
+    {
+        "pattern": ".*?Sklic plačila: Dolžina ni v okviru predpisanih meja!.*?",
+        "response": "Napaka pomeni, da vpisani sklic plačila (strukturirana referenca) ni prave dolžine po shemi eSlog. Največje število znakov sklica ne sme presegati 35 znakov. Številko za sklic se sicer sestavlja po pravilniku ZBS »Pravila za oblikovanje in uporabo standardiziranih referenc pri opravljanju plačilnih storitev«."
+    },
+    {
+        "pattern": ".*?Račun v prilogi ne ustreza predpisani shemi za E-Slog\\. Napaka v vrstici (\\d+) in stolpcu (\\d+)!.*?List of possible elements expected: '(.*?)'.*?",
+        "response": "Pri taki vrsti napake pogledamo, kateri podatki so navedeni kot pričakovani (List of possible elements expected). V zgornjem primeru je naveden »sender_agent«, kar pomeni, da v eRačunu manjka podatek BIC koda banke pošiljatelja."
+    },
+    {
+        "pattern": ".*?Priloga (\\d+) : Priloga pod zaporedno št\\. (\\d+): Račun v prilogi ne ustreza predpisani shemi za E-Slog\\. Napaka v vrstici (.*?) in stolpcu (.*?)!.*?opis: (.*?)\\..*?",
+        "response": "Ta napaka bi lahko imela več vzrokov, saj je vzrok <strong>{5}</strong> neznan. Po naših dosedanjih izkušnjah pa je bil najpogostejši vzrok te napake podatek <strong>enota mere</strong>, ki je imel odvečne znake (npr. presledke). Napaka se nahaja v prilogi <strong>{1}</strong> pod zaporedno številko <strong>{2}</strong> in je bila zaznana v vrstici <strong>{3}</strong> ter stolpcu <strong>{4}</strong>."
+    },
+    {
+        "pattern": ".*?Priloga pod zaporedno št\\. (\\d+): XML dokument v prilogi ni podpisan\\. Napaka: Vozlišče matična št\\. prejemnika \\(pravne osebe(.*?) mora biti navedeno natanko enkrat.*?",
+        "response": "Račun ne vsebuje matične številke prejemnika eRačuna. Napaka se pojavlja v prilogi <strong>{1}</strong>. Preverite, ali je matična številka prejemnika pravilno izpolnjena in poskusite znova."
+    },
+    {
+        "pattern": ".*?Napaka: Vozlišče matična št\\. izdajatelja \\(pravne osebe\\)(.*?) mora biti navedeno natanko enkrat!.*?",
+        "response": "Račun ne vsebuje matične številke pošiljatelja eRačuna. Preverite, ali je matična številka pravilno izpolnjena in poskusite znova."
+    }
+]
