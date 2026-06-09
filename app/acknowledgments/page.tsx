@@ -202,9 +202,18 @@ export default function AcknowledgementsPage() {
   );
 
   const displayedAcknowledgements = useMemo(() => {
-    if (filter === "error") return errorAcknowledgements;
-    return allAcknowledgements;
-  }, [allAcknowledgements, errorAcknowledgements, filter]);
+    const source =
+      filter === "error"
+        ? errorAcknowledgements
+        : allAcknowledgements;
+
+    return source.slice(0, scanLimit);
+  }, [
+    allAcknowledgements,
+    errorAcknowledgements,
+    filter,
+    scanLimit,
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
