@@ -62,6 +62,7 @@ export default function CompanySelector() {
     if (!selected) return;
 
     localStorage.setItem("activeCompany", JSON.stringify(selected));
+    window.dispatchEvent(new CustomEvent("active-company-changed"));
     setActiveCompany(selected);
   }
 

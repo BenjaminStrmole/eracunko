@@ -81,9 +81,19 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
+    useEffect(() => {
     loadDashboard();
-  }, []);
+
+    const handleCompanyChange = () => {
+        loadDashboard();
+    };
+
+    window.addEventListener("active-company-changed", handleCompanyChange);
+
+    return () => {
+        window.removeEventListener("active-company-changed", handleCompanyChange);
+    };
+    }, []);
 
   const receivedInvoices = useMemo(
     () => documents.filter((doc) => !isAcknowledgement(doc)),
