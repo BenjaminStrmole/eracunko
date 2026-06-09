@@ -8,7 +8,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function handleLogin() {
+  async function handleLogin(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+
+    if (loading) return;
+
+    const trimmedUsername = username.trim();
+
+    if (!trimmedUsername || !password) {
+      setMessage("Vnesi uporabniško ime in geslo.");
+      return;
+    }
+
     setLoading(true);
     setMessage("");
 
@@ -19,7 +30,7 @@ export default function LoginPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username,
+          username: trimmedUsername,
           password,
         }),
       });
@@ -48,28 +59,45 @@ export default function LoginPage() {
           Vpiši svoje bizBox demo uporabniško ime in geslo.
         </p>
 
-        <div className="mt-8 space-y-5">
+        <form onSubmit={handleLogin} className="mt-8 space-y-5">
           <div>
-            <label className="mb-2 block text-sm text-slate-300">
+            <label
+              htmlFor="username"
+              className="mb-2 block text-sm text-slate-300"
+            >
               Uporabniško ime
             </label>
+
             <input
+              id="username"
+              name="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              autoFocus
+              disabled={loading}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500 disabled:opacity-60"
               placeholder="npr. DEMO.USER"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-slate-300">
+            <label
+              htmlFor="password"
+              className="mb-2 block text-sm text-slate-300"
+            >
               Geslo
             </label>
+
             <input
+              id="password"
+              name="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               type="password"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3"
+              autoComplete="current-password"
+              disabled={loading}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 outline-none focus:border-blue-500 disabled:opacity-60"
             />
           </div>
 
@@ -80,13 +108,13 @@ export default function LoginPage() {
           )}
 
           <button
-            onClick={handleLogin}
+            type="submit"
             disabled={loading}
             className="w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
           >
             {loading ? "Preverjam prijavo..." : "Prijava"}
           </button>
-        </div>
+        </form>
       </div>
     </main>
   );
