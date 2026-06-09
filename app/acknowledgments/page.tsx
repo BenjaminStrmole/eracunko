@@ -13,6 +13,8 @@ type DocumentItem = {
   metadata?: any;
 };
 
+type FilterType = "all" | "error";
+
 function getParam(item: any, name: string) {
   const params =
     item?.metadata?.parameters?.param ||
@@ -56,12 +58,15 @@ function isAcknowledgement(item: DocumentItem) {
 function isErrorAck(item: DocumentItem) {
   const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
   const title = getTitle(item).toLowerCase();
+  const description = (getParam(item, "Opis") || "").toLowerCase();
 
   return (
     confirmation.startsWith("27") ||
     confirmation.includes("-99") ||
     title.includes("povratnica(-99)") ||
-    title.includes("-99")
+    title.includes("-99") ||
+    description.includes("[error") ||
+    description.includes("napaka")
   );
 }
 
@@ -102,7 +107,7 @@ export default function AcknowledgementsPage() {
   const [loading, setLoading] = useState(true);
   const [deepScanning, setDeepScanning] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"all" | "error">("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [scanLimit, setScanLimit] = useState(25);
   const [scannedCount, setScannedCount] = useState(0);
 
@@ -118,10 +123,7 @@ export default function AcknowledgementsPage() {
       scanned.push(enriched);
       setScannedCount(scanned.length);
 
-      setDocuments([
-        ...scanned,
-        ...acks.slice(scanned.length),
-      ]);
+      setDocuments([...scanned, ...acks.slice(scanned.length)]);
     }
 
     setDeepScanning(false);
@@ -161,7 +163,7 @@ export default function AcknowledgementsPage() {
       setDocuments(onlyAcks);
       setLoading(false);
 
-      scanMetadata(onlyAcks, limit);
+      await scanMetadata(onlyAcks, limit);
     } catch (err: any) {
       setError(err.message || "Napaka pri pridobivanju povratnic.");
       setLoading(false);
@@ -191,7 +193,7 @@ export default function AcknowledgementsPage() {
     [allAcknowledgements]
   );
 
-  const acknowledgements = useMemo(() => {
+  const displayedAcknowledgements = useMemo(() => {
     if (filter === "error") return errorAcknowledgements;
     return allAcknowledgements;
   }, [allAcknowledgements, errorAcknowledgements, filter]);
@@ -218,7 +220,7 @@ export default function AcknowledgementsPage() {
         </aside>
 
         <section className="flex-1 p-10">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-6">
             <div>
               <h2 className="text-4xl font-bold">Povratnice</h2>
               <p className="mt-2 text-slate-400">
@@ -306,7 +308,7 @@ export default function AcknowledgementsPage() {
               </div>
             )}
 
-            {!loading && acknowledgements.length === 0 && !error && (
+            {!loading && displayedAcknowledgements.length === 0 && !error && (
               <div className="px-6 py-8 text-slate-400">
                 {filter === "error"
                   ? "Ni povratnic z napako med trenutno pregledanimi rezultati."
@@ -315,7 +317,7 @@ export default function AcknowledgementsPage() {
             )}
 
             {!loading &&
-              acknowledgements.map((doc) => {
+              displayedAcknowledgements.map((doc) => {
                 const confirmationType =
                   getParam(doc, "VrstaPotrditve") || getTitle(doc);
                 const refMsgId = getParam(doc, "RefMsgId") || "-";
@@ -324,6 +326,7 @@ export default function AcknowledgementsPage() {
                   getParam(doc, "DOC_ROLE_TYPE") ||
                   doc.metadata?.type ||
                   doc.type;
+                const description = getParam(doc, "Opis");
 
                 return (
                   <a
@@ -342,6 +345,12 @@ export default function AcknowledgementsPage() {
                       >
                         {confirmationType}
                       </span>
+
+                      {description && isErrorAck(doc) && (
+                        <div className="mt-2 max-w-xs truncate text-xs text-red-300">
+                          {description.replace("[ERROR:", "").replace("]", "")}
+                        </div>
+                      )}
                     </div>
                     <div className="text-slate-300">{issueDate}</div>
                     <div className="text-blue-300">Odpri →</div>
