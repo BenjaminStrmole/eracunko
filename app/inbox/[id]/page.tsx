@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import errorPatterns from "../../../povratnice_folder_view.json";
+
+type ErrorPattern = {
+  pattern: string;
+  response: string;
+};
 
 function getParam(metadata: any, name: string) {
   const params = metadata?.parameters?.param || [];
@@ -15,6 +21,31 @@ function cleanErrorText(value: string) {
     .replace("[ERROR", "")
     .replace("]", "")
     .trim();
+}
+
+function interpolateResponse(response: string, match: RegExpMatchArray) {
+  return response
+    .replace(/\$\{(\d+)\}/g, (_, index) => match[Number(index)] || "")
+    .replace(/\{(\d+)\}/g, (_, index) => match[Number(index)] || "");
+}
+
+function findErrorExplanation(errorText: string) {
+  if (!errorText) return "";
+
+  for (const item of errorPatterns as ErrorPattern[]) {
+    try {
+      const regex = new RegExp(item.pattern, "is");
+      const match = errorText.match(regex);
+
+      if (match) {
+        return interpolateResponse(item.response, match);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
 }
 
 function isAcknowledgement(metadata: any) {
@@ -100,6 +131,7 @@ export default function InboxDocumentPage() {
 
     const acknowledgement = isAcknowledgement(metadata);
     const errorAck = isErrorAcknowledgement(metadata);
+    const errorDescription = cleanErrorText(getParam(metadata, "Opis") || "");
 
     return {
       isAcknowledgement: acknowledgement,
@@ -131,7 +163,8 @@ export default function InboxDocumentPage() {
       refMsgId: getParam(metadata, "RefMsgId") || "-",
       refDocId: getParam(metadata, "RefDocID") || "-",
       refDocType: getParam(metadata, "RefDocType") || "-",
-      errorDescription: cleanErrorText(getParam(metadata, "Opis") || ""),
+      errorDescription,
+      errorExplanation: findErrorExplanation(errorDescription),
     };
   }, [metadata]);
 
@@ -204,6 +237,27 @@ export default function InboxDocumentPage() {
                   <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-950/60 p-4 text-sm text-red-100">
                     {documentInfo.errorDescription}
                   </pre>
+                </div>
+              )}
+
+              {documentInfo.isErrorAck && (
+                <div className="mt-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-6">
+                  <div className="text-sm font-semibold text-blue-200">
+                    Razlaga napake
+                  </div>
+
+                  {documentInfo.errorExplanation ? (
+                    <div
+                      className="mt-3 rounded-xl bg-slate-950/60 p-4 text-sm leading-6 text-blue-100"
+                      dangerouslySetInnerHTML={{
+                        __html: documentInfo.errorExplanation,
+                      }}
+                    />
+                  ) : (
+                    <div className="mt-3 rounded-xl bg-slate-950/60 p-4 text-sm text-slate-300">
+                      Za to napako še ni pripravljene razlage v bazi povratnic.
+                    </div>
+                  )}
                 </div>
               )}
 
