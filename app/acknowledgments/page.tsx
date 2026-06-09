@@ -11,6 +11,14 @@ type DocumentItem = {
   date: string;
   raw?: any;
   metadata?: any;
+  acknowledgement?: {
+    confirmationType?: string;
+    refMsgId?: string;
+    issueDate?: string;
+    description?: string;
+    roleType?: string;
+    isError?: boolean;
+  };
 };
 
 type FilterType = "all" | "error";
@@ -45,9 +53,22 @@ function getTitle(item: DocumentItem) {
   );
 }
 
+function getConfirmationType(item: DocumentItem) {
+  return (
+    item.acknowledgement?.confirmationType ||
+    getParam(item, "VrstaPotrditve") ||
+    getTitle(item)
+  );
+}
+
+function getDescription(item: DocumentItem) {
+  return item.acknowledgement?.description || getParam(item, "Opis") || "";
+}
+
 function isAcknowledgement(item: DocumentItem) {
   const actualType = getParam(item, "ACTUAL_TYPE");
-  const roleType = getParam(item, "DOC_ROLE_TYPE");
+  const roleType =
+    item.acknowledgement?.roleType || getParam(item, "DOC_ROLE_TYPE");
   const classification =
     item.metadata?.classificationName ||
     item.raw?.classificationname ||
@@ -64,9 +85,11 @@ function isAcknowledgement(item: DocumentItem) {
 }
 
 function isErrorAck(item: DocumentItem) {
-  const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
+  if (item.acknowledgement?.isError) return true;
+
+  const confirmation = getConfirmationType(item).toLowerCase();
   const title = getTitle(item).toLowerCase();
-  const description = (getParam(item, "Opis") || "").toLowerCase();
+  const description = getDescription(item).toLowerCase();
 
   return (
     confirmation.startsWith("27") ||
@@ -90,58 +113,18 @@ function getBadgeStyle(value: string) {
   return "bg-blue-500/10 text-blue-200";
 }
 
-async function loadMetadataForDocument(doc: DocumentItem) {
-  try {
-    const response = await fetch(`/api/bizbox/document/${doc.id}/metadata`, {
-      method: "GET",
-      cache: "no-store",
-    });
-
-    const data = await response.json();
-
-    if (!data.success) return doc;
-
-    return {
-      ...doc,
-      metadata: data.metadata,
-    };
-  } catch {
-    return doc;
-  }
-}
-
 export default function AcknowledgementsPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deepScanning, setDeepScanning] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [scanLimit, setScanLimit] = useState(25);
-  const [scannedCount, setScannedCount] = useState(0);
-
-  async function scanMetadata(acks: DocumentItem[], limit: number) {
-    setDeepScanning(true);
-    setScannedCount(0);
-
-    const toScan = acks.slice(0, limit);
-    const scanned: DocumentItem[] = [];
-
-    for (const doc of toScan) {
-      const enriched = await loadMetadataForDocument(doc);
-      scanned.push(enriched);
-      setScannedCount(scanned.length);
-
-      setDocuments([...scanned, ...acks.slice(scanned.length)]);
-    }
-
-    setDeepScanning(false);
-  }
+  const [enrichedCount, setEnrichedCount] = useState(0);
 
   async function loadDocuments(limit = scanLimit) {
     setLoading(true);
-    setDeepScanning(false);
     setError("");
-    setScannedCount(0);
+    setEnrichedCount(0);
 
     try {
       const activeCompany = JSON.parse(
@@ -151,7 +134,9 @@ export default function AcknowledgementsPage() {
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
 
       const response = await fetch(
-        `/api/bizbox/inbox?taxNumber=${encodeURIComponent(taxNumber)}`,
+        `/api/bizbox/inbox?taxNumber=${encodeURIComponent(
+          taxNumber
+        )}&includeMetadata=true&limit=${limit}`,
         {
           method: "GET",
           cache: "no-store",
@@ -169,13 +154,11 @@ export default function AcknowledgementsPage() {
       const onlyAcks = list.filter(isAcknowledgement);
 
       setDocuments(onlyAcks);
-      setLoading(false);
-
-      await scanMetadata(onlyAcks, limit);
+      setEnrichedCount(data.metadata?.enrichedCount || 0);
     } catch (err: any) {
       setError(err.message || "Napaka pri pridobivanju povratnic.");
+    } finally {
       setLoading(false);
-      setDeepScanning(false);
     }
   }
 
@@ -203,17 +186,10 @@ export default function AcknowledgementsPage() {
 
   const displayedAcknowledgements = useMemo(() => {
     const source =
-      filter === "error"
-        ? errorAcknowledgements
-        : allAcknowledgements;
+      filter === "error" ? errorAcknowledgements : allAcknowledgements;
 
     return source.slice(0, scanLimit);
-  }, [
-    allAcknowledgements,
-    errorAcknowledgements,
-    filter,
-    scanLimit,
-  ]);
+  }, [allAcknowledgements, errorAcknowledgements, filter, scanLimit]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -243,12 +219,6 @@ export default function AcknowledgementsPage() {
               <p className="mt-2 text-slate-400">
                 Pregled povratnic za izbrano aktivno podjetje.
               </p>
-
-              {deepScanning && (
-                <p className="mt-2 text-sm text-blue-300">
-                  Pregledujem metadata: {scannedCount}/{scanLimit}
-                </p>
-              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -271,10 +241,10 @@ export default function AcknowledgementsPage() {
 
               <button
                 onClick={() => loadDocuments(scanLimit)}
-                disabled={loading || deepScanning}
+                disabled={loading}
                 className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
               >
-                {loading || deepScanning ? "Osvežujem..." : "Osveži"}
+                {loading ? "Osvežujem..." : "Osveži"}
               </button>
             </div>
           </div>
@@ -321,7 +291,7 @@ export default function AcknowledgementsPage() {
 
             {loading && (
               <div className="px-6 py-8 text-slate-400">
-                Nalagam povratnice ...
+                Nalagam povratnice in metadata ...
               </div>
             )}
 
@@ -335,15 +305,21 @@ export default function AcknowledgementsPage() {
 
             {!loading &&
               displayedAcknowledgements.map((doc) => {
-                const confirmationType =
-                  getParam(doc, "VrstaPotrditve") || getTitle(doc);
-                const refMsgId = getParam(doc, "RefMsgId") || "-";
-                const issueDate = getParam(doc, "DatumIzdaje") || doc.date;
+                const confirmationType = getConfirmationType(doc);
+                const refMsgId =
+                  doc.acknowledgement?.refMsgId ||
+                  getParam(doc, "RefMsgId") ||
+                  "-";
+                const issueDate =
+                  doc.acknowledgement?.issueDate ||
+                  getParam(doc, "DatumIzdaje") ||
+                  doc.date;
                 const roleType =
+                  doc.acknowledgement?.roleType ||
                   getParam(doc, "DOC_ROLE_TYPE") ||
                   doc.metadata?.type ||
                   doc.type;
-                const description = getParam(doc, "Opis");
+                const description = getDescription(doc);
 
                 return (
                   <a
@@ -377,9 +353,8 @@ export default function AcknowledgementsPage() {
           </div>
 
           <div className="mt-4 text-sm text-slate-500">
-            Napake se zaznajo iz metadata povratnic. Trenutno pregledano:{" "}
-            {Math.min(scannedCount, allAcknowledgements.length)} /{" "}
-            {Math.min(scanLimit, allAcknowledgements.length)}.
+            Metadata je pridobljena na backendu za prvih{" "}
+            {Math.min(enrichedCount, scanLimit)} dokumentov.
           </div>
         </section>
       </div>
