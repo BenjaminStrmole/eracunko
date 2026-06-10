@@ -61,6 +61,20 @@ function isAcknowledgement(metadata: any) {
   );
 }
 
+function isOutgoingDocument(metadata: any) {
+  const docRole = getParam(metadata, "DOC_ROLE");
+  const roleType = getParam(metadata, "DOC_ROLE_TYPE");
+  const classification = metadata?.classificationName || "";
+
+  const text = `${docRole} ${roleType} ${classification}`.toLowerCase();
+
+  return (
+    text.includes("izhodni") ||
+    text.includes("poslan") ||
+    text.includes("out")
+  );
+}
+
 function isErrorAcknowledgement(metadata: any) {
   const confirmation = (getParam(metadata, "VrstaPotrditve") || "").toLowerCase();
   const title = String(metadata?.title || "").toLowerCase();
@@ -130,11 +144,14 @@ export default function InboxDocumentPage() {
     if (!metadata) return null;
 
     const acknowledgement = isAcknowledgement(metadata);
+    const outgoing = isOutgoingDocument(metadata);
     const errorAck = isErrorAcknowledgement(metadata);
     const errorDescription = cleanErrorText(getParam(metadata, "Opis") || "");
 
     return {
       isAcknowledgement: acknowledgement,
+      isOutgoing: outgoing,
+      isIncoming: !outgoing,
       isErrorAck: errorAck,
 
       supplierName: getParam(metadata, "P_Naziv") || metadata.organization || "-",
@@ -168,6 +185,21 @@ export default function InboxDocumentPage() {
     };
   }, [metadata]);
 
+  const backHref = documentInfo?.isAcknowledgement
+    ? "/acknowledgments"
+    : documentInfo?.isOutgoing
+    ? "/sent"
+    : "/inbox";
+
+  const pageTitle = documentInfo?.isAcknowledgement
+    ? "Povratnica"
+    : documentInfo?.isOutgoing
+    ? "Poslani dokument"
+    : "Prejeti dokument";
+
+  const activeNavClass = "block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200";
+  const navClass = "block rounded-lg px-4 py-3 hover:bg-slate-800";
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="flex min-h-screen">
@@ -178,27 +210,25 @@ export default function InboxDocumentPage() {
           </div>
 
           <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
+            <a href="/dashboard" className={navClass}>🏠 Domov</a>
+            <a href="/inbox" className={documentInfo?.isIncoming && !documentInfo?.isAcknowledgement ? activeNavClass : navClass}>📥 Prejeti računi</a>
+            <a href="/acknowledgments" className={documentInfo?.isAcknowledgement ? activeNavClass : navClass}>📨 Povratnice</a>
+            <a href="/sent" className={documentInfo?.isOutgoing && !documentInfo?.isAcknowledgement ? activeNavClass : navClass}>📤 Poslani računi</a>
+            <a href="/drafts" className={navClass}>📝 Osnutki</a>
+            <a href="/invoices/new" className={navClass}>🧾 Nov račun</a>
+            <a href="/customers" className={navClass}>👥 Moje stranke</a>
+            <a href="/settings" className={navClass}>⚙️ Nastavitve</a>
           </nav>
         </aside>
 
         <section className="flex-1 p-10">
           <div className="flex items-start justify-between">
             <div>
-              <a href="/inbox" className="text-sm text-blue-300 hover:text-blue-200">
+              <a href={backHref} className="text-sm text-blue-300 hover:text-blue-200">
                 ← Nazaj
               </a>
 
-              <h2 className="mt-4 text-4xl font-bold">
-                {documentInfo?.isAcknowledgement ? "Povratnica" : "Prejeti dokument"}
-              </h2>
+              <h2 className="mt-4 text-4xl font-bold">{pageTitle}</h2>
 
               <p className="mt-2 text-slate-400">
                 Dokument ID:{" "}
@@ -310,8 +340,14 @@ export default function InboxDocumentPage() {
                     </div>
                   ) : (
                     <div className="mt-8 grid gap-4 md:grid-cols-2">
-                      <Info label="Dobavitelj" value={documentInfo.supplierName} />
-                      <Info label="Davčna dobavitelja" value={documentInfo.supplierTaxId} />
+                      <Info
+                        label={documentInfo.isOutgoing ? "Izdajatelj" : "Dobavitelj"}
+                        value={documentInfo.supplierName}
+                      />
+                      <Info
+                        label={documentInfo.isOutgoing ? "Davčna izdajatelja" : "Davčna dobavitelja"}
+                        value={documentInfo.supplierTaxId}
+                      />
                       <Info label="Prejemnik" value={documentInfo.buyerName} />
                       <Info label="Davčna prejemnika" value={documentInfo.buyerTaxId} />
                       <Info label="Datum izdaje" value={documentInfo.issueDate} />
