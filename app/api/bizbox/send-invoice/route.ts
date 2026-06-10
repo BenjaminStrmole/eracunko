@@ -67,16 +67,56 @@ function buildEnvelopeXml(data: {
 </envelope>`;
 }
 
-function normalizeEAddress(value: string | undefined | null, fallbackTaxId: string) {
+function normalizeTaxId(value: string | undefined | null) {
+  return String(value || "")
+    .replace(/\s/g, "")
+    .toUpperCase();
+}
+
+function looksLikeInvalidSenderEAddress(value: string) {
+  const cleaned = value.trim().toUpperCase();
+
+  if (!cleaned) return true;
+
+  return (
+    cleaned === "CONSIGN_TEST" ||
+    cleaned === "TEST" ||
+    cleaned === "DEMO" ||
+    cleaned.includes("CONSIGN") ||
+    cleaned.includes("TEST")
+  );
+}
+
+function normalizeSenderEAddress(
+  value: string | undefined | null,
+  fallbackTaxId: string
+) {
   const cleaned = String(value || "").trim();
+
+  if (!looksLikeInvalidSenderEAddress(cleaned)) {
+    return cleaned;
+  }
+
+  return `${normalizeTaxId(fallbackTaxId)}.HQ`;
+}
+
+function normalizeReceiverEAddress(
+  value: string | undefined | null,
+  fallbackTaxId: string
+) {
+  const cleaned = String(value || "").trim();
+
   if (cleaned) return cleaned;
-  return `${fallbackTaxId}.HQ`;
+
+  return `${normalizeTaxId(fallbackTaxId)}.HQ`;
 }
 
 function normalizeELocation(value: string | undefined | null, fallbackTaxId: string) {
   const cleaned = String(value || "").trim();
+
   if (cleaned) return cleaned;
-  return `C:${fallbackTaxId}`;
+
+  return `C:${normalizeTaxId(fallbackTaxId)}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -131,12 +171,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const senderTaxId = sender?.vatNumber || sender?.taxId || "SI66666666";
+    const senderTaxId = normalizeTaxId(
+      sender?.vatNumber || sender?.taxId || "SI66666666"
+    );
+
+    const buyerTaxId = normalizeTaxId(buyer.vat);
 
     const finalSender = {
       name: sender?.name || "ZZI T2",
       taxId: senderTaxId,
-      eAddress: normalizeEAddress(sender?.eAddress, senderTaxId),
+      eAddress: normalizeSenderEAddress(sender?.eAddress, senderTaxId),
       eLocation: normalizeELocation(sender?.eLocation, senderTaxId),
       address: sender?.address || "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE",
     };
@@ -149,9 +193,9 @@ export async function POST(request: NextRequest) {
       from: finalSender,
       to: {
         name: buyer.name,
-        taxId: buyer.vat,
-        eAddress: normalizeEAddress(buyer.eAddress, buyer.vat),
-        eLocation: buyer.eLocation,
+        taxId: buyerTaxId,
+        eAddress: normalizeReceiverEAddress(buyer.eAddress, buyerTaxId),
+        eLocation: normalizeELocation(buyer.eLocation, buyerTaxId),
         address: buyer.address || "",
       },
     });
@@ -199,6 +243,7 @@ export async function POST(request: NextRequest) {
           message: "Pošiljanje v bizBox DEMO ni uspelo.",
           raw,
           envelopeXml,
+          finalSender,
           debugUrl: url.replace(guid, "***"),
         },
         { status: 400 }
@@ -210,6 +255,7 @@ export async function POST(request: NextRequest) {
       message: "Dokument uspešno poslan v bizBox DEMO.",
       docId: text,
       envelopeXml,
+      finalSender,
     });
   } catch (error: any) {
     return NextResponse.json(
