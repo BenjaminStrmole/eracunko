@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 
 type SentInvoice = {
+  id?: string;
   number: string;
+  receiver?: string;
+  amount?: string;
+  type?: string;
+  status?: string;
+  date?: string;
+  docId?: string;
   buyer?: {
     name?: string;
     vat?: string;
@@ -11,9 +18,7 @@ type SentInvoice = {
   totals?: {
     gross?: number;
   };
-  status?: string;
   sentAt?: string;
-  docId?: string;
   [key: string]: any;
 };
 
@@ -51,11 +56,64 @@ function generateInvoiceNumber() {
 
 export default function SentInvoicesPage() {
   const [invoices, setInvoices] = useState<SentInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [toast, setToast] = useState("");
 
+  async function loadSentInvoices() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const activeCompany = JSON.parse(
+        localStorage.getItem("activeCompany") || "null"
+      );
+
+      const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
+
+      const response = await fetch(
+        `/api/bizbox/sent?taxNumber=${encodeURIComponent(taxNumber)}&limit=150`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setError(data.message || "Napaka pri pridobivanju poslanih računov.");
+        setInvoices([]);
+        return;
+      }
+
+      const bizboxSent: SentInvoice[] = data.documents || [];
+      const localSent: SentInvoice[] = JSON.parse(
+        localStorage.getItem("sent") || "[]"
+      );
+
+      const merged = [...localSent, ...bizboxSent];
+
+      const unique = merged.filter((invoice, index, array) => {
+        const key = invoice.id || invoice.docId || invoice.number;
+        return (
+          array.findIndex(
+            (item) => (item.id || item.docId || item.number) === key
+          ) === index
+        );
+      });
+
+      setInvoices(unique);
+    } catch (err: any) {
+      setError(err.message || "Napaka pri pridobivanju poslanih računov.");
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("sent") || "[]");
-    setInvoices(saved.reverse());
+    loadSentInvoices();
   }, []);
 
   useEffect(() => {
@@ -66,6 +124,13 @@ export default function SentInvoicesPage() {
   }, [toast]);
 
   function copyInvoice(invoice: SentInvoice) {
+    if (!invoice.buyer && !invoice.lines) {
+      setToast(
+        "Tega bizBox dokumenta še ni mogoče kopirati, ker nima shranjene strukture računa v eRačunku."
+      );
+      return;
+    }
+
     const newInvoice = {
       ...invoice,
       number: generateInvoiceNumber(),
@@ -121,17 +186,33 @@ export default function SentInvoicesPage() {
             <div>
               <h2 className="text-4xl font-bold">Poslani računi</h2>
               <p className="mt-2 text-slate-400">
-                Pregled poslanih e-računov, statusov in povratnic.
+                Pregled poslanih e-računov iz bizBoxa in eRačunka.
               </p>
             </div>
 
-            <a
-              href="/invoices/new"
-              className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
-            >
-              + Nov račun
-            </a>
+            <div className="flex gap-3">
+              <button
+                onClick={loadSentInvoices}
+                disabled={loading}
+                className="rounded-full border border-white/15 px-6 py-3 font-semibold hover:bg-white/10 disabled:opacity-60"
+              >
+                {loading ? "Osvežujem..." : "Osveži"}
+              </button>
+
+              <a
+                href="/invoices/new"
+                className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+              >
+                + Nov račun
+              </a>
+            </div>
           </div>
+
+          {error && (
+            <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-200">
+              {error}
+            </div>
+          )}
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900">
             <div className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
@@ -143,83 +224,78 @@ export default function SentInvoicesPage() {
               <div>Akcije</div>
             </div>
 
-            {invoices.length === 0 && (
+            {loading && (
               <div className="px-6 py-8 text-slate-400">
-                Ni še poslanih računov.
+                Nalagam poslane račune ...
               </div>
             )}
 
-            {invoices.map((invoice) => {
-              const status = invoice.status || "SENT";
+            {!loading && invoices.length === 0 && !error && (
+              <div className="px-6 py-8 text-slate-400">
+                Ni najdenih poslanih računov za izbrano podjetje.
+              </div>
+            )}
 
-              return (
-                <div
-                  key={`${invoice.number}-${invoice.docId || ""}`}
-                  className="grid grid-cols-6 items-center border-b border-slate-800 px-6 py-4 last:border-b-0"
-                >
-                  <div>
-                    <div className="font-medium">{invoice.number}</div>
-                    {invoice.docId && (
-                      <div className="mt-1 text-xs text-slate-500">
-                        docId: {invoice.docId}
-                      </div>
-                    )}
+            {!loading &&
+              invoices.map((invoice) => {
+                const status = invoice.status || "SENT";
+                const receiver =
+                  invoice.receiver || invoice.buyer?.name || "-";
+
+                const amount =
+                  invoice.amount ||
+                  (invoice.totals?.gross
+                    ? formatMoney(invoice.totals.gross)
+                    : "-");
+
+                const date = invoice.date || formatDate(invoice.sentAt);
+
+                return (
+                  <div
+                    key={`${invoice.id || invoice.docId || invoice.number}`}
+                    className="grid grid-cols-6 items-center border-b border-slate-800 px-6 py-4 last:border-b-0"
+                  >
+                    <div>
+                      <div className="font-medium">{invoice.number}</div>
+                      {(invoice.id || invoice.docId) && (
+                        <div className="mt-1 text-xs text-slate-500">
+                          ID: {invoice.id || invoice.docId}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-slate-300">{receiver}</div>
+
+                    <div className="text-slate-300">{amount}</div>
+
+                    <div>
+                      <span className="rounded-full bg-green-500/10 px-3 py-1 text-sm text-green-300">
+                        {status}
+                      </span>
+                    </div>
+
+                    <div className="text-slate-300">{date}</div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => copyInvoice(invoice)}
+                        className="rounded-lg border border-blue-500/30 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
+                      >
+                        📋 Kopiraj
+                      </button>
+
+                      {(invoice.id || invoice.docId) && (
+                        <a
+                          href={`/inbox/${invoice.id || invoice.docId}`}
+                          className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+                        >
+                          Odpri
+                        </a>
+                      )}
+                    </div>
                   </div>
-
-                  <div className="text-slate-300">
-                    {invoice.buyer?.name || "-"}
-                  </div>
-
-                  <div className="text-slate-300">
-                    {formatMoney(invoice.totals?.gross || 0)}
-                  </div>
-
-                  <div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-sm ${
-                        status === "SENT"
-                          ? "bg-green-500/10 text-green-300"
-                          : status === "ERROR"
-                          ? "bg-red-500/10 text-red-300"
-                          : "bg-amber-500/10 text-amber-300"
-                      }`}
-                    >
-                      {status === "SENT"
-                        ? "Poslano"
-                        : status === "ERROR"
-                        ? "Napaka"
-                        : status}
-                    </span>
-                  </div>
-
-                  <div className="text-slate-300">
-                    {formatDate(invoice.sentAt)}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => copyInvoice(invoice)}
-                      className="rounded-lg border border-blue-500/30 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
-                    >
-                      📋 Kopiraj
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        localStorage.setItem(
-                          "eracunko_current_invoice",
-                          JSON.stringify(invoice)
-                        );
-                        window.location.href = "/invoices/preview";
-                      }}
-                      className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
-                    >
-                      Odpri
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </section>
       </div>
