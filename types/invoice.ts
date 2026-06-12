@@ -1,6 +1,7 @@
 export type VatCategory = "S" | "Z" | "E" | "AE" | "K" | "G" | "O" | "IC";
 
 export type InvoiceStatus = "DRAFT" | "READY" | "SENT" | "ERROR";
+export type InvoiceProfile = "standard" | "hr" | "ujp" | "bank";
 
 export type Party = {
   name: string;
@@ -99,8 +100,47 @@ export type InvoiceOperator = {
   name?: string;
 };
 
+export type HrInvoiceData = {
+  invoiceNumberNumericPart?: string;
+  businessPremiseCode?: string;
+  deviceCode?: string;
+  issueTime?: string;
+  businessProcessType?: string;
+  p99BuyerProcessId?: string;
+  operatorOib?: string;
+  operatorCode?: string;
+  operatorName?: string;
+  isCopy?: boolean;
+  selfBilling?: boolean;
+  previousInvoiceNumber?: string;
+  previousInvoiceDate?: string;
+};
+
+export type UjpInvoiceData = {
+  orderReference?: string;
+  contractReference?: string;
+  deliveryNoteReference?: string;
+  buyerReference?: string;
+  budgetUser?: string;
+  ujpRecipient?: string;
+  publicProcurementReference?: string;
+  additionalReference?: string;
+};
+
+export type BankInvoiceData = {
+  payeeIban?: string;
+  payeeBic?: string;
+  paymentModel?: string;
+  paymentReference?: string;
+  purposeCode?: string;
+  paymentMeansCode?: string;
+  payerName?: string;
+  payeeName?: string;
+};
+
 export type Invoice = {
   id?: number;
+  profile?: InvoiceProfile;
 
   number: string;
   invoiceNumberNumericPart?: string;
@@ -118,6 +158,9 @@ export type Invoice = {
   isCopy?: boolean;
   cashAccounting?: boolean;
   operator?: InvoiceOperator;
+  hrData?: HrInvoiceData;
+  ujpData?: UjpInvoiceData;
+  bankData?: BankInvoiceData;
 
   seller?: Party;
   buyer: Party;

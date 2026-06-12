@@ -156,7 +156,8 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   if (isEmpty(invoice.documentType || invoice.eSlog?.documentType)) {
     errors.push("Manjka tip dokumenta.");
   }
-  if (!/^P([1-9]|1[0-2])$/.test(normalize(invoice.businessProcess || invoice.eSlog?.businessProcess)) && !normalize(invoice.businessProcess || invoice.eSlog?.businessProcess).startsWith("P99:")) {
+  const businessProcess = normalize(invoice.businessProcess || invoice.eSlog?.businessProcess);
+  if (!/^P([1-9]|1[0-2])$/.test(businessProcess) && businessProcess !== "P99" && !businessProcess.startsWith("P99:")) {
     errors.push("Poslovni proces mora biti P1-P12 ali P99:oznakaKupca.");
   }
   if (invoice.currency !== "EUR") errors.push("Valuta mora biti EUR.");

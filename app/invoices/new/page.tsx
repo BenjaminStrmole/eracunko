@@ -10,8 +10,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
-import type { Invoice, InvoiceLine, VatCategory } from "../../../types/invoice";
+import type {
+  Invoice,
+  InvoiceLine,
+  InvoiceProfile,
+  VatCategory,
+} from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
 
 type Customer = {
@@ -157,6 +163,7 @@ function lineVatAmount(line: EditableLine) {
 }
 
 export default function NewInvoicePage() {
+  const [profile, setProfile] = useState<InvoiceProfile>("standard");
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerVat, setSelectedCustomerVat] = useState("");
@@ -178,6 +185,10 @@ export default function NewInvoicePage() {
   const [note, setNote] = useState("");
   const [operatorOib, setOperatorOib] = useState("");
   const [operatorCode, setOperatorCode] = useState("Operater1");
+  const [p99BuyerProcessId, setP99BuyerProcessId] = useState("");
+  const [selfBilling, setSelfBilling] = useState(false);
+  const [previousInvoiceNumber, setPreviousInvoiceNumber] = useState("");
+  const [previousInvoiceDate, setPreviousInvoiceDate] = useState("");
 
   const [paymentMeansCode, setPaymentMeansCode] = useState("58");
   const [purposeCode, setPurposeCode] = useState("OTHR");
@@ -185,11 +196,18 @@ export default function NewInvoicePage() {
   const [bankBic, setBankBic] = useState("");
   const [reference, setReference] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [paymentModel, setPaymentModel] = useState("");
+  const [payerName, setPayerName] = useState("");
+  const [payeeName, setPayeeName] = useState("");
 
   const [orderReference, setOrderReference] = useState("");
   const [contractReference, setContractReference] = useState("");
   const [deliveryNoteReference, setDeliveryNoteReference] = useState("");
   const [buyerReference, setBuyerReference] = useState("");
+  const [budgetUser, setBudgetUser] = useState("");
+  const [ujpRecipient, setUjpRecipient] = useState("");
+  const [publicProcurementReference, setPublicProcurementReference] = useState("");
+  const [additionalUjpReference, setAdditionalUjpReference] = useState("");
 
   const [lines, setLines] = useState<EditableLine[]>([
     {
@@ -285,6 +303,7 @@ export default function NewInvoicePage() {
 
     return {
       id: invoiceId,
+      profile,
       number: invoiceNumber,
       invoiceNumberNumericPart,
       businessPremiseCode,
@@ -301,6 +320,21 @@ export default function NewInvoicePage() {
       operator: {
         oib: operatorOib,
         code: operatorCode,
+      },
+      hrData: {
+        invoiceNumberNumericPart,
+        businessPremiseCode,
+        deviceCode,
+        issueTime,
+        businessProcessType: businessProcess,
+        p99BuyerProcessId,
+        operatorOib,
+        operatorCode,
+        operatorName: operatorCode,
+        isCopy,
+        selfBilling,
+        previousInvoiceNumber,
+        previousInvoiceDate,
       },
       seller: {
         name: activeCompany?.name || "",
@@ -346,6 +380,26 @@ export default function NewInvoicePage() {
         contractReference,
         deliveryNoteReference,
         buyerReference,
+      },
+      ujpData: {
+        orderReference,
+        contractReference,
+        deliveryNoteReference,
+        buyerReference,
+        budgetUser,
+        ujpRecipient,
+        publicProcurementReference,
+        additionalReference: additionalUjpReference,
+      },
+      bankData: {
+        payeeIban: bankAccount,
+        payeeBic: bankBic,
+        paymentModel,
+        paymentReference: reference,
+        purposeCode,
+        paymentMeansCode,
+        payerName,
+        payeeName,
       },
       lines,
       totals,
@@ -454,6 +508,25 @@ export default function NewInvoicePage() {
         </div>
       </div>
 
+      <section className="solid-panel mb-8 rounded-[1.75rem] p-3">
+        <div className="grid gap-2 md:grid-cols-4">
+          {invoiceProfiles.map((invoiceProfile) => (
+            <button
+              key={invoiceProfile.id}
+              onClick={() => setProfile(invoiceProfile.id)}
+              className={`rounded-2xl border px-4 py-3 text-left transition ${
+                profile === invoiceProfile.id
+                  ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
+                  : "border-[var(--app-border)] hover:bg-[var(--app-soft)]"
+              }`}
+            >
+              <div className="font-semibold">{invoiceProfile.label}</div>
+              <div className="app-muted mt-1 text-xs">{invoiceProfile.description}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
       {!activeCompany && (
         <section className="mb-8 rounded-[1.75rem] border border-amber-500/25 bg-amber-500/10 p-5 text-amber-500">
           Aktivno podjetje ni izbrano. Izberi ga v zgornjem izbirniku podjetij.
@@ -510,6 +583,52 @@ export default function NewInvoicePage() {
             </label>
           </section>
 
+          {profile === "hr" && (
+            <section className="solid-panel rounded-[1.75rem] p-6">
+              <SectionHeader
+                title="Hrvaška / HR Fiskalizacija 2.0"
+                description="Dodatna polja za HR-CIUS, AMS, operaterja, kopijo in predhodni racun."
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Business process type *">
+                  <select value={businessProcess} onChange={(event) => setBusinessProcess(event.target.value)} className="field-input">
+                    {["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P99"].map((process) => (
+                      <option key={process} value={process}>{process}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Kupceva oznaka procesa pri P99">
+                  <input value={p99BuyerProcessId} onChange={(event) => setP99BuyerProcessId(event.target.value)} className="field-input" placeholder="Obvezno samo za P99" />
+                </Field>
+                <Field label="OIB operaterja *">
+                  <input value={operatorOib} onChange={(event) => setOperatorOib(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="Oznaka operaterja *">
+                  <input value={operatorCode} onChange={(event) => setOperatorCode(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="Predhodni racun">
+                  <input value={previousInvoiceNumber} onChange={(event) => setPreviousInvoiceNumber(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="Datum predhodnega racuna">
+                  <input type="date" value={previousInvoiceDate} onChange={(event) => setPreviousInvoiceDate(event.target.value)} className="field-input" />
+                </Field>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-5 text-sm">
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={isCopy} onChange={(event) => setIsCopy(event.target.checked)} />
+                  Kopija racuna
+                </label>
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={selfBilling} onChange={(event) => setSelfBilling(event.target.checked)} />
+                  Samoizdaja
+                </label>
+              </div>
+              <p className="app-muted mt-4 text-sm">
+                Pri HR profilu mora imeti vsaka postavka KPD kodo in HR DDV oznako.
+              </p>
+            </section>
+          )}
+
           <section className="solid-panel rounded-[1.75rem] p-6">
             <SectionHeader
               title="Kupec"
@@ -543,6 +662,29 @@ export default function NewInvoicePage() {
               <BuyerField label="eAddress" field="eAddress" buyer={buyer} setBuyer={setBuyer} />
             </div>
           </section>
+
+          {profile === "ujp" && (
+            <section className="solid-panel rounded-[1.75rem] p-6">
+              <SectionHeader
+                title="UJP / javni sektor"
+                description="Dodatni sklici za proracunske uporabnike in javne narocnike."
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Proracunski uporabnik">
+                  <input value={budgetUser} onChange={(event) => setBudgetUser(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="UJP prejemnik">
+                  <input value={ujpRecipient} onChange={(event) => setUjpRecipient(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="Referenca javnega narocila">
+                  <input value={publicProcurementReference} onChange={(event) => setPublicProcurementReference(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="Dodatni UJP sklic">
+                  <input value={additionalUjpReference} onChange={(event) => setAdditionalUjpReference(event.target.value)} className="field-input" />
+                </Field>
+              </div>
+            </section>
+          )}
 
           <section className="solid-panel rounded-[1.75rem] p-6">
             <SectionHeader title="Reference" />
@@ -660,11 +802,34 @@ export default function NewInvoicePage() {
               </Field>
             </div>
           </section>
+
+          {profile === "bank" && (
+            <section className="solid-panel rounded-[1.75rem] p-6">
+              <SectionHeader
+                title="Banka"
+                description="Placilni podatki za bancno obdelavo in strožjo IBAN/BIC validacijo."
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Model/sklic *">
+                  <input value={paymentModel} onChange={(event) => setPaymentModel(event.target.value)} className="field-input" placeholder="npr. HR00 ali SI00" />
+                </Field>
+                <Field label="Naziv placnika">
+                  <input value={payerName} onChange={(event) => setPayerName(event.target.value)} className="field-input" />
+                </Field>
+                <Field label="Naziv prejemnika">
+                  <input value={payeeName} onChange={(event) => setPayeeName(event.target.value)} className="field-input" />
+                </Field>
+              </div>
+            </section>
+          )}
         </div>
 
         <aside className="space-y-8">
           <section className="glass-panel rounded-[1.75rem] p-6">
             <h2 className="text-xl font-semibold">Povzetek</h2>
+            <div className="app-muted mt-1 text-sm">
+              Profil: {invoiceProfiles.find((item) => item.id === profile)?.label}
+            </div>
             <div className="mt-5 space-y-3 text-sm">
               <SummaryRow label="BT-106 neto" value={`${prepared.invoice.totals.net.toFixed(2)} EUR`} />
               <SummaryRow label="BT-110 DDV" value={`${prepared.invoice.totals.vat.toFixed(2)} EUR`} />

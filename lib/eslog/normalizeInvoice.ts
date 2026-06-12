@@ -151,28 +151,66 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
   const buyerOib = normalizeOib(invoice.buyer?.oib || buyerVat);
 
   const payment = invoice.payment || {};
+  const hrData = invoice.hrData || {};
+  const ujpData = invoice.ujpData || {};
+  const bankData = invoice.bankData || {};
   const businessProcess =
-    invoice.businessProcess || invoice.eSlog?.businessProcess || DEFAULT_PROFILE_ID;
+    hrData.businessProcessType ||
+    invoice.businessProcess ||
+    invoice.eSlog?.businessProcess ||
+    DEFAULT_PROFILE_ID;
   const documentType = invoice.documentType || invoice.eSlog?.documentType || "380";
+  const paymentIban = bankData.payeeIban || payment.iban || payment.bankAccount || invoice.bankAccount;
+  const paymentBic = bankData.payeeBic || payment.bic || payment.bankBic || invoice.bankBic;
+  const paymentReference = bankData.paymentReference || payment.reference || invoice.reference;
 
   return {
     ...invoice,
+    profile: invoice.profile || "standard",
 
     currency: "EUR",
     number:
-      invoice.invoiceNumberNumericPart &&
-      invoice.businessPremiseCode &&
-      invoice.deviceCode
-        ? `${invoice.invoiceNumberNumericPart}-${invoice.businessPremiseCode}-${invoice.deviceCode}`
+      (hrData.invoiceNumberNumericPart || invoice.invoiceNumberNumericPart) &&
+      (hrData.businessPremiseCode || invoice.businessPremiseCode) &&
+      (hrData.deviceCode || invoice.deviceCode)
+        ? `${hrData.invoiceNumberNumericPart || invoice.invoiceNumberNumericPart}-${hrData.businessPremiseCode || invoice.businessPremiseCode}-${hrData.deviceCode || invoice.deviceCode}`
         : clean(invoice.number),
     documentType,
     businessProcess,
-    issueTime: clean(invoice.issueTime),
+    issueTime: clean(hrData.issueTime || invoice.issueTime),
+    isCopy: hrData.isCopy ?? invoice.isCopy,
     operator: {
       ...invoice.operator,
-      oib: normalizeOib(invoice.operator?.oib),
-      code: clean(invoice.operator?.code),
-      name: clean(invoice.operator?.name),
+      oib: normalizeOib(hrData.operatorOib || invoice.operator?.oib),
+      code: clean(hrData.operatorCode || invoice.operator?.code),
+      name: clean(hrData.operatorName || invoice.operator?.name),
+    },
+    hrData: {
+      ...hrData,
+      invoiceNumberNumericPart: clean(hrData.invoiceNumberNumericPart || invoice.invoiceNumberNumericPart),
+      businessPremiseCode: clean(hrData.businessPremiseCode || invoice.businessPremiseCode),
+      deviceCode: clean(hrData.deviceCode || invoice.deviceCode),
+      issueTime: clean(hrData.issueTime || invoice.issueTime),
+      businessProcessType: clean(hrData.businessProcessType || businessProcess),
+      operatorOib: normalizeOib(hrData.operatorOib || invoice.operator?.oib),
+      operatorCode: clean(hrData.operatorCode || invoice.operator?.code),
+      operatorName: clean(hrData.operatorName || invoice.operator?.name),
+    },
+    ujpData: {
+      ...ujpData,
+      orderReference: clean(ujpData.orderReference || invoice.references?.orderReference),
+      contractReference: clean(ujpData.contractReference || invoice.references?.contractReference),
+      buyerReference: clean(ujpData.buyerReference || invoice.references?.buyerReference),
+    },
+    bankData: {
+      ...bankData,
+      payeeIban: normalizeIban(paymentIban),
+      payeeBic: clean(paymentBic),
+      paymentReference: clean(paymentReference),
+      purposeCode: clean(bankData.purposeCode || payment.purposeCode || invoice.purposeCode),
+      paymentMeansCode: clean(bankData.paymentMeansCode || payment.paymentMeansCode || invoice.paymentMeansCode),
+      payeeName: clean(bankData.payeeName || invoice.seller?.name),
+      payerName: clean(bankData.payerName || invoice.buyer?.name),
     },
 
     seller: invoice.seller
@@ -226,23 +264,33 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
       payable: round2(invoice.totals?.payable ?? gross),
     },
 
+    references: {
+      ...invoice.references,
+      orderReference: clean(invoice.references?.orderReference || ujpData.orderReference),
+      contractReference: clean(invoice.references?.contractReference || ujpData.contractReference),
+      deliveryNoteReference: clean(
+        invoice.references?.deliveryNoteReference || ujpData.additionalReference
+      ),
+      buyerReference: clean(invoice.references?.buyerReference || ujpData.buyerReference),
+    },
+
     payment: {
       ...payment,
       method: payment.method || invoice.paymentMethod || "TRR",
       paymentMeansCode:
-        payment.paymentMeansCode || invoice.paymentMeansCode || "58",
-      purposeCode: payment.purposeCode || invoice.purposeCode || "OTHR",
+        bankData.paymentMeansCode || payment.paymentMeansCode || invoice.paymentMeansCode || "58",
+      purposeCode: bankData.purposeCode || payment.purposeCode || invoice.purposeCode || "OTHR",
       bankAccount: normalizeIban(
-        payment.bankAccount || invoice.bankAccount || payment.iban
+        payment.bankAccount || paymentIban
       ),
-      iban: normalizeIban(payment.iban || invoice.bankAccount || payment.bankAccount),
-      bankBic: clean(payment.bankBic || invoice.bankBic || payment.bic),
-      bic: clean(payment.bic || invoice.bankBic || payment.bankBic),
-      reference: clean(payment.reference || invoice.reference),
+      iban: normalizeIban(paymentIban),
+      bankBic: clean(payment.bankBic || paymentBic),
+      bic: clean(paymentBic),
+      reference: clean(paymentReference),
       paymentTerms:
         payment.paymentTerms ||
         `Plačilo do ${invoice.dueDate}. Sklic: ${clean(
-          payment.reference || invoice.reference
+          paymentReference
         )}`,
     },
 
@@ -256,11 +304,13 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
       businessProcess,
       paymentMeansCode:
         invoice.payment?.paymentMeansCode ||
+        bankData.paymentMeansCode ||
         invoice.paymentMeansCode ||
         invoice.eSlog?.paymentMeansCode ||
         "58",
       purposeCode:
         invoice.payment?.purposeCode ||
+        bankData.purposeCode ||
         invoice.purposeCode ||
         invoice.eSlog?.purposeCode ||
         "OTHR",
@@ -269,10 +319,10 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
 
     paymentMethod: invoice.paymentMethod || payment.method || "TRR",
     paymentMeansCode:
-      invoice.paymentMeansCode || payment.paymentMeansCode || "58",
-    purposeCode: invoice.purposeCode || payment.purposeCode || "OTHR",
-    bankAccount: normalizeIban(invoice.bankAccount || payment.iban || payment.bankAccount),
-    bankBic: clean(invoice.bankBic || payment.bic || payment.bankBic),
-    reference: clean(invoice.reference || payment.reference),
+      invoice.paymentMeansCode || bankData.paymentMeansCode || payment.paymentMeansCode || "58",
+    purposeCode: invoice.purposeCode || bankData.purposeCode || payment.purposeCode || "OTHR",
+    bankAccount: normalizeIban(invoice.bankAccount || paymentIban),
+    bankBic: clean(invoice.bankBic || paymentBic),
+    reference: clean(invoice.reference || paymentReference),
   };
 }
