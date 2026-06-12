@@ -1,4 +1,5 @@
 import type { Invoice, InvoiceLine, Party, VatBreakdown } from "../../types/invoice";
+import { getInvoiceProfileImplementation } from "./profiles/registry";
 import { normalizeInvoiceForEslog } from "./normalizeInvoice";
 
 function isPresent(value: unknown) {
@@ -215,15 +216,6 @@ export function buildTaxSegments(vatBreakdown: VatBreakdown[]) {
     .join("\n");
 }
 
-function insertBeforeSummary(xml: string, extension: string) {
-  if (!extension.trim()) return xml;
-
-  return xml.replace(
-    "\n    <S_UNS>",
-    `\n    ${extension.trim()}\n\n    <S_UNS>`
-  );
-}
-
 export function buildBaseEslogInvoice(input: Invoice) {
   const invoice = normalizeInvoiceForEslog(input);
   const payment = invoice.payment || {};
@@ -346,72 +338,10 @@ export function buildBaseEslogInvoice(input: Invoice) {
 </Invoice>`;
 }
 
-export function applyHrExtensions(xml: string, invoice: Invoice) {
-  if (invoice.profile !== "hr") return xml;
-
-  const hrData = invoice.hrData || {};
-  const processType = hrData.businessProcessType || invoice.businessProcess;
-  const extensions = [
-    buildFreeText("GEN", processType === "P99" ? `P99:${hrData.p99BuyerProcessId || ""}` : undefined),
-    buildFreeText("GEN", invoice.hrData?.selfBilling ? "P12#Samoizdaja" : undefined),
-    buildFreeText(
-      "GEN",
-      hrData.previousInvoiceNumber && hrData.previousInvoiceDate
-        ? `${hrData.previousInvoiceNumber}:${hrData.previousInvoiceDate}#Prethodni račun`
-        : undefined
-    ),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return insertBeforeSummary(xml, extensions);
-}
-
-export function applyUjpExtensions(xml: string, invoice: Invoice) {
-  if (invoice.profile !== "ujp") return xml;
-
-  const ujpData = invoice.ujpData || {};
-  const extensions = [
-    buildFreeText("GEN", ujpData.budgetUser ? `${ujpData.budgetUser}#Proračunski uporabnik` : undefined),
-    buildFreeText("GEN", ujpData.ujpRecipient ? `${ujpData.ujpRecipient}#UJP prejemnik` : undefined),
-    buildFreeText(
-      "GEN",
-      ujpData.publicProcurementReference
-        ? `${ujpData.publicProcurementReference}#Javno naročilo`
-        : undefined
-    ),
-    buildFreeText(
-      "GEN",
-      ujpData.additionalReference ? `${ujpData.additionalReference}#Dodatni sklic` : undefined
-    ),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return insertBeforeSummary(xml, extensions);
-}
-
-export function applyBankExtensions(xml: string, invoice: Invoice) {
-  if (invoice.profile !== "bank") return xml;
-
-  const bankData = invoice.bankData || {};
-  const extensions = [
-    buildFreeText("PMT", bankData.paymentModel ? `${bankData.paymentModel}#Model plačila` : undefined),
-    buildFreeText("PMT", bankData.payerName ? `${bankData.payerName}#Plačnik` : undefined),
-    buildFreeText("PMT", bankData.payeeName ? `${bankData.payeeName}#Prejemnik plačila` : undefined),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return insertBeforeSummary(xml, extensions);
-}
-
 export function buildEslogInvoiceXml(input: Invoice) {
   const invoice = normalizeInvoiceForEslog(input);
   const baseXml = buildBaseEslogInvoice(invoice);
+  const profileImplementation = getInvoiceProfileImplementation(invoice.profile);
 
-  return applyBankExtensions(
-    applyUjpExtensions(applyHrExtensions(baseXml, invoice), invoice),
-    invoice
-  );
+  return profileImplementation.applyXml(baseXml, invoice);
 }
