@@ -10,6 +10,9 @@ export type ActiveCompany = {
   eLocation: string;
   eAddress: string;
   address?: string;
+  postCode?: string;
+  city?: string;
+  country?: string;
   canSendInvoices?: boolean;
 };
 

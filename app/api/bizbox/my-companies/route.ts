@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BASE_URL = process.env.BIZBOX_BASE_URL;
 
+type BizBoxRole = {
+  id?: string;
+};
+
+type BizBoxLocation = {
+  id?: string;
+  name?: string;
+  elocation?: string;
+  ehramba?: Array<{ accountName?: string }>;
+  role?: BizBoxRole[];
+};
+
+type BizBoxCompany = {
+  id?: string;
+  name?: string;
+  address?: string;
+  postCode?: string;
+  city?: string;
+  country?: string;
+  location?: BizBoxLocation[];
+};
+
+type BizBoxRolesResponse = {
+  company?: BizBoxCompany[];
+};
+
 export async function GET(request: NextRequest) {
   try {
     if (!BASE_URL) {
@@ -32,10 +58,10 @@ export async function GET(request: NextRequest) {
 
     const text = await response.text();
 
-    let raw: any = text;
+    let raw: BizBoxRolesResponse | string = text;
 
     try {
-      raw = JSON.parse(text);
+      raw = JSON.parse(text) as BizBoxRolesResponse;
     } catch {}
 
     if (!response.ok) {
@@ -50,12 +76,13 @@ export async function GET(request: NextRequest) {
     }
 
     const companies =
-      raw?.company?.flatMap((company: any) => {
+      typeof raw === "object" && raw.company
+        ? raw.company.flatMap((company) => {
         const locations = Array.isArray(company.location)
           ? company.location
           : [];
 
-        return locations.map((location: any) => {
+        return locations.map((location) => {
           const locationId = location.id || "HQ";
           const ehrambaAccount = location.ehramba?.[0]?.accountName;
 
@@ -70,23 +97,30 @@ export async function GET(request: NextRequest) {
                 ? `C:${company.id}`
                 : `L:${company.id}|${locationId}`),
             eAddress: ehrambaAccount || `${company.id}.${locationId}`,
-            address: "",
-            canSendInvoices: location.role?.some((role: any) =>
-              ["SUP_INV_ADM", "SUP_INV_USR", "P", "U"].includes(role.id)
+            address: company.address || "",
+            postCode: company.postCode || "",
+            city: company.city || "",
+            country: company.country || "",
+            canSendInvoices: location.role?.some((role) =>
+              ["SUP_INV_ADM", "SUP_INV_USR", "P", "U"].includes(role.id || "")
             ),
           };
         });
-      }) || [];
+      })
+        : [];
 
     return NextResponse.json({
       success: true,
       companies,
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Napaka pri pridobivanju podjetij.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Napaka pri pridobivanju podjetij.",
       },
       { status: 500 }
     );

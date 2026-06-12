@@ -1,14 +1,22 @@
 import type { Invoice } from "../../types/invoice";
+import { buildEslogInvoiceXml } from "./buildEslogInvoiceXml";
 import { normalizeInvoiceForEslog } from "./normalizeInvoice";
 import { validateInvoiceForEslog } from "./validateInvoice";
 
 export function prepareInvoiceForEslog(invoice: Invoice) {
-  const normalizedInvoice = normalizeInvoiceForEslog(invoice);
+  const normalizedInvoice = {
+    ...normalizeInvoiceForEslog(invoice),
+  };
   const validation = validateInvoiceForEslog(normalizedInvoice);
+  const xml = validation.valid ? buildEslogInvoiceXml(normalizedInvoice) : "";
 
   return {
-    invoice: normalizedInvoice,
+    invoice: {
+      ...normalizedInvoice,
+      xml,
+    },
     validation,
+    xml,
   };
 }
 

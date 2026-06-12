@@ -3,14 +3,18 @@
 import { ArrowRight, Download, Printer } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import AppShell from "../../components/AppShell";
-import type { Invoice } from "../../../types/invoice";
+import type { Invoice, Party } from "../../../types/invoice";
 
 type ActiveCompany = {
   name?: string;
   vatNumber?: string;
   taxId?: string;
   address?: string;
+  postCode?: string;
+  city?: string;
+  country?: string;
   eLocation?: string;
   eAddress?: string;
 };
@@ -28,7 +32,13 @@ type PreviewInvoice = Omit<Invoice, "lines"> & {
   seller?: {
     name?: string;
     vat?: string;
+    taxId?: string;
     address?: string;
+    postCode?: string;
+    city?: string;
+    country?: string;
+    eLocation?: string;
+    eAddress?: string;
   };
   documentType?: string;
   paymentMethod?: string;
@@ -67,6 +77,43 @@ function formatMoney(value: number) {
   }).format(value || 0);
 }
 
+function normalizeTaxId(value: string | undefined | null) {
+  return String(value || "").replace(/\s/g, "").toUpperCase();
+}
+
+function countryFromTaxId(value: string | undefined | null) {
+  const normalized = normalizeTaxId(value);
+  if (/^[A-Z]{2}/.test(normalized)) return normalized.slice(0, 2);
+  return "SI";
+}
+
+function companyToParty(
+  company: ActiveCompany | null,
+  fallback?: PreviewInvoice["seller"]
+): Party | undefined {
+  if (!company && !fallback) return undefined;
+
+  const taxId = normalizeTaxId(
+    company?.vatNumber || company?.taxId || fallback?.vat || fallback?.taxId
+  );
+  const oib = taxId.replace(/\D/g, "").slice(0, 11);
+
+  return {
+    name: company?.name || fallback?.name || "",
+    vat: taxId,
+    taxId,
+    oib,
+    address: company?.address || fallback?.address || "",
+    postCode: company?.postCode || fallback?.postCode || "",
+    city: company?.city || fallback?.city || "",
+    country: company?.country || fallback?.country || countryFromTaxId(taxId),
+    eLocation: company?.eLocation || fallback?.eLocation || "",
+    eAddress: company?.eAddress || fallback?.eAddress || "",
+    endpointId: oib || taxId,
+    endpointSchemeId: "9934",
+  };
+}
+
 export default function InvoicePreviewPage() {
   const [invoice, setInvoice] = useState<PreviewInvoice | null>(null);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
@@ -94,16 +141,15 @@ export default function InvoicePreviewPage() {
     );
   }
 
-  const senderName = activeCompany?.name || invoice.seller?.name || "ZZI T2";
+  const prepared = prepareInvoiceForEslog({
+    ...invoice,
+    seller: companyToParty(activeCompany, invoice.seller),
+  });
+
+  const senderName = prepared.invoice.seller?.name || "";
   const senderTaxId =
-    activeCompany?.vatNumber ||
-    activeCompany?.taxId ||
-    invoice.seller?.vat ||
-    "SI66666666";
-  const senderAddress =
-    activeCompany?.address ||
-    invoice.seller?.address ||
-    "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE";
+    prepared.invoice.seller?.vat || prepared.invoice.seller?.taxId || "";
+  const senderAddress = prepared.invoice.seller?.address || "";
 
   return (
     <AppShell>
@@ -149,7 +195,7 @@ export default function InvoicePreviewPage() {
               <div className="mb-10 flex items-start justify-between">
                 <div>
                   <div className="text-3xl font-bold">RAČUN</div>
-                  <div className="mt-2 text-slate-500">Št. {invoice.number}</div>
+                  <div className="mt-2 text-slate-500">Št. {prepared.invoice.number}</div>
                   <div className="mt-2 text-sm text-slate-500">
                     Tip dokumenta: {invoice.documentType || invoice.eSlog?.documentType || "380"}
                   </div>
@@ -271,15 +317,15 @@ export default function InvoicePreviewPage() {
                 <div className="w-72 space-y-3">
                   <div className="flex justify-between">
                     <span>Osnova</span>
-                    <span>{formatMoney(invoice.totals.net)}</span>
+                    <span>{formatMoney(prepared.invoice.totals.net)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>DDV</span>
-                    <span>{formatMoney(invoice.totals.vat)}</span>
+                    <span>{formatMoney(prepared.invoice.totals.vat)}</span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-3 text-xl font-bold">
                     <span>Skupaj</span>
-                    <span>{formatMoney(invoice.totals.gross)}</span>
+                    <span>{formatMoney(prepared.invoice.totals.gross)}</span>
                   </div>
                 </div>
               </div>
@@ -303,6 +349,33 @@ export default function InvoicePreviewPage() {
                   Naslednji korak: generiranje eSLOG XML
                 </div>
               </div>
+
+              <div className="mt-6 rounded-2xl bg-[var(--app-soft)] p-4 text-sm">
+                <div className="font-semibold">DDV breakdown</div>
+                <div className="mt-3 space-y-2">
+                  {(prepared.invoice.vatBreakdown || []).map((item) => (
+                    <div key={`${item.vatCategory}-${item.vatRate}`} className="app-muted">
+                      {item.vatCategory} / {item.vatRate}%:{" "}
+                      {formatMoney(item.taxableAmount)} + {formatMoney(item.vatAmount)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {(prepared.validation.errors.length > 0 ||
+                prepared.validation.warnings.length > 0) && (
+                <div className="mt-6 rounded-2xl bg-red-500/10 p-4 text-sm text-red-500">
+                  <div className="font-semibold">Validacija</div>
+                  <ul className="mt-2 list-disc pl-5">
+                    {prepared.validation.errors.map((error) => (
+                      <li key={error}>{error}</li>
+                    ))}
+                    {prepared.validation.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </aside>
           </div>
 

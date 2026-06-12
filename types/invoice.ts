@@ -1,4 +1,4 @@
-export type VatCategory = "S" | "Z" | "E" | "AE" | "K" | "G" | "O";
+export type VatCategory = "S" | "Z" | "E" | "AE" | "K" | "G" | "O" | "IC";
 
 export type InvoiceStatus = "DRAFT" | "READY" | "SENT" | "ERROR";
 
@@ -6,6 +6,7 @@ export type Party = {
   name: string;
   vat: string;
   taxId?: string;
+  oib?: string;
 
   address: string;
   street?: string;
@@ -15,6 +16,11 @@ export type Party = {
 
   eLocation: string;
   eAddress?: string;
+  endpointId?: string;
+  endpointSchemeId?: string;
+  registrationNumber?: string;
+  contactName?: string;
+  contactEmail?: string;
 };
 
 export type InvoiceLine = {
@@ -27,10 +33,15 @@ export type InvoiceLine = {
   price: number;
   vatRate: number;
   vatCategory?: VatCategory;
+  hrVatCategoryCode?: string;
 
   itemCode?: string;
   note?: string;
+  itemDescription?: string;
   taxExemptionReason?: string;
+  taxExemptionReasonCode?: string;
+  kpdCode?: string;
+  kpdListId?: string;
 
   netAmount?: number;
   vatAmount?: number;
@@ -82,17 +93,31 @@ export type ESlogData = {
   language?: string;
 };
 
+export type InvoiceOperator = {
+  oib?: string;
+  code?: string;
+  name?: string;
+};
+
 export type Invoice = {
   id?: number;
 
   number: string;
+  invoiceNumberNumericPart?: string;
+  businessPremiseCode?: string;
+  deviceCode?: string;
+
   issueDate: string;
+  issueTime?: string;
   serviceDate: string;
   dueDate: string;
 
   currency: "EUR";
   documentType?: string;
   businessProcess?: string;
+  isCopy?: boolean;
+  cashAccounting?: boolean;
+  operator?: InvoiceOperator;
 
   seller?: Party;
   buyer: Party;

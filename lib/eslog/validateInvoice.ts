@@ -14,15 +14,55 @@ function normalize(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 function isPositiveNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 function isValidVatCategory(value: unknown): value is VatCategory {
-  return ["S", "Z", "E", "AE", "K", "G", "O"].includes(String(value));
+  return ["S", "Z", "E", "AE", "K", "G", "O", "IC"].includes(String(value));
 }
 
-function validateLine(line: InvoiceLine, index: number) {
+function isDate(value: unknown) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalize(value));
+}
+
+function isTime(value: unknown) {
+  return /^\d{2}:\d{2}:\d{2}$/.test(normalize(value));
+}
+
+function isHrVat(value: unknown) {
+  return /^HR\d{11}$/.test(normalize(value).replace(/\s/g, "").toUpperCase());
+}
+
+function isOib(value: unknown) {
+  return /^\d{11}$/.test(normalize(value).replace(/\D/g, ""));
+}
+
+function invoiceHasHrContext(invoice: Invoice) {
+  return (
+    invoice.seller?.country === "HR" ||
+    invoice.buyer?.country === "HR" ||
+    normalize(invoice.seller?.vat).startsWith("HR") ||
+    normalize(invoice.buyer?.vat).startsWith("HR")
+  );
+}
+
+function expectedLineNet(line: InvoiceLine) {
+  return round2(Number(line.quantity || 0) * Number(line.price || 0));
+}
+
+function expectedLineVat(line: InvoiceLine) {
+  const category = line.vatCategory || "S";
+  if (["Z", "E", "AE", "K", "G", "O", "IC"].includes(category)) return 0;
+
+  return round2(expectedLineNet(line) * (Number(line.vatRate || 0) / 100));
+}
+
+function validateLine(line: InvoiceLine, index: number, invoice: Invoice) {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -45,11 +85,11 @@ function validateLine(line: InvoiceLine, index: number) {
   }
 
   if (!line.unit) {
-    warnings.push(`${label}: manjka enota mere, uporabljena bo privzeta enota.`);
+    errors.push(`${label}: manjka enota mere.`);
   }
 
   if (!line.vatCategory) {
-    warnings.push(`${label}: manjka DDV kategorija, uporabljena bo S.`);
+    errors.push(`${label}: manjka DDV kategorija.`);
   } else if (!isValidVatCategory(line.vatCategory)) {
     errors.push(`${label}: DDV kategorija ni veljavna.`);
   }
@@ -58,8 +98,42 @@ function validateLine(line: InvoiceLine, index: number) {
     errors.push(`${label}: pri DDV kategoriji S mora biti DDV stopnja večja od 0.`);
   }
 
-  if (["E", "AE", "K", "G", "O"].includes(String(line.vatCategory)) && !line.taxExemptionReason) {
-    warnings.push(`${label}: za oproščeno/reverse charge postavko je priporočljiv razlog oprostitve.`);
+  if (["Z", "E", "AE", "K", "G", "O", "IC"].includes(String(line.vatCategory))) {
+    if (Number(line.vatRate || 0) !== 0) {
+      errors.push(`${label}: DDV kategorija ${line.vatCategory} mora imeti DDV stopnjo 0.`);
+    }
+
+    if (!line.taxExemptionReason && !line.taxExemptionReasonCode) {
+      errors.push(`${label}: manjka razlog ali koda davčne oprostitve.`);
+    }
+  }
+
+  if (line.vatCategory === "AE" && isEmpty(invoice.buyer?.vat || invoice.buyer?.taxId)) {
+    errors.push(`${label}: reverse charge zahteva kupčevo davčno številko.`);
+  }
+
+  if (normalize(line.description).length > 1024) {
+    errors.push(`${label}: naziv/opis postavke presega 1024 znakov.`);
+  }
+
+  if (normalize(line.itemDescription || line.note).length > 4096) {
+    errors.push(`${label}: dodatni opis postavke presega 4096 znakov.`);
+  }
+
+  if (invoiceHasHrContext(invoice) && isEmpty(line.kpdCode)) {
+    errors.push(`${label}: za HR e-račun manjka KPD koda.`);
+  }
+
+  if (invoiceHasHrContext(invoice) && ["E", "AE", "O"].includes(String(line.vatCategory)) && !line.hrVatCategoryCode) {
+    errors.push(`${label}: za HR DDV kategorijo ${line.vatCategory} manjka HR oznaka DDV kategorije.`);
+  }
+
+  if (typeof line.netAmount === "number" && Math.abs(round2(line.netAmount) - expectedLineNet(line)) > 0.01) {
+    errors.push(`${label}: line net amount ni pravilno izračunan.`);
+  }
+
+  if (typeof line.vatAmount === "number" && Math.abs(round2(line.vatAmount) - expectedLineVat(line)) > 0.01) {
+    errors.push(`${label}: DDV znesek postavke ni pravilno izračunan.`);
   }
 
   return { errors, warnings };
@@ -70,9 +144,21 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   const warnings: string[] = [];
 
   if (isEmpty(invoice.number)) errors.push("Manjka številka računa.");
-  if (isEmpty(invoice.issueDate)) errors.push("Manjka datum izdaje.");
-  if (isEmpty(invoice.serviceDate)) errors.push("Manjka datum opravljene storitve.");
-  if (isEmpty(invoice.dueDate)) errors.push("Manjka rok plačila.");
+  if (invoiceHasHrContext(invoice) && !/^\S+[-_/]\S+[-_/]\S+$/.test(normalize(invoice.number))) {
+    errors.push("HR številka računa mora imeti tri dele brez presledkov, npr. 1-PP01-01.");
+  }
+  if (!isDate(invoice.issueDate)) errors.push("Manjka datum izdaje ali format ni YYYY-MM-DD.");
+  if (!isDate(invoice.serviceDate)) errors.push("Manjka datum opravljene storitve ali format ni YYYY-MM-DD.");
+  if (!isDate(invoice.dueDate)) errors.push("Manjka rok plačila ali format ni YYYY-MM-DD.");
+  if (invoiceHasHrContext(invoice) && !isTime(invoice.issueTime)) {
+    errors.push("Za HR e-račun manjka čas izdaje v formatu HH:MM:SS.");
+  }
+  if (isEmpty(invoice.documentType || invoice.eSlog?.documentType)) {
+    errors.push("Manjka tip dokumenta.");
+  }
+  if (!/^P([1-9]|1[0-2])$/.test(normalize(invoice.businessProcess || invoice.eSlog?.businessProcess)) && !normalize(invoice.businessProcess || invoice.eSlog?.businessProcess).startsWith("P99:")) {
+    errors.push("Poslovni proces mora biti P1-P12 ali P99:oznakaKupca.");
+  }
   if (invoice.currency !== "EUR") errors.push("Valuta mora biti EUR.");
 
   if (!invoice.seller) {
@@ -83,8 +169,17 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
       errors.push("Izdajatelj: manjka davčna številka.");
     }
     if (isEmpty(invoice.seller.address)) errors.push("Izdajatelj: manjka naslov.");
+    if (isEmpty(invoice.seller.postCode)) warnings.push("Izdajatelj: manjka poštna številka.");
+    if (isEmpty(invoice.seller.city)) warnings.push("Izdajatelj: manjka mesto.");
+    if (isEmpty(invoice.seller.country)) errors.push("Izdajatelj: manjka država.");
     if (isEmpty(invoice.seller.eLocation)) errors.push("Izdajatelj: manjka eLokacija.");
-    if (isEmpty(invoice.seller.eAddress)) warnings.push("Izdajatelj: manjka eAddress, uporabljen bo fallback.");
+    if (isEmpty(invoice.seller.eAddress)) errors.push("Izdajatelj: manjka eAddress.");
+    if (invoiceHasHrContext(invoice) && !isHrVat(invoice.seller.vat || invoice.seller.taxId)) {
+      errors.push("Izdajatelj: HR VAT ID mora biti HR + 11 številk.");
+    }
+    if (invoiceHasHrContext(invoice) && !isOib(invoice.seller.oib || invoice.seller.vat || invoice.seller.taxId)) {
+      errors.push("Izdajatelj: manjka veljaven OIB z 11 številkami.");
+    }
   }
 
   if (!invoice.buyer) {
@@ -92,16 +187,34 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   } else {
     if (isEmpty(invoice.buyer.name)) errors.push("Kupec: manjka naziv.");
     if (isEmpty(invoice.buyer.vat || invoice.buyer.taxId)) errors.push("Kupec: manjka davčna številka.");
-    if (isEmpty(invoice.buyer.address)) warnings.push("Kupec: manjka naslov.");
+    if (isEmpty(invoice.buyer.address)) errors.push("Kupec: manjka naslov.");
+    if (isEmpty(invoice.buyer.postCode)) warnings.push("Kupec: manjka poštna številka.");
+    if (isEmpty(invoice.buyer.city)) warnings.push("Kupec: manjka mesto.");
+    if (isEmpty(invoice.buyer.country)) errors.push("Kupec: manjka država.");
     if (isEmpty(invoice.buyer.eLocation)) errors.push("Kupec: manjka eLokacija.");
     if (isEmpty(invoice.buyer.eAddress)) warnings.push("Kupec: manjka eAddress, uporabljen bo fallback iz davčne številke.");
+    if (invoiceHasHrContext(invoice) && !isHrVat(invoice.buyer.vat || invoice.buyer.taxId)) {
+      errors.push("Kupec: HR VAT ID mora biti HR + 11 številk.");
+    }
+    if (invoiceHasHrContext(invoice) && !isOib(invoice.buyer.oib || invoice.buyer.vat || invoice.buyer.taxId)) {
+      errors.push("Kupec: manjka veljaven OIB z 11 številkami.");
+    }
+  }
+
+  if (invoiceHasHrContext(invoice)) {
+    if (!isOib(invoice.operator?.oib)) {
+      errors.push("Za HR e-račun manjka OIB operaterja z 11 številkami.");
+    }
+    if (isEmpty(invoice.operator?.code || invoice.operator?.name)) {
+      errors.push("Za HR e-račun manjka oznaka operaterja.");
+    }
   }
 
   if (!invoice.lines || invoice.lines.length === 0) {
     errors.push("Račun mora imeti vsaj eno postavko.");
   } else {
     invoice.lines.forEach((line, index) => {
-      const result = validateLine(line, index);
+      const result = validateLine(line, index, invoice);
       errors.push(...result.errors);
       warnings.push(...result.warnings);
     });
@@ -128,20 +241,63 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
     if (Math.abs(expectedGross - actualGross) > 0.01) {
       errors.push("Skupni zneski se ne ujemajo: neto + DDV ni enako bruto.");
     }
+
+    const payable = invoice.totals.payable ?? invoice.totals.gross;
+    if (payable > 0 && isEmpty(invoice.dueDate)) {
+      errors.push("Rok plačila je obvezen, ker je znesek za plačilo večji od 0.");
+    }
+  }
+
+  const vatBreakdown = invoice.vatBreakdown || [];
+  const expectedBreakdown = new Map<string, { taxableAmount: number; vatAmount: number }>();
+
+  for (const line of invoice.lines || []) {
+    const key = `${line.vatCategory || "S"}_${Number(line.vatRate || 0)}`;
+    const current = expectedBreakdown.get(key) || { taxableAmount: 0, vatAmount: 0 };
+    current.taxableAmount = round2(current.taxableAmount + expectedLineNet(line));
+    current.vatAmount = round2(current.vatAmount + expectedLineVat(line));
+    expectedBreakdown.set(key, current);
+  }
+
+  for (const [key, expected] of expectedBreakdown) {
+    const [vatCategory, vatRate] = key.split("_");
+    const actual = vatBreakdown.find(
+      (breakdown) =>
+        breakdown.vatCategory === vatCategory &&
+        Number(breakdown.vatRate || 0) === Number(vatRate)
+    );
+
+    if (!actual) {
+      errors.push(`Manjka DDV breakdown za kategorijo ${vatCategory} in stopnjo ${vatRate}.`);
+      continue;
+    }
+
+    if (Math.abs(round2(actual.taxableAmount) - expected.taxableAmount) > 0.01) {
+      errors.push(`DDV breakdown ${vatCategory}/${vatRate}: davčna osnova ni pravilna.`);
+    }
+
+    if (Math.abs(round2(actual.vatAmount) - expected.vatAmount) > 0.01) {
+      errors.push(`DDV breakdown ${vatCategory}/${vatRate}: DDV znesek ni pravilen.`);
+    }
+  }
+
+  const calculatedVatTotal = round2(vatBreakdown.reduce((sum, item) => sum + item.vatAmount, 0));
+  if (invoice.totals && Math.abs(calculatedVatTotal - round2(invoice.totals.vat)) > 0.01) {
+    errors.push("BT-110: skupni DDV ni enak vsoti DDV breakdown vrstic.");
   }
 
   const payment = invoice.payment;
 
   if (!payment?.iban && !invoice.bankAccount) {
-    warnings.push("Manjka IBAN oziroma bančni račun.");
+    errors.push("Manjka IBAN oziroma bančni račun.");
   }
 
   if (!payment?.reference && !invoice.reference) {
-    warnings.push("Manjka sklic plačila.");
+    errors.push("Manjka sklic plačila.");
   }
 
   if (!payment?.paymentMeansCode && !invoice.paymentMeansCode) {
-    warnings.push("Manjka koda načina plačila, uporabljena bo 30.");
+    errors.push("Manjka koda načina plačila.");
   }
 
   if (!payment?.purposeCode && !invoice.purposeCode) {

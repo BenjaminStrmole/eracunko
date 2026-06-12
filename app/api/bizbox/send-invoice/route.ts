@@ -145,7 +145,14 @@ export async function POST(request: NextRequest) {
 
     const prepared = body.invoice ? prepareInvoiceForEslog(body.invoice) : null;
 
-    if (prepared && !prepared.validation.valid) {
+    if (!prepared) {
+      return NextResponse.json(
+        { success: false, message: "Manjka račun za pošiljanje." },
+        { status: 400 }
+      );
+    }
+
+    if (!prepared.validation.valid) {
       return NextResponse.json(
         {
           success: false,
@@ -157,12 +164,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const preparedInvoice = prepared?.invoice;
+    const preparedInvoice = prepared.invoice;
 
     const invoiceNumber =
       body.invoiceNumber || preparedInvoice?.number || body.invoice?.number;
 
-    const xml = body.xml || preparedInvoice?.xml || body.invoice?.xml;
+    const xml = prepared.xml || preparedInvoice.xml;
 
     const buyer = body.buyer ||
       preparedInvoice?.buyer || {
@@ -173,9 +180,9 @@ export async function POST(request: NextRequest) {
         eAddress: "",
       };
 
-    const sender = body.sender || preparedInvoice?.seller;
+    const sender = preparedInvoice.seller;
 
-    if (!invoiceNumber || !xml || !buyer?.eLocation) {
+    if (!invoiceNumber || !xml || !buyer?.eLocation || !sender?.eLocation) {
       return NextResponse.json(
         {
           success: false,
@@ -184,6 +191,7 @@ export async function POST(request: NextRequest) {
             invoiceNumber: !invoiceNumber,
             xml: !xml,
             buyerELocation: !buyer?.eLocation,
+            senderELocation: !sender?.eLocation,
           },
         },
         { status: 400 }
@@ -191,17 +199,17 @@ export async function POST(request: NextRequest) {
     }
 
     const senderTaxId = normalizeTaxId(
-      sender?.vat || sender?.vatNumber || sender?.taxId || "SI66666666"
+      sender?.vat || sender?.taxId
     );
 
     const buyerTaxId = normalizeTaxId(buyer.vat || buyer.taxId);
 
     const finalSender = {
-      name: sender?.name || "ZZI T2",
+      name: sender?.name || "",
       taxId: senderTaxId,
       eAddress: normalizeSenderEAddress(sender?.eAddress, senderTaxId),
       eLocation: normalizeELocation(sender?.eLocation, senderTaxId),
-      address: sender?.address || "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE",
+      address: sender?.address || "",
     };
 
     const finalBuyer = {
@@ -283,11 +291,14 @@ export async function POST(request: NextRequest) {
       finalBuyer,
       validationWarnings: prepared?.validation.warnings || [],
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Napaka pri pošiljanju računa.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Napaka pri pošiljanju računa.",
       },
       { status: 500 }
     );
