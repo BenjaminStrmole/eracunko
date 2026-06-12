@@ -1,6 +1,8 @@
 "use client";
 
+import { Download, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import AppShell from "../../components/AppShell";
 import CompanySelector from "../../components/CompanySelector";
 import type { Invoice } from "../../../types/invoice";
 
@@ -11,6 +13,30 @@ type SenderCompany = {
   address?: string;
   eLocation?: string;
   eAddress?: string;
+};
+
+type SendResult = {
+  success: boolean;
+  message: string;
+  docId?: string;
+  raw?: unknown;
+};
+
+type BizBoxSendResponse = {
+  success?: boolean;
+  message?: string;
+  docId?: string;
+  raw?: unknown;
+};
+
+type SentInvoice = Invoice & {
+  docId?: string;
+  status: "SENT";
+  sentAt: string;
+};
+
+type StoredSentInvoice = {
+  number?: string;
 };
 
 function escapeXml(value: string | number | undefined | null) {
@@ -209,12 +235,7 @@ export default function InvoiceXmlPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [sending, setSending] = useState(false);
   const [activeCompany, setActiveCompany] = useState<SenderCompany | null>(null);
-  const [sendResult, setSendResult] = useState<{
-    success: boolean;
-    message: string;
-    docId?: string;
-    raw?: any;
-  } | null>(null);
+  const [sendResult, setSendResult] = useState<SendResult | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("eracunko_current_invoice");
@@ -224,10 +245,11 @@ export default function InvoiceXmlPage() {
       return;
     }
 
-    setInvoice(JSON.parse(saved));
-
     const savedCompany = localStorage.getItem("activeCompany");
-    setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
+    queueMicrotask(() => {
+      setInvoice(JSON.parse(saved));
+      setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
+    });
   }, []);
 
   const xml = useMemo(() => {
@@ -240,7 +262,7 @@ export default function InvoiceXmlPage() {
 
     const currentActiveCompany = JSON.parse(
       localStorage.getItem("activeCompany") || "null"
-    );
+    ) as SenderCompany | null;
 
     setSending(true);
     setSendResult(null);
@@ -259,7 +281,7 @@ export default function InvoiceXmlPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as BizBoxSendResponse;
 
       if (!data.success) {
         setSendResult({
@@ -270,16 +292,18 @@ export default function InvoiceXmlPage() {
         return;
       }
 
-      const sentInvoice = {
+      const sentInvoice: SentInvoice = {
         ...invoice,
         docId: data.docId,
         status: "SENT",
         sentAt: new Date().toISOString(),
       };
 
-      const existingSent = JSON.parse(localStorage.getItem("sent") || "[]");
+      const existingSent = JSON.parse(
+        localStorage.getItem("sent") || "[]"
+      ) as StoredSentInvoice[];
       const filteredSent = existingSent.filter(
-        (item: any) => item.number !== invoice.number
+        (item) => item.number !== invoice.number
       );
 
       localStorage.setItem("sent", JSON.stringify([...filteredSent, sentInvoice]));
@@ -292,10 +316,13 @@ export default function InvoiceXmlPage() {
         message: data.message || "Dokument uspešno poslan.",
         docId: data.docId,
       });
-    } catch (error: any) {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Napaka pri pošiljanju.";
+
       setSendResult({
         success: false,
-        message: error.message || "Napaka pri pošiljanju.",
+        message,
       });
     } finally {
       setSending(false);
@@ -304,38 +331,29 @@ export default function InvoiceXmlPage() {
 
   if (!invoice) {
     return (
-      <main className="min-h-screen bg-slate-950 p-10 text-white">
+      <main className="app-bg min-h-screen p-10 text-[var(--foreground)]">
         Nalagam XML ...
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <h1 className="text-2xl font-bold">eRačunko</h1>
-          <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-
-          <nav className="mt-10 space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Dashboard</a>
-            <a href="/invoices/preview" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📄 Predogled računa</a>
-            <a href="/invoices/xml" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">🧾 eSLOG XML</a>
-          </nav>
-        </aside>
-
-        <section className="flex-1 p-10">
-          <h2 className="text-4xl font-bold">eSLOG XML</h2>
-
-          <p className="mt-2 text-slate-400">
+    <AppShell>
+          <div className="mb-8">
+            <div className="status-pill mb-4 inline-flex">eSLOG izvoz</div>
+            <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+              eSLOG XML
+            </h1>
+            <p className="app-muted mt-3 max-w-2xl">
             XML dokument je ustvarjen iz trenutnega računa in pripravljen za pošiljanje v bizBox DEMO.
-          </p>
+            </p>
+          </div>
 
           <div className="mt-6 max-w-3xl">
             <CompanySelector />
           </div>
 
-          <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
+          <div className="glass-panel mt-4 rounded-2xl p-4 text-sm">
             Izdajatelj v XML:{" "}
             <strong>
               {activeCompany?.name || "ZZI T2"} (
@@ -343,7 +361,7 @@ export default function InvoiceXmlPage() {
             </strong>
           </div>
 
-          <pre className="mt-8 max-h-[650px] overflow-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-blue-100">
+          <pre className="mt-8 max-h-[650px] overflow-auto rounded-[1.5rem] border border-[var(--app-border)] bg-slate-950 p-6 text-sm text-blue-100 shadow-[var(--app-shadow-soft)]">
             {xml}
           </pre>
 
@@ -363,16 +381,18 @@ export default function InvoiceXmlPage() {
 
                 URL.revokeObjectURL(url);
               }}
-              className="rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+              className="primary-button h-12 px-6"
             >
+              <Download className="h-4 w-4" aria-hidden="true" />
               Prenesi XML
             </button>
 
             <button
               onClick={sendToBizBox}
               disabled={sending}
-              className="rounded-lg border border-white/15 px-6 py-3 font-semibold hover:bg-white/10 disabled:opacity-60"
+              className="secondary-button h-12 px-6 disabled:opacity-60"
             >
+              <Send className="h-4 w-4" aria-hidden="true" />
               {sending ? "Pošiljam..." : "Pošlji v bizBox DEMO"}
             </button>
           </div>
@@ -395,23 +415,21 @@ export default function InvoiceXmlPage() {
               </div>
 
               {sendResult.docId && (
-                <div className="mt-3 text-slate-300">
+                <div className="app-muted mt-3">
                   Številka dokumenta:
                   <span className="font-bold"> {sendResult.docId}</span>
                 </div>
               )}
 
-              {!sendResult.success && sendResult.raw && (
+              {!sendResult.success && sendResult.raw != null && (
                 <pre className="mt-4 overflow-auto rounded-xl bg-slate-950 p-4 text-sm text-red-100">
                   {typeof sendResult.raw === "string"
                     ? sendResult.raw
-                    : JSON.stringify(sendResult.raw, null, 2)}
+                    : JSON.stringify(sendResult.raw, null, 2) || ""}
                 </pre>
               )}
             </div>
           )}
-        </section>
-      </div>
-    </main>
+    </AppShell>
   );
 }

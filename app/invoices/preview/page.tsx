@@ -1,6 +1,9 @@
 "use client";
 
+import { ArrowRight, Download, Printer } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import AppShell from "../../components/AppShell";
 import type { Invoice } from "../../../types/invoice";
 
 type ActiveCompany = {
@@ -10,6 +13,46 @@ type ActiveCompany = {
   address?: string;
   eLocation?: string;
   eAddress?: string;
+};
+
+type PreviewLine = Invoice["lines"][number] & {
+  unit?: string;
+  itemCode?: string;
+  note?: string;
+  vatCategory?: string;
+  taxExemptionReason?: string;
+};
+
+type PreviewInvoice = Omit<Invoice, "lines"> & {
+  lines: PreviewLine[];
+  seller?: {
+    name?: string;
+    vat?: string;
+    address?: string;
+  };
+  documentType?: string;
+  paymentMethod?: string;
+  paymentMeansCode?: string;
+  purposeCode?: string;
+  bankBic?: string;
+  note?: string;
+  eSlog?: {
+    documentType?: string;
+    purposeCode?: string;
+  };
+  payment?: {
+    method?: string;
+    paymentMeansCode?: string;
+    purposeCode?: string;
+    bankAccount?: string;
+    bankBic?: string;
+    reference?: string;
+  };
+  references?: {
+    orderReference?: string;
+    contractReference?: string;
+    deliveryNoteReference?: string;
+  };
 };
 
 function formatDate(value: string) {
@@ -25,7 +68,7 @@ function formatMoney(value: number) {
 }
 
 export default function InvoicePreviewPage() {
-  const [invoice, setInvoice] = useState<(Invoice & Record<string, any>) | null>(null);
+  const [invoice, setInvoice] = useState<PreviewInvoice | null>(null);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
 
   useEffect(() => {
@@ -36,15 +79,16 @@ export default function InvoicePreviewPage() {
       return;
     }
 
-    setInvoice(JSON.parse(saved));
-
     const savedCompany = localStorage.getItem("activeCompany");
-    setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
+    queueMicrotask(() => {
+      setInvoice(JSON.parse(saved));
+      setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
+    });
   }, []);
 
   if (!invoice) {
     return (
-      <main className="min-h-screen bg-slate-950 p-10 text-white">
+      <main className="app-bg min-h-screen p-10 text-[var(--foreground)]">
         Nalagam predogled računa ...
       </main>
     );
@@ -62,56 +106,41 @@ export default function InvoicePreviewPage() {
     "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE";
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="no-print w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
-
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
-          </nav>
-        </aside>
-
-        <section className="flex-1 p-10 print:p-0">
+    <AppShell>
           <div className="no-print mb-8 flex items-center justify-between">
             <div>
-              <h2 className="text-4xl font-bold">Predogled računa</h2>
-              <p className="mt-2 text-slate-400">
+              <div className="status-pill mb-4 inline-flex">Kontrola računa</div>
+              <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+                Predogled računa
+              </h1>
+              <p className="app-muted mt-3">
                 Preverite podatke pred generiranjem eSLOG XML in pošiljanjem.
               </p>
             </div>
 
             <div className="flex gap-3">
-              <a
+              <Link
                 href="/invoices/new"
-                className="rounded-full border border-white/15 px-6 py-3 font-semibold hover:bg-white/10"
+                className="secondary-button h-12 px-5"
               >
                 Nazaj
-              </a>
+              </Link>
 
               <button
                 onClick={() => window.print()}
-                className="rounded-full border border-blue-500/30 bg-blue-500/10 px-6 py-3 font-semibold text-blue-200 hover:bg-blue-500/20"
+                className="secondary-button h-12 px-5"
               >
-                Prenesi PDF
+                <Printer className="h-4 w-4" aria-hidden="true" />
+                Natisni
               </button>
 
-              <a
+              <Link
                 href="/invoices/xml"
-                className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+                className="primary-button h-12 px-6"
               >
+                <Download className="h-4 w-4" aria-hidden="true" />
                 Generiraj eSLOG XML
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -193,7 +222,7 @@ export default function InvoicePreviewPage() {
                   <div>Znesek</div>
                 </div>
 
-                {invoice.lines.map((line: any) => {
+                {invoice.lines.map((line) => {
                   const lineNet = line.quantity * line.price;
 
                   return (
@@ -225,12 +254,12 @@ export default function InvoicePreviewPage() {
                 })}
               </div>
 
-              {invoice.lines.some((line: any) => line.taxExemptionReason) && (
+              {invoice.lines.some((line) => line.taxExemptionReason) && (
                 <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
                   <strong>Davčna pojasnila:</strong>
                   {invoice.lines
-                    .filter((line: any) => line.taxExemptionReason)
-                    .map((line: any) => (
+                    .filter((line) => line.taxExemptionReason)
+                    .map((line) => (
                       <div key={line.id} className="mt-1">
                         {line.description}: {line.taxExemptionReason}
                       </div>
@@ -256,8 +285,11 @@ export default function InvoicePreviewPage() {
               </div>
             </div>
 
-            <aside className="no-print rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-xl font-bold">Kontrola pred pošiljanjem</h3>
+            <aside className="no-print glass-panel rounded-[1.75rem] p-6">
+              <h2 className="text-xl font-semibold">Kontrola pred pošiljanjem</h2>
+              <p className="app-muted mt-1 text-sm">
+                Ključni podatki, ki jih preveri pred XML korakom.
+              </p>
 
               <div className="mt-6 space-y-4 text-sm">
                 <Check ok text="Podatki izdajatelja iz aktivnega podjetja" />
@@ -266,14 +298,13 @@ export default function InvoicePreviewPage() {
                 <Check ok={Boolean(invoice.payment?.reference || invoice.reference)} text="Referenca plačila vpisana" />
                 <Check ok={Boolean(invoice.eSlog?.documentType || invoice.documentType)} text="Tip dokumenta izbran" />
                 <Check ok={Boolean(invoice.eSlog?.purposeCode || invoice.purposeCode)} text="Koda namena vpisana" />
-                <div className="rounded-xl bg-blue-500/10 p-4 text-blue-200">
-                  • Naslednji korak: generiranje eSLOG XML
+                <div className="rounded-2xl bg-[var(--app-soft)] p-4 text-[var(--app-primary-strong)]">
+                  <ArrowRight className="mb-2 h-4 w-4" aria-hidden="true" />
+                  Naslednji korak: generiranje eSLOG XML
                 </div>
               </div>
             </aside>
           </div>
-        </section>
-      </div>
 
       <style jsx global>{`
         @media print {
@@ -288,9 +319,13 @@ export default function InvoicePreviewPage() {
           main {
             background: white !important;
           }
+
+          aside {
+            display: none !important;
+          }
         }
       `}</style>
-    </main>
+    </AppShell>
   );
 }
 
@@ -298,7 +333,7 @@ function Check({ ok, text }: { ok: boolean; text: string }) {
   return (
     <div
       className={`rounded-xl p-4 ${
-        ok ? "bg-green-500/10 text-green-300" : "bg-red-500/10 text-red-300"
+        ok ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
       }`}
     >
       {ok ? "✓" : "!"} {text}
