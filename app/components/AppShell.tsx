@@ -1,18 +1,30 @@
 "use client";
 
+import {
+  Building2,
+  FileCheck2,
+  FileClock,
+  FilePlus2,
+  Inbox,
+  LayoutDashboard,
+  Send,
+  Settings,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
+import ThemeToggle from "./ThemeToggle";
 
 const navItems = [
-  { href: "/dashboard", label: "Domov", icon: "🏠" },
-  { href: "/inbox", label: "Prejeti računi", icon: "📥" },
-  { href: "/acknowledgments", label: "Povratnice", icon: "📨" },
-  { href: "/sent", label: "Poslani računi", icon: "📤" },
-  { href: "/drafts", label: "Osnutki", icon: "📝" },
-  { href: "/invoices/new", label: "Nov račun", icon: "🧾" },
-  { href: "/customers", label: "Moje stranke", icon: "👥" },
-  { href: "/settings", label: "Nastavitve", icon: "⚙️" },
+  { href: "/dashboard", label: "Domov", icon: LayoutDashboard },
+  { href: "/inbox", label: "Prejeti računi", icon: Inbox },
+  { href: "/acknowledgments", label: "Povratnice", icon: FileCheck2 },
+  { href: "/sent", label: "Poslani računi", icon: Send },
+  { href: "/drafts", label: "Osnutki", icon: FileClock },
+  { href: "/invoices/new", label: "Nov račun", icon: FilePlus2 },
+  { href: "/customers", label: "Moje stranke", icon: Users },
+  { href: "/settings", label: "Nastavitve", icon: Settings },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -25,33 +37,41 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="app-bg min-h-screen text-[var(--foreground)]">
       <div className="flex min-h-screen">
-        <aside className="w-72 shrink-0 border-r border-slate-800 bg-slate-900 p-6">
+        <aside className="sticky top-0 h-screen w-72 shrink-0 border-r border-[var(--app-border)] bg-[var(--app-sidebar)] p-5 shadow-[var(--app-shadow-soft)] backdrop-blur-2xl">
           <div className="mb-10">
-            <Link href="/dashboard" className="block text-2xl font-bold">
-              eRačunko
+            <Link href="/dashboard" className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--app-primary)] text-white shadow-lg shadow-blue-500/20">
+                <Building2 className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-2xl font-semibold tracking-tight">
+                  eRačunko
+                </span>
+                <span className="app-muted block text-sm">
+                  Mikro ERP za e-račune
+                </span>
+              </span>
             </Link>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-1.5">
             {navItems.map((item) => {
               const active = isActive(pathname, item.href);
+              const Icon = item.icon;
 
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`block rounded-lg px-4 py-3 ${
+                  className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-medium ${
                     active
-                      ? "bg-blue-600/20 text-blue-200"
-                      : "hover:bg-slate-800"
+                      ? "bg-[var(--app-primary)] text-white shadow-lg shadow-blue-500/20"
+                      : "app-muted hover:bg-[var(--app-soft)] hover:text-[var(--foreground)]"
                   }`}
                 >
-                  <span className="mr-2" aria-hidden="true">
-                    {item.icon}
-                  </span>
+                  <Icon className="h-4.5 w-4.5" aria-hidden="true" />
                   {item.label}
                 </Link>
               );
@@ -59,9 +79,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
             <LogoutButton />
           </nav>
+
+          <div className="absolute bottom-5 left-5 right-5">
+            <ThemeToggle />
+          </div>
         </aside>
 
-        <section className="flex-1 p-10">{children}</section>
+        <section className="min-w-0 flex-1 p-6 lg:p-10">{children}</section>
       </div>
     </main>
   );

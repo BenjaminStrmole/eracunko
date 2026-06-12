@@ -1,8 +1,31 @@
 "use client";
 
+import {
+  AlertCircle,
+  ArrowRight,
+  FileCheck2,
+  FileClock,
+  Inbox,
+  Send,
+  Users,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import LogoutButton from "../components/LogoutButton";
+import AppShell from "../components/AppShell";
 import CompanySelector from "../components/CompanySelector";
+
+type RawParam = {
+  parameterName?: string;
+  parameterValue?: string;
+};
+
+type RawDocument = {
+  parameters?: {
+    param?: RawParam[];
+  };
+  classificationname?: string;
+  classificationName?: string;
+};
 
 type DocumentItem = {
   id: string;
@@ -11,12 +34,23 @@ type DocumentItem = {
   type: string;
   status: string;
   date: string;
-  raw?: any;
+  raw?: RawDocument;
+  parameters?: {
+    param?: RawParam[];
+  };
 };
 
-function getParam(item: any, name: string) {
-  const params = item?.raw?.parameters?.param || item?.parameters?.param || [];
-  const found = params.find((param: any) => param.parameterName === name);
+type ActiveCompany = {
+  name?: string;
+  vatNumber?: string;
+  taxId?: string;
+  eLocation?: string;
+  eAddress?: string;
+};
+
+function getParam(item: DocumentItem, name: string) {
+  const params = item.raw?.parameters?.param || item.parameters?.param || [];
+  const found = params.find((param) => param.parameterName === name);
   return found?.parameterValue || "";
 }
 
@@ -35,19 +69,13 @@ function isAcknowledgement(item: DocumentItem) {
 }
 
 function isErrorAck(item: DocumentItem) {
-  const confirmation = (
-    getParam(item, "VrstaPotrditve") || ""
-  ).toLowerCase();
-
-  return (
-    confirmation.startsWith("27") ||
-    confirmation.includes("-99")
-  );
+  const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
+  return confirmation.startsWith("27") || confirmation.includes("-99");
 }
 
 export default function DashboardPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [activeCompany, setActiveCompany] = useState<any>(null);
+  const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [sentCount, setSentCount] = useState(0);
   const [draftCount, setDraftCount] = useState(0);
   const [customerCount, setCustomerCount] = useState(0);
@@ -56,21 +84,23 @@ export default function DashboardPage() {
   async function loadDashboard() {
     setLoading(true);
 
-    const company = JSON.parse(localStorage.getItem("activeCompany") || "null");
-    setActiveCompany(company);
+    const company = JSON.parse(
+      localStorage.getItem("activeCompany") || "null"
+    ) as ActiveCompany | null;
 
+    setActiveCompany(company);
     setSentCount(JSON.parse(localStorage.getItem("sent") || "[]").length);
     setDraftCount(JSON.parse(localStorage.getItem("drafts") || "[]").length);
-    setCustomerCount(JSON.parse(localStorage.getItem("customers") || "[]").length);
+    setCustomerCount(
+      JSON.parse(localStorage.getItem("customers") || "[]").length
+    );
 
     try {
       const taxNumber = company?.vatNumber || company?.taxId || "";
-
       const response = await fetch(
         `/api/bizbox/inbox?taxNumber=${encodeURIComponent(taxNumber)}`,
         { cache: "no-store" }
       );
-
       const data = await response.json();
 
       if (data.success) {
@@ -81,19 +111,17 @@ export default function DashboardPage() {
     }
   }
 
-    useEffect(() => {
-    loadDashboard();
+  useEffect(() => {
+    queueMicrotask(() => {
+      loadDashboard();
+    });
 
-    const handleCompanyChange = () => {
-        loadDashboard();
-    };
-
-    window.addEventListener("active-company-changed", handleCompanyChange);
+    window.addEventListener("active-company-changed", loadDashboard);
 
     return () => {
-        window.removeEventListener("active-company-changed", handleCompanyChange);
+      window.removeEventListener("active-company-changed", loadDashboard);
     };
-    }, []);
+  }, []);
 
   const receivedInvoices = useMemo(
     () => documents.filter((doc) => !isAcknowledgement(doc)),
@@ -113,114 +141,135 @@ export default function DashboardPage() {
   const latestAcks = acknowledgements.slice(0, 5);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
+    <AppShell>
+      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="status-pill mb-4 inline-flex">Pregled poslovanja</div>
+          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+            Domov
+          </h1>
+          <p className="app-muted mt-3 max-w-2xl text-base">
+            Ključni statusi e-računov, povratnic, osnutkov in strank za aktivno
+            podjetje.
+          </p>
+        </div>
 
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
-            <LogoutButton />
-          </nav>
-        </aside>
+        <Link href="/invoices/new" className="primary-button h-12 px-6">
+          Nov račun
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
 
-        <section className="flex-1 p-10">
-          <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8">
+        <CompanySelector />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <StatCard
+          href="/inbox"
+          label="Prejeti računi"
+          value={receivedInvoices.length}
+          icon={Inbox}
+        />
+        <StatCard
+          href="/acknowledgments"
+          label="Povratnice"
+          value={acknowledgements.length}
+          icon={FileCheck2}
+        />
+        <StatCard href="/sent" label="Poslani" value={sentCount} icon={Send} />
+        <StatCard
+          href="/drafts"
+          label="Osnutki"
+          value={draftCount}
+          icon={FileClock}
+        />
+        <StatCard
+          href="/customers"
+          label="Stranke"
+          value={customerCount}
+          icon={Users}
+        />
+        <StatCard
+          label="Napake"
+          value={errorAcks.length}
+          icon={AlertCircle}
+          danger
+        />
+      </div>
+
+      <div className="mt-8 grid gap-6 xl:grid-cols-3">
+        <div className="solid-panel rounded-[1.75rem] p-6 xl:col-span-2">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-4xl font-bold">Domov</h2>
-              <p className="mt-2 text-slate-400">
-                Pregled aktivnega podjetja, prejetih računov, povratnic in osnutkov.
+              <h2 className="text-xl font-semibold">Zadnje povratnice</h2>
+              <p className="app-muted mt-1 text-sm">
+                Hitri pregled uspešnih in zavrnjenih potrditev.
               </p>
             </div>
-
-            <a
-              href="/invoices/new"
-              className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
-            >
-              + Nov račun
-            </a>
+            <Link href="/acknowledgments" className="secondary-button h-10 px-4 text-sm">
+              Vse povratnice
+            </Link>
           </div>
 
-          <div className="mb-8">
-            <CompanySelector />
-          </div>
+          <div className="mt-5 space-y-3">
+            {loading && <div className="app-muted">Nalagam podatke ...</div>}
 
-          <div className="grid gap-6 md:grid-cols-6">
-            <StatCard href="/inbox" label="Prejeti računi" value={receivedInvoices.length} />
-            <StatCard href="/acknowledgments" label="Povratnice" value={acknowledgements.length} />
-            <StatCard href="/sent" label="Poslani računi" value={sentCount} />
-            <StatCard href="/drafts" label="Osnutki" value={draftCount} />
-            <StatCard href="/customers" label="Moje stranke" value={customerCount} />
-            <StatCard label="Napake" value={errorAcks.length} danger />
-          </div>
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:col-span-2">
-              <h3 className="text-xl font-bold">Zadnje povratnice</h3>
-
-              <div className="mt-5 space-y-3">
-                {loading && <div className="text-slate-400">Nalagam podatke ...</div>}
-
-                {!loading && latestAcks.length === 0 && (
-                  <div className="text-slate-400">Ni povratnic.</div>
-                )}
-
-                {latestAcks.map((doc) => {
-                  const status = getParam(doc, "VrstaPotrditve") || doc.number;
-                  const ref = getParam(doc, "RefMsgId") || "-";
-
-                  return (
-                    <a
-                      key={doc.id}
-                      href={`/inbox/${doc.id}`}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4 hover:bg-slate-800"
-                    >
-                      <div>
-                        <div className="font-semibold">{status}</div>
-                        <div className="mt-1 text-sm text-slate-500">
-                          RefMsgId: {ref}
-                        </div>
-                      </div>
-
-                      <span
-                        className={`rounded-full px-3 py-1 text-sm ${
-                          isErrorAck(doc)
-                            ? "bg-red-500/10 text-red-300"
-                            : "bg-green-500/10 text-green-300"
-                        }`}
-                      >
-                        {isErrorAck(doc) ? "Napaka" : "OK"}
-                      </span>
-                    </a>
-                  );
-                })}
+            {!loading && latestAcks.length === 0 && (
+              <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] p-5 app-muted">
+                Ni povratnic za prikaz.
               </div>
-            </div>
+            )}
 
-            <aside className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-6">
-              <h3 className="text-xl font-bold text-blue-100">Aktivno podjetje</h3>
+            {latestAcks.map((doc) => {
+              const status = getParam(doc, "VrstaPotrditve") || doc.number;
+              const ref = getParam(doc, "RefMsgId") || "-";
+              const hasError = isErrorAck(doc);
 
-              <div className="mt-5 space-y-3 text-sm">
-                <Info label="Naziv" value={activeCompany?.name} />
-                <Info label="Davčna" value={activeCompany?.vatNumber || activeCompany?.taxId} />
-                <Info label="eLokacija" value={activeCompany?.eLocation} />
-                <Info label="eNaslov" value={activeCompany?.eAddress} />
-              </div>
-            </aside>
+              return (
+                <Link
+                  key={doc.id}
+                  href={`/inbox/${doc.id}`}
+                  className="flex items-center justify-between rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 hover:bg-[var(--app-soft)]"
+                >
+                  <div>
+                    <div className="font-semibold">{status}</div>
+                    <div className="app-muted mt-1 text-sm">RefMsgId: {ref}</div>
+                  </div>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      hasError
+                        ? "bg-red-500/10 text-red-500"
+                        : "bg-emerald-500/10 text-emerald-500"
+                    }`}
+                  >
+                    {hasError ? "Napaka" : "OK"}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
-        </section>
+        </div>
+
+        <aside className="glass-panel rounded-[1.75rem] p-6">
+          <h2 className="text-xl font-semibold">Aktivno podjetje</h2>
+          <p className="app-muted mt-1 text-sm">
+            Podatki, ki se uporabijo pri pripravi računov.
+          </p>
+
+          <div className="mt-5 space-y-3 text-sm">
+            <Info label="Naziv" value={activeCompany?.name} />
+            <Info
+              label="Davčna"
+              value={activeCompany?.vatNumber || activeCompany?.taxId}
+            />
+            <Info label="eLokacija" value={activeCompany?.eLocation} />
+            <Info label="eNaslov" value={activeCompany?.eAddress} />
+          </div>
+        </aside>
       </div>
-    </main>
+    </AppShell>
   );
 }
 
@@ -228,42 +277,46 @@ function StatCard({
   href,
   label,
   value,
+  icon: Icon,
   danger,
 }: {
   href?: string;
   label: string;
   value: number;
+  icon: React.ElementType;
   danger?: boolean;
 }) {
-  const className = `rounded-2xl border p-6 ${
-    danger
-      ? "border-red-500/20 bg-red-500/10"
-      : "border-slate-800 bg-slate-900 hover:bg-slate-800"
-  }`;
-
   const content = (
     <>
-      <div className={danger ? "text-red-300" : "text-slate-400"}>{label}</div>
-      <div className="mt-3 text-4xl font-bold">{value}</div>
+      <div
+        className={`mb-5 flex h-11 w-11 items-center justify-center rounded-2xl ${
+          danger ? "bg-red-500/10 text-red-500" : "bg-[var(--app-soft)] text-[var(--app-primary)]"
+        }`}
+      >
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div className="app-muted text-sm font-medium">{label}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight">{value}</div>
     </>
   );
+
+  const className =
+    "solid-panel block rounded-[1.5rem] p-5 hover:-translate-y-0.5 hover:border-[var(--app-primary)]";
 
   if (!href) return <div className={className}>{content}</div>;
 
   return (
-    <a href={href} className={className}>
+    <Link href={href} className={className}>
       {content}
-    </a>
+    </Link>
   );
 }
 
-function Info({ label, value }: { label: string; value: any }) {
+function Info({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-blue-500/20 bg-slate-950/60 p-4">
-      <div className="text-slate-500">{label}</div>
-      <div className="mt-1 break-words font-semibold text-slate-200">
-        {value || "-"}
-      </div>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <div className="app-muted">{label}</div>
+      <div className="mt-1 break-words font-semibold">{value || "-"}</div>
     </div>
   );
 }

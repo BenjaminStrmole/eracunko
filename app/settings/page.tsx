@@ -124,28 +124,31 @@ export default function SettingsPage() {
   return (
     <AppShell>
       {toast && (
-        <div className="fixed right-5 top-5 z-50 max-w-md rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-4 text-sm text-blue-100 shadow-xl backdrop-blur">
+        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-[var(--foreground)]">
           ℹ️ {toast}
         </div>
       )}
 
       <div className="mb-8">
-        <h2 className="text-4xl font-bold">Nastavitve podjetja</h2>
-        <p className="mt-2 text-slate-400">
+        <div className="status-pill mb-4 inline-flex">Profil izdajatelja</div>
+        <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+          Nastavitve podjetja
+        </h1>
+        <p className="app-muted mt-3 max-w-2xl">
           Podatki za izdajatelja, plačilo, privzete roke in številčenje računov.
         </p>
       </div>
 
       <div className="grid max-w-6xl gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:col-span-2">
-          <h3 className="text-2xl font-bold">Podjetje</h3>
+        <div className="solid-panel rounded-[1.75rem] p-6 lg:col-span-2">
+          <h2 className="text-2xl font-semibold tracking-tight">Podjetje</h2>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <Field label="Naziv podjetja">
               <input
                 value={settings.name}
                 onChange={(event) => updateField("name", event.target.value)}
-                className="input"
+                className="field-input"
                 placeholder="Moje podjetje d.o.o."
               />
             </Field>
@@ -156,7 +159,7 @@ export default function SettingsPage() {
                 onChange={(event) =>
                   updateField("vatNumber", event.target.value.toUpperCase())
                 }
-                className="input"
+                className="field-input"
                 placeholder="SI12345678"
               />
             </Field>
@@ -167,7 +170,7 @@ export default function SettingsPage() {
                 onChange={(event) =>
                   updateField("registrationNumber", event.target.value)
                 }
-                className="input"
+                className="field-input"
                 placeholder="1234567000"
               />
             </Field>
@@ -178,7 +181,7 @@ export default function SettingsPage() {
                 onChange={(event) =>
                   updateField("isVatPayer", event.target.value === "yes")
                 }
-                className="input"
+                className="field-input"
               >
                 <option value="yes">Da</option>
                 <option value="no">Ne</option>
@@ -189,7 +192,7 @@ export default function SettingsPage() {
               <input
                 value={settings.address}
                 onChange={(event) => updateField("address", event.target.value)}
-                className="input"
+                className="field-input"
                 placeholder="Ulica 1"
               />
             </Field>
@@ -199,13 +202,13 @@ export default function SettingsPage() {
                 <input
                   value={settings.postCode}
                   onChange={(event) => updateField("postCode", event.target.value)}
-                  className="input"
+                  className="field-input"
                   placeholder="1000"
                 />
                 <input
                   value={settings.city}
                   onChange={(event) => updateField("city", event.target.value)}
-                  className="input col-span-2"
+                  className="field-input col-span-2"
                   placeholder="Ljubljana"
                 />
               </div>
@@ -216,7 +219,7 @@ export default function SettingsPage() {
                 type="email"
                 value={settings.email}
                 onChange={(event) => updateField("email", event.target.value)}
-                className="input"
+                className="field-input"
                 placeholder="info@podjetje.si"
               />
             </Field>
@@ -225,14 +228,16 @@ export default function SettingsPage() {
               <input
                 value={settings.phone}
                 onChange={(event) => updateField("phone", event.target.value)}
-                className="input"
+                className="field-input"
                 placeholder="+386 40 000 000"
               />
             </Field>
           </div>
 
-          <div className="mt-10 border-t border-slate-800 pt-8">
-            <h3 className="text-2xl font-bold">Plačilo in privzete vrednosti</h3>
+          <div className="mt-10 border-t border-[var(--app-border)] pt-8">
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Plačilo in privzete vrednosti
+            </h2>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <Field label="IBAN">
@@ -241,7 +246,7 @@ export default function SettingsPage() {
                   onChange={(event) =>
                     updateField("iban", event.target.value.toUpperCase())
                   }
-                  className="input"
+                  className="field-input"
                   placeholder="SI56 1234 5678 9012 345"
                 />
               </Field>
@@ -252,7 +257,7 @@ export default function SettingsPage() {
                   onChange={(event) =>
                     updateField("bic", event.target.value.toUpperCase())
                   }
-                  className="input"
+                  className="field-input"
                   placeholder="LJBASI2X"
                 />
               </Field>
@@ -265,7 +270,7 @@ export default function SettingsPage() {
                   onChange={(event) =>
                     updateField("defaultDueDays", event.target.value)
                   }
-                  className="input"
+                  className="field-input"
                   placeholder="15"
                 />
               </Field>
@@ -276,7 +281,7 @@ export default function SettingsPage() {
                   onChange={(event) =>
                     updateField("invoicePrefix", event.target.value.toUpperCase())
                   }
-                  className="input"
+                  className="field-input"
                   placeholder="ER"
                 />
               </Field>
@@ -285,14 +290,17 @@ export default function SettingsPage() {
 
           <button
             onClick={saveSettings}
-            className="mt-8 rounded-lg bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+            className="primary-button mt-8 h-12 px-6"
           >
             Shrani nastavitve
           </button>
         </div>
 
-        <aside className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-6">
-          <h3 className="text-xl font-bold text-blue-100">Predogled izdajatelja</h3>
+        <aside className="glass-panel rounded-[1.75rem] p-6">
+          <h2 className="text-xl font-semibold">Predogled izdajatelja</h2>
+          <p className="app-muted mt-1 text-sm">
+            Kratek povzetek podatkov, ki bodo šli na račun.
+          </p>
 
           <div className="mt-5 space-y-3 text-sm">
             <Info label="Naziv" value={settings.name} />
@@ -308,21 +316,6 @@ export default function SettingsPage() {
           </div>
         </aside>
       </div>
-
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid rgb(51 65 85);
-          background: rgb(30 41 59);
-          padding: 0.75rem;
-          outline: none;
-        }
-
-        .input:focus {
-          border-color: rgb(59 130 246);
-        }
-      `}</style>
     </AppShell>
   );
 }
@@ -336,7 +329,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm text-slate-300">{label}</label>
+      <label className="app-muted mb-2 block text-sm font-medium">{label}</label>
       {children}
     </div>
   );
@@ -344,9 +337,9 @@ function Field({
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <div className="text-slate-400">{label}</div>
-      <div className="mt-1 font-medium text-white">{value || "-"}</div>
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <div className="app-muted">{label}</div>
+      <div className="mt-1 break-words font-semibold">{value || "-"}</div>
     </div>
   );
 }

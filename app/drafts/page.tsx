@@ -96,29 +96,32 @@ export default function DraftsPage() {
   return (
     <AppShell>
       {toast && (
-        <div className="fixed right-5 top-5 z-50 max-w-md rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-4 text-sm text-blue-100 shadow-xl backdrop-blur">
+        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-[var(--foreground)]">
           ℹ️ {toast}
         </div>
       )}
 
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h2 className="text-4xl font-bold">Osnutki</h2>
-          <p className="mt-2 text-slate-400">
+          <div className="status-pill mb-4 inline-flex">Delovni dokumenti</div>
+          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+            Osnutki
+          </h1>
+          <p className="app-muted mt-3">
             Nedokončani računi, ki čakajo na predogled ali pošiljanje.
           </p>
         </div>
 
         <Link
           href="/invoices/new"
-          className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
+          className="primary-button h-12 px-6"
         >
           + Nov račun
         </Link>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900">
-        <div className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
+      <div className="solid-panel overflow-hidden rounded-[1.75rem]">
+        <div className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
           <div>Številka</div>
           <div>Kupec</div>
           <div>Znesek</div>
@@ -128,7 +131,7 @@ export default function DraftsPage() {
         </div>
 
         {sortedDrafts.length === 0 && (
-          <div className="px-6 py-8 text-slate-400">
+          <div className="app-muted px-6 py-8">
             Ni shranjenih osnutkov. Ustvari račun in klikni Shrani osnutek.
           </div>
         )}
@@ -136,35 +139,35 @@ export default function DraftsPage() {
         {sortedDrafts.map((draft) => (
           <div
             key={`${draft.id || draft.number}`}
-            className="grid grid-cols-6 items-center border-b border-slate-800 px-6 py-4 last:border-b-0"
+            className="grid grid-cols-6 items-center border-b border-[var(--app-border)] px-6 py-4 last:border-b-0"
           >
             <div className="font-medium">{draft.number}</div>
-            <div className="text-slate-300">{draft.buyer?.name || "-"}</div>
-            <div className="text-slate-300">{formatMoney(draft.totals?.gross)}</div>
+            <div className="app-muted">{draft.buyer?.name || "-"}</div>
+            <div className="app-muted">{formatMoney(draft.totals?.gross)}</div>
             <div>
-              <span className="rounded-full bg-amber-500/10 px-3 py-1 text-sm text-amber-300">
+              <span className="rounded-full bg-amber-500/10 px-3 py-1 text-sm font-semibold text-amber-500">
                 {draft.status || "DRAFT"}
               </span>
             </div>
-            <div className="text-slate-300">
+            <div className="app-muted">
               {formatDate(draft.updatedAt || draft.createdAt)}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => openDraft(draft)}
-                className="rounded-lg border border-blue-500/30 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
+                className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-medium text-[var(--app-primary-strong)] hover:bg-[var(--app-soft)]"
               >
                 Odpri
               </button>
               <button
                 onClick={() => copyDraft(draft)}
-                className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+                className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-medium hover:bg-[var(--app-soft)]"
               >
                 Kopiraj
               </button>
               <button
                 onClick={() => deleteDraft(draft.number)}
-                className="rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                className="rounded-xl border border-red-500/25 px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
               >
                 Izbriši
               </button>

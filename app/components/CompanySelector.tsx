@@ -18,16 +18,6 @@ export default function CompanySelector() {
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("activeCompany");
-
-    if (saved) {
-      setActiveCompany(JSON.parse(saved));
-    }
-
-    loadCompanies();
-  }, []);
-
   async function loadCompanies() {
     setLoading(true);
 
@@ -54,6 +44,18 @@ export default function CompanySelector() {
     }
   }
 
+  useEffect(() => {
+    const saved = localStorage.getItem("activeCompany");
+
+    queueMicrotask(() => {
+      if (saved) {
+        setActiveCompany(JSON.parse(saved));
+      }
+
+      loadCompanies();
+    });
+  }, []);
+
   function selectCompany(value: string) {
     const selected = companies.find(
       (company) => `${company.taxId}-${company.locationId}` === value
@@ -67,9 +69,11 @@ export default function CompanySelector() {
   }
 
   return (
-    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
+    <div className="glass-panel rounded-[1.5rem] p-5">
       <div className="mb-3">
-        <div className="text-sm text-blue-200">Aktivno podjetje</div>
+        <div className="text-sm font-medium text-[var(--app-primary-strong)]">
+          Aktivno podjetje
+        </div>
         <div className="mt-1 font-bold">
           {activeCompany
             ? `${activeCompany.name} (${activeCompany.taxId})`
@@ -78,7 +82,7 @@ export default function CompanySelector() {
             : "Ni izbranega podjetja"}
         </div>
         {activeCompany && (
-          <div className="mt-1 text-xs text-slate-400">
+          <div className="app-muted mt-1 text-xs">
             {activeCompany.eAddress} · {activeCompany.eLocation}
           </div>
         )}
@@ -91,7 +95,7 @@ export default function CompanySelector() {
             : ""
         }
         onChange={(event) => selectCompany(event.target.value)}
-        className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm outline-none focus:border-blue-500"
+        className="field-input text-sm"
       >
         <option value="">Izberi podjetje</option>
 
