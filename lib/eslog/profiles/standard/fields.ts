@@ -2,7 +2,7 @@ import type { InvoiceProfileConfig } from "../types";
 
 export const standardFields: InvoiceProfileConfig = {
   id: "standard",
-  label: "Navaden",
+  label: "Standard",
   description: "Minimalni eSLOG 2.0 / EN16931 racun.",
   requiredFields: [
     "number",
@@ -17,5 +17,5 @@ export const standardFields: InvoiceProfileConfig = {
   ],
   optionalFields: ["note", "references", "paymentTerms"],
   sections: ["base", "buyer", "lines", "payment"],
+  profileFields: [],
 };
-

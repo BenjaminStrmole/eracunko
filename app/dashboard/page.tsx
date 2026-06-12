@@ -48,6 +48,39 @@ type ActiveCompany = {
   eAddress?: string;
 };
 
+type LocalInvoice = {
+  number?: string;
+  buyer?: {
+    name?: string;
+  };
+  totals?: {
+    net?: number;
+    vat?: number;
+    gross?: number;
+    payable?: number;
+  };
+  createdAt?: string;
+  sentAt?: string;
+  status?: string;
+};
+
+function safeJsonParse<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback;
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("sl-SI", {
+    style: "currency",
+    currency: "EUR",
+  }).format(value || 0);
+}
+
 function getParam(item: DocumentItem, name: string) {
   const params = item.raw?.parameters?.param || item.parameters?.param || [];
   const found = params.find((param) => param.parameterName === name);
@@ -76,6 +109,8 @@ function isErrorAck(item: DocumentItem) {
 export default function DashboardPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
+  const [sentInvoices, setSentInvoices] = useState<LocalInvoice[]>([]);
+  const [draftInvoices, setDraftInvoices] = useState<LocalInvoice[]>([]);
   const [sentCount, setSentCount] = useState(0);
   const [draftCount, setDraftCount] = useState(0);
   const [customerCount, setCustomerCount] = useState(0);
@@ -87,13 +122,22 @@ export default function DashboardPage() {
     const company = JSON.parse(
       localStorage.getItem("activeCompany") || "null"
     ) as ActiveCompany | null;
+    const sent = safeJsonParse<LocalInvoice[]>(localStorage.getItem("sent"), []);
+    const drafts = safeJsonParse<LocalInvoice[]>(
+      localStorage.getItem("drafts"),
+      []
+    );
+    const customers = safeJsonParse<unknown[]>(
+      localStorage.getItem("customers"),
+      []
+    );
 
     setActiveCompany(company);
-    setSentCount(JSON.parse(localStorage.getItem("sent") || "[]").length);
-    setDraftCount(JSON.parse(localStorage.getItem("drafts") || "[]").length);
-    setCustomerCount(
-      JSON.parse(localStorage.getItem("customers") || "[]").length
-    );
+    setSentInvoices(sent);
+    setDraftInvoices(drafts);
+    setSentCount(sent.length);
+    setDraftCount(drafts.length);
+    setCustomerCount(customers.length);
 
     try {
       const taxNumber = company?.vatNumber || company?.taxId || "";
@@ -139,6 +183,16 @@ export default function DashboardPage() {
   );
 
   const latestAcks = acknowledgements.slice(0, 5);
+  const sentTotal = sentInvoices.reduce(
+    (sum, invoice) => sum + (invoice.totals?.gross || invoice.totals?.payable || 0),
+    0
+  );
+  const draftTotal = draftInvoices.reduce(
+    (sum, invoice) => sum + (invoice.totals?.gross || invoice.totals?.payable || 0),
+    0
+  );
+  const latestSent = sentInvoices.slice(-5).reverse();
+  const latestDrafts = draftInvoices.slice(0, 5);
 
   return (
     <AppShell>
@@ -196,6 +250,30 @@ export default function DashboardPage() {
           icon={AlertCircle}
           danger
         />
+      </div>
+
+      <div className="mt-8 grid gap-4 md:grid-cols-3">
+        <MoneyCard
+          label="Vrednost poslanih"
+          value={formatMoney(sentTotal)}
+          detail={`${sentInvoices.length} lokalno shranjenih poslanih računov`}
+        />
+        <MoneyCard
+          label="Vrednost osnutkov"
+          value={formatMoney(draftTotal)}
+          detail={`${draftInvoices.length} odprtih osnutkov`}
+        />
+        <div className="solid-panel rounded-[1.5rem] p-5">
+          <div className="app-muted text-sm font-medium">Naslednji korak</div>
+          <div className="mt-2 text-lg font-semibold">
+            {draftInvoices.length > 0
+              ? "Dokončaj osnutek računa"
+              : "Ustvari nov eSLOG račun"}
+          </div>
+          <Link href="/invoices/new" className="secondary-button mt-4 h-10 px-4 text-sm">
+            Odpri obrazec
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-3">
@@ -269,6 +347,21 @@ export default function DashboardPage() {
           </div>
         </aside>
       </div>
+
+      <div className="mt-8 grid gap-6 xl:grid-cols-2">
+        <DocumentListPanel
+          title="Zadnji poslani računi"
+          emptyText="Ni lokalno shranjenih poslanih računov."
+          invoices={latestSent}
+          href="/sent"
+        />
+        <DocumentListPanel
+          title="Zadnji osnutki"
+          emptyText="Ni odprtih osnutkov."
+          invoices={latestDrafts}
+          href="/drafts"
+        />
+      </div>
     </AppShell>
   );
 }
@@ -309,6 +402,74 @@ function StatCard({
     <Link href={href} className={className}>
       {content}
     </Link>
+  );
+}
+
+function MoneyCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="solid-panel rounded-[1.5rem] p-5">
+      <div className="app-muted text-sm font-medium">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="app-muted mt-2 text-sm">{detail}</div>
+    </div>
+  );
+}
+
+function DocumentListPanel({
+  title,
+  emptyText,
+  invoices,
+  href,
+}: {
+  title: string;
+  emptyText: string;
+  invoices: LocalInvoice[];
+  href: string;
+}) {
+  return (
+    <section className="solid-panel rounded-[1.75rem] p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <Link href={href} className="secondary-button h-10 px-4 text-sm">
+          Odpri
+        </Link>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {invoices.length === 0 && (
+          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] p-5 app-muted">
+            {emptyText}
+          </div>
+        )}
+
+        {invoices.map((invoice, index) => (
+          <div
+            key={`${invoice.number || "invoice"}-${index}`}
+            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="font-semibold">{invoice.number || "Brez številke"}</div>
+                <div className="app-muted mt-1 text-sm">
+                  {invoice.buyer?.name || "Kupec ni vpisan"}
+                </div>
+              </div>
+              <div className="text-right font-semibold">
+                {formatMoney(invoice.totals?.gross || invoice.totals?.payable || 0)}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

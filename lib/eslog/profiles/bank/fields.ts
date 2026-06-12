@@ -7,5 +7,23 @@ export const bankFields: InvoiceProfileConfig = {
   requiredFields: ["payment.iban", "payment.bic", "payment.reference", "payment.paymentMeansCode", "payment.purposeCode"],
   optionalFields: ["bankData.payerName", "bankData.payeeName"],
   sections: ["base", "buyer", "lines", "payment", "bank"],
+  profileFields: [
+    {
+      name: "paymentModel",
+      label: "Model/sklic",
+      type: "text",
+      required: true,
+      placeholder: "npr. SI00 ali HR00",
+    },
+    {
+      name: "payerName",
+      label: "Naziv placnika",
+      type: "text",
+    },
+    {
+      name: "payeeName",
+      label: "Naziv prejemnika",
+      type: "text",
+    },
+  ],
 };
-

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
+import type { ProfileFieldDefinition } from "../../../lib/eslog/profiles/types";
 import type {
   Invoice,
   InvoiceLine,
@@ -72,6 +73,9 @@ type EditableLine = InvoiceLine & {
 type StoredInvoice = {
   number?: string;
 };
+
+type ProfileFieldValue = string | boolean;
+type ProfileDataState = Record<InvoiceProfile, Record<string, ProfileFieldValue>>;
 
 const VAT_CATEGORIES: Array<{ value: VatCategory; label: string }> = [
   { value: "S", label: "S - Standardna stopnja" },
@@ -164,6 +168,18 @@ function lineVatAmount(line: EditableLine) {
 
 export default function NewInvoicePage() {
   const [profile, setProfile] = useState<InvoiceProfile>("standard");
+  const [profileData, setProfileData] = useState<ProfileDataState>(() => ({
+    standard: {},
+    hr: {
+      issueTime: nowTime(),
+      businessProcessType: "P1",
+      operatorCode: "Operater1",
+      isCopy: false,
+      selfBilling: false,
+    },
+    ujp: {},
+    bank: {},
+  }));
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerVat, setSelectedCustomerVat] = useState("");
@@ -175,20 +191,14 @@ export default function NewInvoicePage() {
   const [businessPremiseCode, setBusinessPremiseCode] = useState("PP01");
   const [deviceCode, setDeviceCode] = useState("01");
   const [issueDate, setIssueDate] = useState(today());
-  const [issueTime, setIssueTime] = useState(nowTime());
+  const [issueTime] = useState(nowTime());
   const [serviceDate, setServiceDate] = useState(today());
   const [dueDate, setDueDate] = useState(addDays(15));
-  const [isCopy, setIsCopy] = useState(false);
+  const [isCopy] = useState(false);
 
   const [documentType, setDocumentType] = useState("380");
   const [businessProcess, setBusinessProcess] = useState("P1");
   const [note, setNote] = useState("");
-  const [operatorOib, setOperatorOib] = useState("");
-  const [operatorCode, setOperatorCode] = useState("Operater1");
-  const [p99BuyerProcessId, setP99BuyerProcessId] = useState("");
-  const [selfBilling, setSelfBilling] = useState(false);
-  const [previousInvoiceNumber, setPreviousInvoiceNumber] = useState("");
-  const [previousInvoiceDate, setPreviousInvoiceDate] = useState("");
 
   const [paymentMeansCode, setPaymentMeansCode] = useState("58");
   const [purposeCode, setPurposeCode] = useState("OTHR");
@@ -196,18 +206,11 @@ export default function NewInvoicePage() {
   const [bankBic, setBankBic] = useState("");
   const [reference, setReference] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
-  const [paymentModel, setPaymentModel] = useState("");
-  const [payerName, setPayerName] = useState("");
-  const [payeeName, setPayeeName] = useState("");
 
   const [orderReference, setOrderReference] = useState("");
   const [contractReference, setContractReference] = useState("");
   const [deliveryNoteReference, setDeliveryNoteReference] = useState("");
   const [buyerReference, setBuyerReference] = useState("");
-  const [budgetUser, setBudgetUser] = useState("");
-  const [ujpRecipient, setUjpRecipient] = useState("");
-  const [publicProcurementReference, setPublicProcurementReference] = useState("");
-  const [additionalUjpReference, setAdditionalUjpReference] = useState("");
 
   const [lines, setLines] = useState<EditableLine[]>([
     {
@@ -261,7 +264,17 @@ export default function NewInvoicePage() {
       setBankBic(settings.bic || "");
 
       if (company?.taxId || company?.vatNumber) {
-        setOperatorOib((company.taxId || company.vatNumber || "").replace(/\D/g, "").slice(0, 11));
+        const operatorOib = (company.taxId || company.vatNumber || "")
+          .replace(/\D/g, "")
+          .slice(0, 11);
+
+        setProfileData((current) => ({
+          ...current,
+          hr: {
+            ...current.hr,
+            operatorOib,
+          },
+        }));
       }
 
       if (settings.defaultDueDays) {
@@ -280,6 +293,44 @@ export default function NewInvoicePage() {
       }
     });
   }, []);
+
+  const selectedProfile = useMemo(
+    () => invoiceProfiles.find((item) => item.id === profile) || invoiceProfiles[0],
+    [profile]
+  );
+
+  const currentProfileData = profileData[profile] || {};
+  const lineProfileFields = selectedProfile.profileFields.filter(
+    (field) => field.scope === "line"
+  );
+
+  function updateProfileField(name: string, value: ProfileFieldValue) {
+    setProfileData((current) => ({
+      ...current,
+      [profile]: {
+        ...current[profile],
+        [name]: value,
+      },
+    }));
+  }
+
+  function profileString(
+    data: Record<string, ProfileFieldValue>,
+    name: string,
+    fallback = ""
+  ) {
+    const value = data[name];
+    return typeof value === "string" ? value : fallback;
+  }
+
+  function profileBoolean(
+    data: Record<string, ProfileFieldValue>,
+    name: string,
+    fallback = false
+  ) {
+    const value = data[name];
+    return typeof value === "boolean" ? value : fallback;
+  }
 
   const totals = useMemo(() => {
     const net = round2(
@@ -300,6 +351,24 @@ export default function NewInvoicePage() {
 
   function buildInvoice(): Invoice {
     const sellerVat = activeCompany?.vatNumber || activeCompany?.taxId || "";
+    const hrData = profileData.hr;
+    const ujpData = profileData.ujp;
+    const bankData = profileData.bank;
+    const hrIssueTime = profileString(hrData, "issueTime", issueTime);
+    const hrBusinessProcess = profileString(
+      hrData,
+      "businessProcessType",
+      businessProcess
+    );
+    const hrOperatorOib = profileString(hrData, "operatorOib");
+    const hrOperatorCode = profileString(hrData, "operatorCode", "Operater1");
+    const bankPaymentReference = profileString(bankData, "paymentReference", reference);
+    const bankPurposeCode = profileString(bankData, "purposeCode", purposeCode);
+    const bankPaymentMeansCode = profileString(
+      bankData,
+      "paymentMeansCode",
+      paymentMeansCode
+    );
 
     return {
       id: invoiceId,
@@ -309,32 +378,32 @@ export default function NewInvoicePage() {
       businessPremiseCode,
       deviceCode,
       issueDate,
-      issueTime,
+      issueTime: hrIssueTime,
       serviceDate,
       dueDate,
       currency: "EUR",
       documentType,
-      businessProcess,
-      isCopy,
+      businessProcess: hrBusinessProcess,
+      isCopy: profileBoolean(hrData, "isCopy", isCopy),
       note,
       operator: {
-        oib: operatorOib,
-        code: operatorCode,
+        oib: hrOperatorOib,
+        code: hrOperatorCode,
       },
       hrData: {
         invoiceNumberNumericPart,
         businessPremiseCode,
         deviceCode,
-        issueTime,
-        businessProcessType: businessProcess,
-        p99BuyerProcessId,
-        operatorOib,
-        operatorCode,
-        operatorName: operatorCode,
-        isCopy,
-        selfBilling,
-        previousInvoiceNumber,
-        previousInvoiceDate,
+        issueTime: hrIssueTime,
+        businessProcessType: hrBusinessProcess,
+        p99BuyerProcessId: profileString(hrData, "p99BuyerProcessId"),
+        operatorOib: hrOperatorOib,
+        operatorCode: hrOperatorCode,
+        operatorName: hrOperatorCode,
+        isCopy: profileBoolean(hrData, "isCopy"),
+        selfBilling: profileBoolean(hrData, "selfBilling"),
+        previousInvoiceNumber: profileString(hrData, "previousInvoiceNumber"),
+        previousInvoiceDate: profileString(hrData, "previousInvoiceDate"),
       },
       seller: {
         name: activeCompany?.name || "",
@@ -366,13 +435,13 @@ export default function NewInvoicePage() {
         endpointSchemeId: "9934",
       },
       payment: {
-        paymentMeansCode,
-        purposeCode,
+        paymentMeansCode: bankPaymentMeansCode,
+        purposeCode: bankPurposeCode,
         bankAccount,
         iban: bankAccount,
         bankBic,
         bic: bankBic,
-        reference,
+        reference: bankPaymentReference,
         paymentTerms,
       },
       references: {
@@ -386,30 +455,33 @@ export default function NewInvoicePage() {
         contractReference,
         deliveryNoteReference,
         buyerReference,
-        budgetUser,
-        ujpRecipient,
-        publicProcurementReference,
-        additionalReference: additionalUjpReference,
+        budgetUser: profileString(ujpData, "budgetUser"),
+        ujpRecipient: profileString(ujpData, "ujpRecipient"),
+        publicProcurementReference: profileString(
+          ujpData,
+          "publicProcurementReference"
+        ),
+        additionalReference: profileString(ujpData, "additionalReference"),
       },
       bankData: {
         payeeIban: bankAccount,
         payeeBic: bankBic,
-        paymentModel,
-        paymentReference: reference,
-        purposeCode,
-        paymentMeansCode,
-        payerName,
-        payeeName,
+        paymentModel: profileString(bankData, "paymentModel"),
+        paymentReference: bankPaymentReference,
+        purposeCode: bankPurposeCode,
+        paymentMeansCode: bankPaymentMeansCode,
+        payerName: profileString(bankData, "payerName"),
+        payeeName: profileString(bankData, "payeeName"),
       },
       lines,
       totals,
       eSlog: {
         specificationIdentifier: "urn:cen.eu:en16931:2017",
         documentType,
-        businessProcess,
-        paymentMeansCode,
-        purposeCode,
-        profileId: businessProcess,
+        businessProcess: hrBusinessProcess,
+        paymentMeansCode: bankPaymentMeansCode,
+        purposeCode: bankPurposeCode,
+        profileId: hrBusinessProcess,
       },
       createdAt,
     };
@@ -561,73 +633,20 @@ export default function NewInvoicePage() {
               <Field label="Datum izdaje">
                 <input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className="field-input" />
               </Field>
-              <Field label="Cas izdaje">
-                <input value={issueTime} onChange={(event) => setIssueTime(event.target.value)} className="field-input" placeholder="HH:MM:SS" />
-              </Field>
               <Field label="Datum storitve">
                 <input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} className="field-input" />
               </Field>
               <Field label="Rok placila">
                 <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field-input" />
               </Field>
-              <Field label="OIB operaterja">
-                <input value={operatorOib} onChange={(event) => setOperatorOib(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Oznaka operaterja">
-                <input value={operatorCode} onChange={(event) => setOperatorCode(event.target.value)} className="field-input" />
-              </Field>
             </div>
-            <label className="mt-4 flex items-center gap-3 text-sm">
-              <input type="checkbox" checked={isCopy} onChange={(event) => setIsCopy(event.target.checked)} />
-              Kopija dokumenta
-            </label>
           </section>
 
-          {profile === "hr" && (
-            <section className="solid-panel rounded-[1.75rem] p-6">
-              <SectionHeader
-                title="Hrvaška / HR Fiskalizacija 2.0"
-                description="Dodatna polja za HR-CIUS, AMS, operaterja, kopijo in predhodni racun."
-              />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Business process type *">
-                  <select value={businessProcess} onChange={(event) => setBusinessProcess(event.target.value)} className="field-input">
-                    {["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P99"].map((process) => (
-                      <option key={process} value={process}>{process}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Kupceva oznaka procesa pri P99">
-                  <input value={p99BuyerProcessId} onChange={(event) => setP99BuyerProcessId(event.target.value)} className="field-input" placeholder="Obvezno samo za P99" />
-                </Field>
-                <Field label="OIB operaterja *">
-                  <input value={operatorOib} onChange={(event) => setOperatorOib(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="Oznaka operaterja *">
-                  <input value={operatorCode} onChange={(event) => setOperatorCode(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="Predhodni racun">
-                  <input value={previousInvoiceNumber} onChange={(event) => setPreviousInvoiceNumber(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="Datum predhodnega racuna">
-                  <input type="date" value={previousInvoiceDate} onChange={(event) => setPreviousInvoiceDate(event.target.value)} className="field-input" />
-                </Field>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-5 text-sm">
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={isCopy} onChange={(event) => setIsCopy(event.target.checked)} />
-                  Kopija racuna
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={selfBilling} onChange={(event) => setSelfBilling(event.target.checked)} />
-                  Samoizdaja
-                </label>
-              </div>
-              <p className="app-muted mt-4 text-sm">
-                Pri HR profilu mora imeti vsaka postavka KPD kodo in HR DDV oznako.
-              </p>
-            </section>
-          )}
+          <ProfileFieldsSection
+            profile={selectedProfile}
+            values={currentProfileData}
+            onChange={updateProfileField}
+          />
 
           <section className="solid-panel rounded-[1.75rem] p-6">
             <SectionHeader
@@ -662,29 +681,6 @@ export default function NewInvoicePage() {
               <BuyerField label="eAddress" field="eAddress" buyer={buyer} setBuyer={setBuyer} />
             </div>
           </section>
-
-          {profile === "ujp" && (
-            <section className="solid-panel rounded-[1.75rem] p-6">
-              <SectionHeader
-                title="UJP / javni sektor"
-                description="Dodatni sklici za proracunske uporabnike in javne narocnike."
-              />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Proracunski uporabnik">
-                  <input value={budgetUser} onChange={(event) => setBudgetUser(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="UJP prejemnik">
-                  <input value={ujpRecipient} onChange={(event) => setUjpRecipient(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="Referenca javnega narocila">
-                  <input value={publicProcurementReference} onChange={(event) => setPublicProcurementReference(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="Dodatni UJP sklic">
-                  <input value={additionalUjpReference} onChange={(event) => setAdditionalUjpReference(event.target.value)} className="field-input" />
-                </Field>
-              </div>
-            </section>
-          )}
 
           <section className="solid-panel rounded-[1.75rem] p-6">
             <SectionHeader title="Reference" />
@@ -748,12 +744,19 @@ export default function NewInvoicePage() {
                     <Field label="DDV %">
                       <input type="number" value={line.vatRate} onChange={(event) => updateLine(line.id, { vatRate: Number(event.target.value) })} className="field-input" />
                     </Field>
-                    <Field label="HR DDV oznaka">
-                      <input value={line.hrVatCategoryCode || ""} onChange={(event) => updateLine(line.id, { hrVatCategoryCode: event.target.value })} className="field-input" />
-                    </Field>
-                    <Field label="KPD koda">
-                      <input value={line.kpdCode || ""} onChange={(event) => updateLine(line.id, { kpdCode: event.target.value, kpdListId: "CG" })} className="field-input" />
-                    </Field>
+                    {lineProfileFields.map((field) => (
+                      <LineProfileField
+                        key={field.name}
+                        field={field}
+                        line={line}
+                        onChange={(value) =>
+                          updateLine(line.id, {
+                            [field.name]: value,
+                            ...(field.name === "kpdCode" ? { kpdListId: "CG" } : {}),
+                          } as Partial<EditableLine>)
+                        }
+                      />
+                    ))}
                     <div className="md:col-span-2">
                       <Field label="Razlog oprostitve">
                         <input value={line.taxExemptionReason || ""} onChange={(event) => updateLine(line.id, { taxExemptionReason: event.target.value })} className="field-input" />
@@ -803,25 +806,6 @@ export default function NewInvoicePage() {
             </div>
           </section>
 
-          {profile === "bank" && (
-            <section className="solid-panel rounded-[1.75rem] p-6">
-              <SectionHeader
-                title="Banka"
-                description="Placilni podatki za bancno obdelavo in strožjo IBAN/BIC validacijo."
-              />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Model/sklic *">
-                  <input value={paymentModel} onChange={(event) => setPaymentModel(event.target.value)} className="field-input" placeholder="npr. HR00 ali SI00" />
-                </Field>
-                <Field label="Naziv placnika">
-                  <input value={payerName} onChange={(event) => setPayerName(event.target.value)} className="field-input" />
-                </Field>
-                <Field label="Naziv prejemnika">
-                  <input value={payeeName} onChange={(event) => setPayeeName(event.target.value)} className="field-input" />
-                </Field>
-              </div>
-            </section>
-          )}
         </div>
 
         <aside className="space-y-8">
@@ -861,6 +845,23 @@ export default function NewInvoicePage() {
               {prepared.xml || "XML bo generiran, ko so odpravljene obvezne napake."}
             </pre>
           </section>
+
+          {process.env.NODE_ENV !== "production" && (
+            <section className="solid-panel rounded-[1.75rem] p-6">
+              <h2 className="text-xl font-semibold">Debug profil</h2>
+              <pre className="mt-4 max-h-80 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-blue-100">
+                {JSON.stringify(
+                  {
+                    profile: prepared.invoice.profile,
+                    profileData: currentProfileData,
+                    validationErrors: prepared.validation.errors,
+                  },
+                  null,
+                  2
+                )}
+              </pre>
+            </section>
+          )}
         </aside>
       </div>
     </AppShell>
@@ -888,6 +889,125 @@ function BuyerField({
         className="field-input"
       />
     </Field>
+  );
+}
+
+function ProfileFieldsSection({
+  profile,
+  values,
+  onChange,
+}: {
+  profile: (typeof invoiceProfiles)[number];
+  values: Record<string, ProfileFieldValue>;
+  onChange: (name: string, value: ProfileFieldValue) => void;
+}) {
+  if (profile.profileFields.length === 0) return null;
+  const invoiceFields = profile.profileFields.filter(
+    (field) => field.scope !== "line"
+  );
+
+  if (invoiceFields.length === 0) return null;
+
+  return (
+    <section className="solid-panel rounded-[1.75rem] p-6">
+      <SectionHeader title={profile.label} description={profile.description} />
+      <div className="grid gap-4 md:grid-cols-2">
+        {invoiceFields.map((field) => (
+          <ProfileField
+            key={field.name}
+            field={field}
+            value={values[field.name]}
+            onChange={(value) => onChange(field.name, value)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LineProfileField({
+  field,
+  line,
+  onChange,
+}: {
+  field: ProfileFieldDefinition;
+  line: EditableLine;
+  onChange: (value: ProfileFieldValue) => void;
+}) {
+  const lineValue = line[field.name as keyof EditableLine];
+  const value =
+    typeof lineValue === "string" || typeof lineValue === "boolean"
+      ? lineValue
+      : lineValue == null
+        ? ""
+        : String(lineValue);
+
+  return (
+    <ProfileField field={field} value={value} onChange={onChange} />
+  );
+}
+
+function ProfileField({
+  field,
+  value,
+  onChange,
+}: {
+  field: ProfileFieldDefinition;
+  value: ProfileFieldValue | undefined;
+  onChange: (value: ProfileFieldValue) => void;
+}) {
+  const label = `${field.label}${field.required ? " *" : ""}`;
+  const wrapperClass = field.span === "full" ? "md:col-span-2" : "";
+
+  if (field.type === "checkbox") {
+    return (
+      <label className={`flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 ${wrapperClass}`}>
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(event) => onChange(event.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          <span className="block font-medium">{label}</span>
+          {field.helper && (
+            <span className="app-muted mt-1 block text-sm">{field.helper}</span>
+          )}
+        </span>
+      </label>
+    );
+  }
+
+  return (
+    <div className={wrapperClass}>
+      <Field label={label}>
+        {field.type === "select" ? (
+          <select
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value)}
+            className="field-input"
+          >
+            <option value="">Izberi...</option>
+            {(field.options || []).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type={field.type === "date" ? "date" : field.type === "time" ? "text" : "text"}
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value)}
+            className="field-input"
+            placeholder={field.placeholder || (field.type === "time" ? "HH:MM:SS" : undefined)}
+          />
+        )}
+      </Field>
+      {field.helper && (
+        <p className="app-muted mt-2 text-xs">{field.helper}</p>
+      )}
+    </div>
   );
 }
 

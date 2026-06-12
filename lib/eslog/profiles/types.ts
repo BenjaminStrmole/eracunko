@@ -12,6 +12,22 @@ export type InvoiceProfileConfig = {
   requiredFields: string[];
   optionalFields: string[];
   sections: string[];
+  profileFields: ProfileFieldDefinition[];
+};
+
+export type ProfileFieldDefinition = {
+  name: string;
+  label: string;
+  type: "text" | "date" | "time" | "checkbox" | "select";
+  scope?: "invoice" | "line";
+  required?: boolean;
+  helper?: string;
+  placeholder?: string;
+  options?: Array<{
+    label: string;
+    value: string;
+  }>;
+  span?: "full" | "half";
 };
 
 export type InvoiceProfileImplementation = {
@@ -19,4 +35,3 @@ export type InvoiceProfileImplementation = {
   validate: (invoice: Invoice) => ProfileValidationOutput;
   applyXml: (xml: string, invoice: Invoice) => string;
 };
-
