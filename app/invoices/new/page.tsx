@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { InvoiceLine, Invoice } from "../../../types/invoice";
 
 type Customer = {
@@ -43,6 +44,14 @@ type ExtendedInvoiceLine = InvoiceLine & {
 type DraftInvoice = Invoice & {
   id: number;
   createdAt: string;
+  updatedAt?: string;
+  seller?: {
+    name?: string;
+    vat?: string;
+    address?: string;
+    eLocation?: string;
+    eAddress?: string;
+  };
   paymentMethod?: string;
   paymentMeansCode?: string;
   purposeCode?: string;
@@ -52,6 +61,39 @@ type DraftInvoice = Invoice & {
   businessProcess?: string;
   documentType?: string;
   note?: string;
+  eSlog?: {
+    specificationIdentifier?: string;
+    customizationId?: string;
+    profileId?: string;
+    documentType?: string;
+    paymentMeansCode?: string;
+    purposeCode?: string;
+    language?: string;
+  };
+  payment?: {
+    method?: string;
+    paymentMeansCode?: string;
+    purposeCode?: string;
+    bankAccount?: string;
+    bankBic?: string;
+    reference?: string;
+  };
+  references?: {
+    orderReference?: string;
+    contractReference?: string;
+    deliveryNoteReference?: string;
+  };
+};
+
+type StoredInvoice = {
+  number?: string;
+};
+
+type CompanySettings = {
+  iban?: string;
+  bic?: string;
+  defaultDueDays?: string;
+  invoicePrefix?: string;
 };
 
 function today() {
@@ -62,6 +104,16 @@ function addDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function safeJsonParse<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback;
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeVat(value: string) {
@@ -82,15 +134,21 @@ function generateInvoiceNumber() {
   const year = new Date().getFullYear();
   const saved = JSON.parse(localStorage.getItem("invoices") || "[]");
   const drafts = JSON.parse(localStorage.getItem("drafts") || "[]");
+  const settings = safeJsonParse<CompanySettings>(
+    localStorage.getItem("companySettings"),
+    {}
+  );
   const all = [...saved, ...drafts];
+  const prefix = settings.invoicePrefix?.trim();
+  const yearPrefix = prefix ? `${prefix}-${year}-` : `${year}-`;
 
-  const sameYear = all.filter((invoice: any) =>
-    String(invoice.number || "").startsWith(`${year}-`)
+  const sameYear = all.filter((invoice: StoredInvoice) =>
+    String(invoice.number || "").startsWith(yearPrefix)
   );
 
   const nextNumber = sameYear.length + 1;
 
-  return `${year}-${String(nextNumber).padStart(3, "0")}`;
+  return `${yearPrefix}${String(nextNumber).padStart(3, "0")}`;
 }
 
 export default function NewInvoicePage() {
@@ -104,7 +162,7 @@ export default function NewInvoicePage() {
   const [documentType, setDocumentType] = useState("380");
   const [businessProcess, setBusinessProcess] = useState("P1");
   const [currency, setCurrency] = useState<"EUR">("EUR");
-  const [language, setLanguage] = useState("sl");
+  const [language] = useState("sl");
   const [note, setNote] = useState("");
 
   const [paymentMethod, setPaymentMethod] = useState("TRR");
@@ -140,21 +198,76 @@ export default function NewInvoicePage() {
 
   useEffect(() => {
     const company = JSON.parse(localStorage.getItem("activeCompany") || "null");
-    setActiveCompany(company);
-
-    const number = generateInvoiceNumber();
-
-    setInvoiceNumber(number);
-    setReference(`SI00-${number.replace("-", "")}`);
-
+    const settings = safeJsonParse<CompanySettings>(
+      localStorage.getItem("companySettings"),
+      {}
+    );
     const savedCustomers: Customer[] = JSON.parse(
       localStorage.getItem("customers") || "[]"
     );
 
-    setCustomers(savedCustomers);
-
     const params = new URLSearchParams(window.location.search);
     const vat = params.get("vat");
+    const draftNumber = params.get("draft");
+
+    queueMicrotask(() => {
+      setActiveCompany(company);
+      setCustomers(savedCustomers);
+
+      const number = generateInvoiceNumber();
+
+      setInvoiceNumber(number);
+      setReference(`SI00-${number.replaceAll("-", "")}`);
+      setBankAccount(settings.iban || "SI56 0000 0000 0000 000");
+      setBankBic(settings.bic || "");
+
+      if (settings.defaultDueDays) {
+        setDueDate(addDays(Number(settings.defaultDueDays) || 15));
+      }
+    });
+
+    if (draftNumber) {
+      const drafts: DraftInvoice[] = JSON.parse(
+        localStorage.getItem("drafts") || "[]"
+      );
+      const draft = drafts.find((item) => item.number === draftNumber);
+
+      if (draft) {
+        const selected = savedCustomers.find(
+          (customer) =>
+            normalizeVat(customer.vatNumber) === normalizeVat(draft.buyer.vat)
+        );
+
+        queueMicrotask(() => {
+          setInvoiceNumber(draft.number);
+          setIssueDate(draft.issueDate);
+          setServiceDate(draft.serviceDate);
+          setDueDate(draft.dueDate);
+          setDocumentType(draft.documentType || draft.eSlog?.documentType || "380");
+          setBusinessProcess(draft.businessProcess || draft.eSlog?.profileId || "P1");
+          setPaymentMethod(draft.paymentMethod || draft.payment?.method || "TRR");
+          setPaymentMeansCode(
+            draft.paymentMeansCode || draft.payment?.paymentMeansCode || "30"
+          );
+          setPurposeCode(draft.purposeCode || draft.payment?.purposeCode || "OTHR");
+          setBankAccount(draft.bankAccount || draft.payment?.bankAccount || "");
+          setBankBic(draft.bankBic || draft.payment?.bankBic || "");
+          setReference(draft.reference || draft.payment?.reference || "");
+          setOrderReference(draft.references?.orderReference || "");
+          setContractReference(draft.references?.contractReference || "");
+          setDeliveryNoteReference(draft.references?.deliveryNoteReference || "");
+          setNote(draft.note || "");
+          setLines(draft.lines as ExtendedInvoiceLine[]);
+
+          if (selected) {
+            setBuyer(selected);
+            setBuyerSearch(selected.name);
+          }
+        });
+
+        return;
+      }
+    }
 
     if (vat) {
       const selected = savedCustomers.find(
@@ -162,8 +275,10 @@ export default function NewInvoicePage() {
       );
 
       if (selected) {
-        setBuyer(selected);
-        setBuyerSearch(selected.name);
+        queueMicrotask(() => {
+          setBuyer(selected);
+          setBuyerSearch(selected.name);
+        });
       }
     }
   }, []);
@@ -190,7 +305,9 @@ export default function NewInvoicePage() {
 
   useEffect(() => {
     if (!invoiceNumber) return;
-    setReference(`SI00-${invoiceNumber.replaceAll("-", "")}`);
+    queueMicrotask(() => {
+      setReference(`SI00-${invoiceNumber.replaceAll("-", "")}`);
+    });
   }, [invoiceNumber]);
 
   const favoriteCustomers = customers.filter((customer) => customer.isFavorite);
@@ -285,7 +402,9 @@ export default function NewInvoicePage() {
       throw new Error("Najprej izberi kupca iz šifranta strank.");
     }
 
-    const invoice: Invoice & Record<string, any> = {
+    const invoice: DraftInvoice = {
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
       number: invoiceNumber,
       issueDate,
       serviceDate,
@@ -392,6 +511,7 @@ export default function NewInvoicePage() {
       ...invoice,
       id: Date.now(),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       paymentMethod,
       paymentMeansCode,
       purposeCode,
@@ -455,14 +575,14 @@ export default function NewInvoicePage() {
           </div>
 
           <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
+            <Link href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</Link>
+            <Link href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</Link>
+            <Link href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</Link>
+            <Link href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</Link>
+            <Link href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</Link>
+            <Link href="/invoices/new" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">🧾 Nov račun</Link>
+            <Link href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</Link>
+            <Link href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</Link>
           </nav>
         </aside>
 
@@ -823,9 +943,9 @@ export default function NewInvoicePage() {
               </div>
 
               <div className="mt-8 flex justify-between">
-                <a href="/dashboard" className="rounded-lg border border-white/15 px-6 py-3 font-semibold hover:bg-white/10">
+                <Link href="/dashboard" className="rounded-lg border border-white/15 px-6 py-3 font-semibold hover:bg-white/10">
                   Prekliči
-                </a>
+                </Link>
 
                 <div className="flex gap-3">
                   <button onClick={saveDraft} className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-6 py-3 font-semibold text-blue-200 hover:bg-blue-500/20">
@@ -913,7 +1033,7 @@ function Field({
   );
 }
 
-function InfoLine({ label, value }: { label: string; value: any }) {
+function InfoLine({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div>
       <span className="text-slate-500">{label}:</span> {value || "-"}
@@ -921,7 +1041,7 @@ function InfoLine({ label, value }: { label: string; value: any }) {
   );
 }
 
-function SummaryLine({ label, value }: { label: string; value: any }) {
+function SummaryLine({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-slate-400">{label}</span>
