@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
+import { prepareInvoiceForEslog } from "@/lib/eslog/prepareInvoiceForEslog";
 
 export const runtime = "nodejs";
 
@@ -111,7 +112,10 @@ function normalizeReceiverEAddress(
   return `${normalizeTaxId(fallbackTaxId)}.HQ`;
 }
 
-function normalizeELocation(value: string | undefined | null, fallbackTaxId: string) {
+function normalizeELocation(
+  value: string | undefined | null,
+  fallbackTaxId: string
+) {
   const cleaned = String(value || "").trim();
 
   if (cleaned) return cleaned;
@@ -139,43 +143,58 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const {
-      invoiceNumber,
-      xml,
-      buyer,
-      sender,
-    }: {
-      invoiceNumber: string;
-      xml: string;
-      buyer: {
-        name: string;
-        vat: string;
-        address: string;
-        eLocation: string;
-        eAddress?: string;
+    const prepared = body.invoice ? prepareInvoiceForEslog(body.invoice) : null;
+
+    if (prepared && !prepared.validation.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Račun ni pripravljen za eSLOG.",
+          errors: prepared.validation.errors,
+          warnings: prepared.validation.warnings,
+        },
+        { status: 400 }
+      );
+    }
+
+    const preparedInvoice = prepared?.invoice;
+
+    const invoiceNumber =
+      body.invoiceNumber || preparedInvoice?.number || body.invoice?.number;
+
+    const xml = body.xml || preparedInvoice?.xml || body.invoice?.xml;
+
+    const buyer = body.buyer ||
+      preparedInvoice?.buyer || {
+        name: "",
+        vat: "",
+        address: "",
+        eLocation: "",
+        eAddress: "",
       };
-      sender?: {
-        name?: string;
-        vatNumber?: string;
-        taxId?: string;
-        address?: string;
-        eLocation?: string;
-        eAddress?: string;
-      };
-    } = body;
+
+    const sender = body.sender || preparedInvoice?.seller;
 
     if (!invoiceNumber || !xml || !buyer?.eLocation) {
       return NextResponse.json(
-        { success: false, message: "Manjkajo podatki za pošiljanje." },
+        {
+          success: false,
+          message: "Manjkajo podatki za pošiljanje.",
+          missing: {
+            invoiceNumber: !invoiceNumber,
+            xml: !xml,
+            buyerELocation: !buyer?.eLocation,
+          },
+        },
         { status: 400 }
       );
     }
 
     const senderTaxId = normalizeTaxId(
-      sender?.vatNumber || sender?.taxId || "SI66666666"
+      sender?.vat || sender?.vatNumber || sender?.taxId || "SI66666666"
     );
 
-    const buyerTaxId = normalizeTaxId(buyer.vat);
+    const buyerTaxId = normalizeTaxId(buyer.vat || buyer.taxId);
 
     const finalSender = {
       name: sender?.name || "ZZI T2",
@@ -185,19 +204,22 @@ export async function POST(request: NextRequest) {
       address: sender?.address || "POT V TEST 2, 1231 LJUBLJANA - ČRNUČE",
     };
 
-    const xmlFileName = `${invoiceNumber}.xml`;
+    const finalBuyer = {
+      name: buyer.name,
+      taxId: buyerTaxId,
+      eAddress: normalizeReceiverEAddress(buyer.eAddress, buyerTaxId),
+      eLocation: normalizeELocation(buyer.eLocation, buyerTaxId),
+      address: buyer.address || "",
+    };
+
+    const safeInvoiceNumber = String(invoiceNumber).replace(/[^\w.-]/g, "_");
+    const xmlFileName = `${safeInvoiceNumber}.xml`;
 
     const envelopeXml = buildEnvelopeXml({
       invoiceNumber,
       xmlFileName,
       from: finalSender,
-      to: {
-        name: buyer.name,
-        taxId: buyerTaxId,
-        eAddress: normalizeReceiverEAddress(buyer.eAddress, buyerTaxId),
-        eLocation: normalizeELocation(buyer.eLocation, buyerTaxId),
-        address: buyer.address || "",
-      },
+      to: finalBuyer,
     });
 
     const zip = new JSZip();
@@ -230,7 +252,7 @@ export async function POST(request: NextRequest) {
 
     const text = await response.text();
 
-    let raw: any = text;
+    let raw: unknown = text;
 
     try {
       raw = JSON.parse(text);
@@ -244,6 +266,8 @@ export async function POST(request: NextRequest) {
           raw,
           envelopeXml,
           finalSender,
+          finalBuyer,
+          validationWarnings: prepared?.validation.warnings || [],
           debugUrl: url.replace(guid, "***"),
         },
         { status: 400 }
@@ -256,6 +280,8 @@ export async function POST(request: NextRequest) {
       docId: text,
       envelopeXml,
       finalSender,
+      finalBuyer,
+      validationWarnings: prepared?.validation.warnings || [],
     });
   } catch (error: any) {
     return NextResponse.json(
