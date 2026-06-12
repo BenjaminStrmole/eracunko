@@ -1,11 +1,46 @@
 "use client";
-function getParam(item: any, name: string) {
-  const params = item?.raw?.parameters?.param || item?.parameters?.param || [];
-  const found = params.find((param: any) => param.parameterName === name);
+
+import { RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import AppShell from "../components/AppShell";
+
+type RawParam = {
+  parameterName?: string;
+  parameterValue?: string;
+};
+
+type InboxDocument = {
+  id: string;
+  number: string;
+  sender: string;
+  type: string;
+  status: string;
+  date: string;
+  raw?: {
+    parameters?: {
+      param?: RawParam[];
+    };
+    classificationname?: string;
+    classificationName?: string;
+  };
+  parameters?: {
+    param?: RawParam[];
+  };
+};
+
+type ActiveCompany = {
+  vatNumber?: string;
+  taxId?: string;
+};
+
+function getParam(item: InboxDocument, name: string) {
+  const params = item.raw?.parameters?.param || item.parameters?.param || [];
+  const found = params.find((param) => param.parameterName === name);
   return found?.parameterValue || "";
 }
 
-function isAcknowledgement(item: any) {
+function isAcknowledgement(item: InboxDocument) {
   const actualType = getParam(item, "ACTUAL_TYPE");
   const roleType = getParam(item, "DOC_ROLE_TYPE");
   const classification =
@@ -19,41 +54,29 @@ function isAcknowledgement(item: any) {
   );
 }
 
-import { useEffect, useState } from "react";
-
-type InboxDocument = {
-  id: string;
-  number: string;
-  sender: string;
-  type: string;
-  status: string;
-  date: string;
-  raw?: any;
-};
-
 export default function InboxPage() {
   const [documents, setDocuments] = useState<InboxDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [raw, setRaw] = useState<any>(null);
+  const [raw, setRaw] = useState<unknown>(null);
 
   async function loadInbox() {
     setLoading(true);
     setError("");
 
     try {
-            const activeCompany = JSON.parse(
+      const activeCompany = JSON.parse(
         localStorage.getItem("activeCompany") || "null"
-        );
+      ) as ActiveCompany | null;
 
-        const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
-
-        const response = await fetch(
+      const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
+      const response = await fetch(
         `/api/bizbox/inbox?taxNumber=${encodeURIComponent(taxNumber)}`,
         {
-        method: "GET",
-        cache: "no-store",
-      });
+          method: "GET",
+          cache: "no-store",
+        }
+      );
 
       const data = await response.json();
 
@@ -65,116 +88,107 @@ export default function InboxPage() {
 
       setDocuments(data.documents || []);
       setRaw(data.raw);
-    } catch (err: any) {
-      setError(err.message || "Napaka pri pridobivanju inboxa.");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Napaka pri pridobivanju inboxa.";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadInbox();
+    queueMicrotask(() => {
+      loadInbox();
+    });
   }, []);
 
+  const incomingDocuments = useMemo(
+    () => documents.filter((doc) => !isAcknowledgement(doc)),
+    [documents]
+  );
+
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
+    <AppShell>
+      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="status-pill mb-4 inline-flex">Vhodni dokumenti</div>
+          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+            Prejeti računi
+          </h1>
+          <p className="app-muted mt-3 max-w-2xl">
+            Pregled prejetih računov iz bizBox DEMO okolja za izbrano podjetje.
+          </p>
+        </div>
 
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
-          </nav>
-        </aside>
-
-        <section className="flex-1 p-10">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-4xl font-bold">Prejeti računi</h2>
-              <p className="mt-2 text-slate-400">
-                Pregled prejetih računov iz bizBox DEMO okolja.
-              </p>
-            </div>
-
-            <button
-              onClick={loadInbox}
-              disabled={loading}
-              className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
-            >
-              {loading ? "Osvežujem..." : "Osveži"}
-            </button>
-          </div>
-
-          {error && (
-            <div className="mt-8 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-200">
-              {error}
-            </div>
-          )}
-
-          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900">
-            <div className="grid grid-cols-5 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
-              <div>Številka</div>
-              <div>Pošiljatelj</div>
-              <div>Tip</div>
-              <div>Status</div>
-              <div>Datum</div>
-            </div>
-
-            {loading && (
-              <div className="px-6 py-8 text-slate-400">
-                Nalagam dokumente iz bizBox ...
-              </div>
-            )}
-
-            {!loading && documents.filter((doc) => !isAcknowledgement(doc)).length === 0 && !error && (
-              <div className="px-6 py-8 text-slate-400">
-                Ni prejetih dokumentov ali pa endpoint vrača drugačno strukturo.
-              </div>
-            )}
-
-            {!loading &&
-              documents.filter((doc) => !isAcknowledgement(doc)).map((doc) => (
-                    <a
-                    key={doc.id}
-                    href={`/inbox/${doc.id}`}
-                    className="grid grid-cols-5 border-b border-slate-800 px-6 py-4 last:border-b-0 hover:bg-slate-800/70"
-                    >
-                  <div className="font-medium">{doc.number}</div>
-                  <div className="text-slate-300">{doc.sender}</div>
-                  <div className="text-slate-300">{doc.type}</div>
-                  <div>
-                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-200">
-                      {doc.status}
-                    </span>
-                  </div>
-                  <div className="text-slate-300">{doc.date}</div>
-                </a>
-              ))}
-          </div>
-
-          {raw && (
-            <details className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <summary className="cursor-pointer font-semibold text-blue-200">
-                Debug raw response
-              </summary>
-
-              <pre className="mt-4 max-h-[500px] overflow-auto rounded-xl bg-slate-950 p-4 text-sm text-slate-300">
-                {typeof raw === "string" ? raw : JSON.stringify(raw, null, 2)}
-              </pre>
-            </details>
-          )}
-        </section>
+        <button
+          onClick={loadInbox}
+          disabled={loading}
+          className="secondary-button h-12 px-5 disabled:opacity-60"
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          {loading ? "Osvežujem..." : "Osveži"}
+        </button>
       </div>
-    </main>
+
+      {error && (
+        <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-500">
+          {error}
+        </div>
+      )}
+
+      <section className="solid-panel overflow-hidden rounded-[1.75rem]">
+        <div className="grid grid-cols-5 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
+          <div>Številka</div>
+          <div>Pošiljatelj</div>
+          <div>Tip</div>
+          <div>Status</div>
+          <div>Datum</div>
+        </div>
+
+        {loading && (
+          <div className="app-muted px-6 py-8">
+            Nalagam dokumente iz bizBox ...
+          </div>
+        )}
+
+        {!loading && incomingDocuments.length === 0 && !error && (
+          <div className="app-muted px-6 py-8">
+            Ni prejetih dokumentov ali pa endpoint vrača drugačno strukturo.
+          </div>
+        )}
+
+        {!loading &&
+          incomingDocuments.map((doc) => (
+            <Link
+              key={doc.id}
+              href={`/inbox/${doc.id}`}
+              className="grid grid-cols-5 border-b border-[var(--app-border)] px-6 py-4 last:border-b-0 hover:bg-[var(--app-soft)]"
+            >
+              <div className="font-medium">{doc.number}</div>
+              <div className="app-muted">{doc.sender}</div>
+              <div className="app-muted">{doc.type}</div>
+              <div>
+                <span className="rounded-full bg-[var(--app-soft)] px-3 py-1 text-sm font-semibold text-[var(--app-primary-strong)]">
+                  {doc.status}
+                </span>
+              </div>
+              <div className="app-muted">{doc.date}</div>
+            </Link>
+          ))}
+      </section>
+
+      {raw !== null && (
+        <details className="solid-panel mt-8 rounded-[1.5rem] p-5">
+          <summary className="cursor-pointer font-semibold text-[var(--app-primary-strong)]">
+            Debug raw response
+          </summary>
+
+          <pre className="mt-4 max-h-[500px] overflow-auto rounded-2xl bg-slate-950 p-4 text-sm text-slate-200">
+            {typeof raw === "string" ? raw : JSON.stringify(raw, null, 2)}
+          </pre>
+        </details>
+      )}
+    </AppShell>
   );
 }

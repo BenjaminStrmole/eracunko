@@ -1,6 +1,9 @@
 "use client";
 
+import { Copy, FilePlus2, RefreshCw } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import AppShell from "../components/AppShell";
 
 type SentInvoice = {
   id?: string;
@@ -15,11 +18,20 @@ type SentInvoice = {
     name?: string;
     vat?: string;
   };
+  lines?: unknown[];
   totals?: {
     gross?: number;
   };
   sentAt?: string;
-  [key: string]: any;
+};
+
+type StoredInvoice = {
+  number?: string;
+};
+
+type ActiveCompany = {
+  vatNumber?: string;
+  taxId?: string;
 };
 
 function formatMoney(value: number) {
@@ -43,11 +55,13 @@ function formatDate(value?: string) {
 
 function generateInvoiceNumber() {
   const year = new Date().getFullYear();
-  const sent = JSON.parse(localStorage.getItem("sent") || "[]");
-  const drafts = JSON.parse(localStorage.getItem("drafts") || "[]");
+  const sent: StoredInvoice[] = JSON.parse(localStorage.getItem("sent") || "[]");
+  const drafts: StoredInvoice[] = JSON.parse(
+    localStorage.getItem("drafts") || "[]"
+  );
   const all = [...sent, ...drafts];
 
-  const sameYear = all.filter((invoice: any) =>
+  const sameYear = all.filter((invoice) =>
     String(invoice.number || "").startsWith(`${year}-`)
   );
 
@@ -67,7 +81,7 @@ export default function SentInvoicesPage() {
     try {
       const activeCompany = JSON.parse(
         localStorage.getItem("activeCompany") || "null"
-      );
+      ) as ActiveCompany | null;
 
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
 
@@ -93,7 +107,6 @@ export default function SentInvoicesPage() {
       );
 
       const merged = [...localSent, ...bizboxSent];
-
       const unique = merged.filter((invoice, index, array) => {
         const key = invoice.id || invoice.docId || invoice.number;
         return (
@@ -104,8 +117,12 @@ export default function SentInvoicesPage() {
       });
 
       setInvoices(unique);
-    } catch (err: any) {
-      setError(err.message || "Napaka pri pridobivanju poslanih računov.");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Napaka pri pridobivanju poslanih računov.";
+      setError(message);
       setInvoices([]);
     } finally {
       setLoading(false);
@@ -113,7 +130,9 @@ export default function SentInvoicesPage() {
   }
 
   useEffect(() => {
-    loadSentInvoices();
+    queueMicrotask(() => {
+      loadSentInvoices();
+    });
   }, []);
 
   useEffect(() => {
@@ -155,150 +174,118 @@ export default function SentInvoicesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <AppShell>
       {toast && (
-        <div className="fixed right-5 top-5 z-50 max-w-md rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-4 text-sm text-blue-100 shadow-xl backdrop-blur">
+        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-[var(--foreground)]">
           ℹ️ {toast}
         </div>
       )}
 
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
+      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="status-pill mb-4 inline-flex">Izhodni dokumenti</div>
+          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+            Poslani računi
+          </h1>
+          <p className="app-muted mt-3 max-w-2xl">
+            Pregled poslanih e-računov iz bizBoxa in lokalno shranjenih računov.
+          </p>
+        </div>
 
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
-          </nav>
-        </aside>
+        <div className="flex gap-3">
+          <button
+            onClick={loadSentInvoices}
+            disabled={loading}
+            className="secondary-button h-12 px-5 disabled:opacity-60"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            {loading ? "Osvežujem..." : "Osveži"}
+          </button>
 
-        <section className="flex-1 p-10">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="text-4xl font-bold">Poslani računi</h2>
-              <p className="mt-2 text-slate-400">
-                Pregled poslanih e-računov iz bizBoxa in eRačunka.
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={loadSentInvoices}
-                disabled={loading}
-                className="rounded-full border border-white/15 px-6 py-3 font-semibold hover:bg-white/10 disabled:opacity-60"
-              >
-                {loading ? "Osvežujem..." : "Osveži"}
-              </button>
-
-              <a
-                href="/invoices/new"
-                className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
-              >
-                + Nov račun
-              </a>
-            </div>
-          </div>
-
-          {error && (
-            <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-200">
-              {error}
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900">
-            <div className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
-              <div>Številka</div>
-              <div>Prejemnik</div>
-              <div>Znesek</div>
-              <div>Status</div>
-              <div>Datum</div>
-              <div>Akcije</div>
-            </div>
-
-            {loading && (
-              <div className="px-6 py-8 text-slate-400">
-                Nalagam poslane račune ...
-              </div>
-            )}
-
-            {!loading && invoices.length === 0 && !error && (
-              <div className="px-6 py-8 text-slate-400">
-                Ni najdenih poslanih računov za izbrano podjetje.
-              </div>
-            )}
-
-            {!loading &&
-              invoices.map((invoice) => {
-                const status = invoice.status || "SENT";
-                const receiver =
-                  invoice.receiver || invoice.buyer?.name || "-";
-
-                const amount =
-                  invoice.amount ||
-                  (invoice.totals?.gross
-                    ? formatMoney(invoice.totals.gross)
-                    : "-");
-
-                const date = invoice.date || formatDate(invoice.sentAt);
-
-                return (
-                  <div
-                    key={`${invoice.id || invoice.docId || invoice.number}`}
-                    className="grid grid-cols-6 items-center border-b border-slate-800 px-6 py-4 last:border-b-0"
-                  >
-                    <div>
-                      <div className="font-medium">{invoice.number}</div>
-                      {(invoice.id || invoice.docId) && (
-                        <div className="mt-1 text-xs text-slate-500">
-                          ID: {invoice.id || invoice.docId}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="text-slate-300">{receiver}</div>
-
-                    <div className="text-slate-300">{amount}</div>
-
-                    <div>
-                      <span className="rounded-full bg-green-500/10 px-3 py-1 text-sm text-green-300">
-                        {status}
-                      </span>
-                    </div>
-
-                    <div className="text-slate-300">{date}</div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => copyInvoice(invoice)}
-                        className="rounded-lg border border-blue-500/30 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
-                      >
-                        📋 Kopiraj
-                      </button>
-
-                      {(invoice.id || invoice.docId) && (
-                        <a
-                          href={`/inbox/${invoice.id || invoice.docId}`}
-                          className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
-                        >
-                          Odpri
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </section>
+          <Link href="/invoices/new" className="primary-button h-12 px-6">
+            <FilePlus2 className="h-4 w-4" aria-hidden="true" />
+            Nov račun
+          </Link>
+        </div>
       </div>
-    </main>
+
+      {error && (
+        <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-500">
+          {error}
+        </div>
+      )}
+
+      <section className="solid-panel overflow-hidden rounded-[1.75rem]">
+        <div className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
+          <div>Številka</div>
+          <div>Prejemnik</div>
+          <div>Znesek</div>
+          <div>Status</div>
+          <div>Datum</div>
+          <div>Akcije</div>
+        </div>
+
+        {loading && (
+          <div className="app-muted px-6 py-8">Nalagam poslane račune ...</div>
+        )}
+
+        {!loading && invoices.length === 0 && !error && (
+          <div className="app-muted px-6 py-8">
+            Ni najdenih poslanih računov za izbrano podjetje.
+          </div>
+        )}
+
+        {!loading &&
+          invoices.map((invoice) => {
+            const status = invoice.status || "SENT";
+            const receiver = invoice.receiver || invoice.buyer?.name || "-";
+            const amount =
+              invoice.amount ||
+              (invoice.totals?.gross ? formatMoney(invoice.totals.gross) : "-");
+            const date = invoice.date || formatDate(invoice.sentAt);
+
+            return (
+              <div
+                key={`${invoice.id || invoice.docId || invoice.number}`}
+                className="grid grid-cols-6 items-center border-b border-[var(--app-border)] px-6 py-4 last:border-b-0"
+              >
+                <div>
+                  <div className="font-medium">{invoice.number}</div>
+                  {(invoice.id || invoice.docId) && (
+                    <div className="app-muted mt-1 text-xs">
+                      ID: {invoice.id || invoice.docId}
+                    </div>
+                  )}
+                </div>
+                <div className="app-muted">{receiver}</div>
+                <div className="app-muted">{amount}</div>
+                <div>
+                  <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-500">
+                    {status}
+                  </span>
+                </div>
+                <div className="app-muted">{date}</div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => copyInvoice(invoice)}
+                    className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-medium text-[var(--app-primary-strong)] hover:bg-[var(--app-soft)]"
+                  >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                  </button>
+
+                  {(invoice.id || invoice.docId) && (
+                    <Link
+                      href={`/inbox/${invoice.id || invoice.docId}`}
+                      className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-medium hover:bg-[var(--app-soft)]"
+                    >
+                      Odpri
+                    </Link>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+      </section>
+    </AppShell>
   );
 }

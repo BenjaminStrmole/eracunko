@@ -1,6 +1,23 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import AppShell from "../components/AppShell";
+
+type DocumentParam = {
+  parameterName?: string;
+  parameterValue?: string;
+};
+
+type DocumentMetadata = {
+  title?: string;
+  type?: string;
+  classificationName?: string;
+  parameters?: {
+    param?: DocumentParam[];
+  };
+};
 
 type DocumentItem = {
   id: string;
@@ -9,8 +26,15 @@ type DocumentItem = {
   type: string;
   status: string;
   date: string;
-  raw?: any;
-  metadata?: any;
+  raw?: DocumentMetadata & {
+    classificationname?: string;
+    externalid?: string;
+    filename?: string;
+  };
+  metadata?: DocumentMetadata;
+  parameters?: {
+    param?: DocumentParam[];
+  };
   acknowledgement?: {
     confirmationType?: string;
     refMsgId?: string;
@@ -23,14 +47,14 @@ type DocumentItem = {
 
 type FilterType = "all" | "error";
 
-function getParam(item: any, name: string) {
+function getParam(item: DocumentItem, name: string) {
   const params =
     item?.metadata?.parameters?.param ||
     item?.raw?.parameters?.param ||
     item?.parameters?.param ||
     [];
 
-  const found = params.find((param: any) => param.parameterName === name);
+  const found = params.find((param) => param.parameterName === name);
   return found?.parameterValue || "";
 }
 
@@ -104,13 +128,13 @@ function isErrorAck(item: DocumentItem) {
 function getBadgeStyle(value: string) {
   const text = value.toLowerCase();
 
-  if (text.startsWith("12")) return "bg-green-500/10 text-green-300";
-  if (text.startsWith("29")) return "bg-green-500/10 text-green-300";
-  if (text.startsWith("27")) return "bg-red-500/10 text-red-300";
-  if (text.includes("-99")) return "bg-red-500/10 text-red-300";
-  if (text.startsWith("43")) return "bg-yellow-500/10 text-yellow-300";
+  if (text.startsWith("12")) return "bg-emerald-500/10 text-emerald-500";
+  if (text.startsWith("29")) return "bg-emerald-500/10 text-emerald-500";
+  if (text.startsWith("27")) return "bg-red-500/10 text-red-500";
+  if (text.includes("-99")) return "bg-red-500/10 text-red-500";
+  if (text.startsWith("43")) return "bg-amber-500/10 text-amber-500";
 
-  return "bg-blue-500/10 text-blue-200";
+  return "bg-[var(--app-soft)] text-[var(--app-primary-strong)]";
 }
 
 export default function AcknowledgementsPage() {
@@ -155,8 +179,12 @@ export default function AcknowledgementsPage() {
 
       setDocuments(onlyAcks);
       setEnrichedCount(data.metadata?.enrichedCount || 0);
-    } catch (err: any) {
-      setError(err.message || "Napaka pri pridobivanju povratnic.");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Napaka pri pridobivanju povratnic.";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -166,11 +194,13 @@ export default function AcknowledgementsPage() {
     const params = new URLSearchParams(window.location.search);
     const status = params.get("status");
 
-    if (status === "error") {
-      setFilter("error");
-    }
+    queueMicrotask(() => {
+      if (status === "error") {
+        setFilter("error");
+      }
 
-    loadDocuments();
+      loadDocuments();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -192,31 +222,14 @@ export default function AcknowledgementsPage() {
   }, [allAcknowledgements, errorAcknowledgements, filter, scanLimit]);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
-
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg px-4 py-3 hover:bg-slate-800">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
-          </nav>
-        </aside>
-
-        <section className="flex-1 p-10">
-          <div className="flex items-start justify-between gap-6">
+    <AppShell>
+          <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <h2 className="text-4xl font-bold">Povratnice</h2>
-              <p className="mt-2 text-slate-400">
+              <div className="status-pill mb-4 inline-flex">Status dostave</div>
+              <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+                Povratnice
+              </h1>
+              <p className="app-muted mt-3 max-w-2xl">
                 Pregled povratnic za izbrano aktivno podjetje.
               </p>
             </div>
@@ -229,7 +242,7 @@ export default function AcknowledgementsPage() {
                   setScanLimit(value);
                   loadDocuments(value);
                 }}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-200 outline-none"
+                className="field-input h-12 w-44 text-sm"
               >
                 <option value={25}>25 rezultatov</option>
                 <option value={50}>50 rezultatov</option>
@@ -242,8 +255,9 @@ export default function AcknowledgementsPage() {
               <button
                 onClick={() => loadDocuments(scanLimit)}
                 disabled={loading}
-                className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-60"
+                className="secondary-button h-12 px-5 disabled:opacity-60"
               >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
                 {loading ? "Osvežujem..." : "Osveži"}
               </button>
             </div>
@@ -254,8 +268,8 @@ export default function AcknowledgementsPage() {
               onClick={() => setFilter("all")}
               className={`rounded-full px-5 py-2 text-sm font-semibold ${
                 filter === "all"
-                  ? "bg-blue-600 text-white"
-                  : "border border-slate-700 text-slate-300 hover:bg-slate-800"
+                  ? "bg-[var(--app-primary)] text-white"
+                  : "border border-[var(--app-border)] app-muted hover:bg-[var(--app-soft)]"
               }`}
             >
               Vse povratnice ({allAcknowledgements.length})
@@ -266,7 +280,7 @@ export default function AcknowledgementsPage() {
               className={`rounded-full px-5 py-2 text-sm font-semibold ${
                 filter === "error"
                   ? "bg-red-600 text-white"
-                  : "border border-red-500/30 text-red-300 hover:bg-red-500/10"
+                  : "border border-red-500/30 text-red-500 hover:bg-red-500/10"
               }`}
             >
               Napake ({errorAcknowledgements.length})
@@ -274,13 +288,13 @@ export default function AcknowledgementsPage() {
           </div>
 
           {error && (
-            <div className="mt-8 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-200">
+            <div className="mt-8 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-500">
               {error}
             </div>
           )}
 
-          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900">
-            <div className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
+          <div className="solid-panel mt-8 overflow-hidden rounded-[1.75rem]">
+            <div className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
               <div>Dokument</div>
               <div>Vrsta</div>
               <div>Ref. sporočilo</div>
@@ -290,13 +304,13 @@ export default function AcknowledgementsPage() {
             </div>
 
             {loading && (
-              <div className="px-6 py-8 text-slate-400">
+              <div className="app-muted px-6 py-8">
                 Nalagam povratnice in metadata ...
               </div>
             )}
 
             {!loading && displayedAcknowledgements.length === 0 && !error && (
-              <div className="px-6 py-8 text-slate-400">
+              <div className="app-muted px-6 py-8">
                 {filter === "error"
                   ? "Ni povratnic z napako med trenutno pregledanimi rezultati."
                   : "Ni povratnic za izbrano podjetje."}
@@ -322,17 +336,17 @@ export default function AcknowledgementsPage() {
                 const description = getDescription(doc);
 
                 return (
-                  <a
+                  <Link
                     key={doc.id}
                     href={`/inbox/${doc.id}`}
-                    className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 last:border-b-0 hover:bg-slate-800/70"
+                    className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 last:border-b-0 hover:bg-[var(--app-soft)]"
                   >
                     <div className="font-medium">{getTitle(doc)}</div>
-                    <div className="text-slate-300">{roleType}</div>
-                    <div className="text-slate-300">{refMsgId}</div>
+                    <div className="app-muted">{roleType}</div>
+                    <div className="app-muted">{refMsgId}</div>
                     <div>
                       <span
-                        className={`rounded-full px-3 py-1 text-sm ${getBadgeStyle(
+                        className={`rounded-full px-3 py-1 text-sm font-semibold ${getBadgeStyle(
                           confirmationType
                         )}`}
                       >
@@ -340,24 +354,22 @@ export default function AcknowledgementsPage() {
                       </span>
 
                       {description && isErrorAck(doc) && (
-                        <div className="mt-2 max-w-xs truncate text-xs text-red-300">
+                        <div className="mt-2 max-w-xs truncate text-xs text-red-500">
                           {cleanErrorText(description)}
                         </div>
                       )}
                     </div>
-                    <div className="text-slate-300">{issueDate}</div>
-                    <div className="text-blue-300">Odpri →</div>
-                  </a>
+                    <div className="app-muted">{issueDate}</div>
+                    <div className="text-[var(--app-primary-strong)]">Odpri →</div>
+                  </Link>
                 );
               })}
           </div>
 
-          <div className="mt-4 text-sm text-slate-500">
+          <div className="app-muted mt-4 text-sm">
             Metadata je pridobljena na backendu za prvih{" "}
             {Math.min(enrichedCount, scanLimit)} dokumentov.
           </div>
-        </section>
-      </div>
-    </main>
+    </AppShell>
   );
 }

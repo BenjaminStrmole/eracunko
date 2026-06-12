@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FilePlus2, Star, StarOff, Trash2, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import AppShell from "../components/AppShell";
 
 type Customer = {
   name: string;
@@ -16,7 +19,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem("customers") || "[]");
-    setCustomers(saved);
+    queueMicrotask(() => setCustomers(saved));
   }, []);
 
   function saveCustomers(updated: Customer[]) {
@@ -42,160 +45,151 @@ export default function CustomersPage() {
     saveCustomers(updated);
   }
 
-  const favoriteCustomers = customers.filter((customer) => customer.isFavorite);
+  const favoriteCustomers = useMemo(
+    () => customers.filter((customer) => customer.isFavorite),
+    [customers]
+  );
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
+    <AppShell>
+      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="status-pill mb-4 inline-flex">Šifrant kupcev</div>
+          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+            Moje stranke
+          </h1>
+          <p className="app-muted mt-3 max-w-2xl">
+            Shranjene stranke iz eImenika za hitrejšo pripravo in pošiljanje
+            e-računov.
+          </p>
+        </div>
 
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🏠 Domov</a>
-            <a href="/inbox" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📥 Prejeti računi</a>
-            <a href="/acknowledgments" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📨 Povratnice</a>
-            <a href="/sent" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📤 Poslani računi</a>
-            <a href="/drafts" className="block rounded-lg px-4 py-3 hover:bg-slate-800">📝 Osnutki</a>
-            <a href="/invoices/new" className="block rounded-lg px-4 py-3 hover:bg-slate-800">🧾 Nov račun</a>
-            <a href="/customers" className="block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200">👥 Moje stranke</a>
-            <a href="/settings" className="block rounded-lg px-4 py-3 hover:bg-slate-800">⚙️ Nastavitve</a>
-          </nav>
-        </aside>
-
-        <section className="flex-1 p-10">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="text-4xl font-bold">Moje stranke</h2>
-              <p className="mt-2 text-slate-400">
-                Shranjene stranke iz eImenika za hitrejše kreiranje računov.
-              </p>
-            </div>
-
-            <a
-              href="/customers/new"
-              className="rounded-full bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500"
-            >
-              + Nova stranka
-            </a>
-          </div>
-
-          <div className="mb-8 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-6">
-            <h3 className="text-xl font-bold text-blue-100">
-              ⭐ Priljubljene stranke
-            </h3>
-
-            <p className="mt-2 text-slate-300">
-              Te stranke bodo prikazane kot hiter izbor pri kreiranju novega računa.
-            </p>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {favoriteCustomers.length === 0 && (
-                <p className="text-slate-400">Ni še priljubljenih strank.</p>
-              )}
-
-              {favoriteCustomers.map((customer) => (
-                <a
-                  key={customer.vatNumber}
-                  href={`/invoices/new?vat=${encodeURIComponent(
-                    customer.vatNumber
-                  )}`}
-                  className="rounded-xl border border-slate-700 bg-slate-900 p-4 hover:bg-slate-800"
-                >
-                  <div className="font-bold">{customer.name}</div>
-
-                  <div className="mt-1 text-sm text-slate-400">
-                    {customer.vatNumber}
-                  </div>
-
-                  <div className="mt-2 text-xs text-slate-500">
-                    eLokacija: {customer.eLocation || "-"}
-                  </div>
-
-                  <div className="mt-4 inline-block rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
-                    Uporabi v računu →
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900">
-            <div className="grid grid-cols-6 border-b border-slate-800 px-6 py-4 text-sm text-slate-400">
-              <div>Naziv</div>
-              <div>Davčna</div>
-              <div>Status</div>
-              <div>eLokacija</div>
-              <div>Priljubljeno</div>
-              <div>Akcije</div>
-            </div>
-
-            {customers.length === 0 && (
-              <div className="p-6 text-slate-400">
-                Ni še shranjenih strank. Dodaj prvo stranko.
-              </div>
-            )}
-
-            {customers.map((customer) => (
-              <div
-                key={customer.vatNumber}
-                className="grid grid-cols-6 items-center border-b border-slate-800 px-6 py-4 last:border-b-0"
-              >
-                <div className="font-medium">{customer.name}</div>
-
-                <div className="text-slate-300">{customer.vatNumber}</div>
-
-                <div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-sm ${
-                      customer.status === "READY"
-                        ? "bg-green-500/10 text-green-300"
-                        : "bg-amber-500/10 text-amber-300"
-                    }`}
-                  >
-                    {customer.status === "READY"
-                      ? "Prejema e-račune"
-                      : "Ni v eImeniku"}
-                  </span>
-                </div>
-
-                <div className="break-words text-sm text-slate-300">
-                  {customer.eLocation || "-"}
-                </div>
-
-                <div>{customer.isFavorite ? "⭐ Da" : "☆ Ne"}</div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleFavorite(customer.vatNumber)}
-                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
-                  >
-                    {customer.isFavorite ? "Odstrani ⭐" : "Dodaj ⭐"}
-                  </button>
-
-                  <a
-                    href={`/invoices/new?vat=${encodeURIComponent(
-                      customer.vatNumber
-                    )}`}
-                    className="rounded-lg border border-blue-500/30 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
-                  >
-                    Račun
-                  </a>
-
-                  <button
-                    onClick={() => deleteCustomer(customer.vatNumber)}
-                    className="rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
-                  >
-                    Izbriši
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <Link href="/customers/new" className="primary-button h-12 px-6">
+          <UserPlus className="h-4 w-4" aria-hidden="true" />
+          Nova stranka
+        </Link>
       </div>
-    </main>
+
+      <section className="glass-panel mb-8 rounded-[1.75rem] p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Priljubljene stranke</h2>
+            <p className="app-muted mt-1 text-sm">
+              Hiter izbor pri kreiranju novega računa.
+            </p>
+          </div>
+          <span className="status-pill">{favoriteCustomers.length}</span>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {favoriteCustomers.length === 0 && (
+            <p className="app-muted">Ni še priljubljenih strank.</p>
+          )}
+
+          {favoriteCustomers.map((customer) => (
+            <Link
+              key={customer.vatNumber}
+              href={`/invoices/new?vat=${encodeURIComponent(
+                customer.vatNumber
+              )}`}
+              className="solid-panel rounded-[1.25rem] p-4 hover:-translate-y-0.5 hover:border-[var(--app-primary)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold">{customer.name}</div>
+                  <div className="app-muted mt-1 text-sm">{customer.vatNumber}</div>
+                </div>
+                <Star className="h-4 w-4 text-[var(--app-primary)]" aria-hidden="true" />
+              </div>
+              <div className="app-muted mt-2 text-xs">
+                eLokacija: {customer.eLocation || "-"}
+              </div>
+              <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--app-primary-strong)]">
+                Uporabi v računu
+                <FilePlus2 className="h-4 w-4" aria-hidden="true" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="solid-panel overflow-hidden rounded-[1.75rem]">
+        <div className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
+          <div>Naziv</div>
+          <div>Davčna</div>
+          <div>Status</div>
+          <div>eLokacija</div>
+          <div>Priljubljeno</div>
+          <div>Akcije</div>
+        </div>
+
+        {customers.length === 0 && (
+          <div className="app-muted p-6">
+            Ni še shranjenih strank. Dodaj prvo stranko iz eImenika.
+          </div>
+        )}
+
+        {customers.map((customer) => (
+          <div
+            key={customer.vatNumber}
+            className="grid grid-cols-6 items-center border-b border-[var(--app-border)] px-6 py-4 last:border-b-0"
+          >
+            <div className="font-medium">{customer.name}</div>
+            <div className="app-muted">{customer.vatNumber}</div>
+            <div>
+              <span
+                className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                  customer.status === "READY"
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : "bg-amber-500/10 text-amber-500"
+                }`}
+              >
+                {customer.status === "READY"
+                  ? "Prejema e-račune"
+                  : "Ni v eImeniku"}
+              </span>
+            </div>
+            <div className="app-muted break-words text-sm">
+              {customer.eLocation || "-"}
+            </div>
+            <div className="app-muted">{customer.isFavorite ? "Da" : "Ne"}</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => toggleFavorite(customer.vatNumber)}
+                className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-medium hover:bg-[var(--app-soft)]"
+                title={
+                  customer.isFavorite
+                    ? "Odstrani iz priljubljenih"
+                    : "Dodaj med priljubljene"
+                }
+              >
+                {customer.isFavorite ? (
+                  <StarOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Star className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+
+              <Link
+                href={`/invoices/new?vat=${encodeURIComponent(
+                  customer.vatNumber
+                )}`}
+                className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-medium text-[var(--app-primary-strong)] hover:bg-[var(--app-soft)]"
+              >
+                Račun
+              </Link>
+
+              <button
+                onClick={() => deleteCustomer(customer.vatNumber)}
+                className="rounded-xl border border-red-500/25 px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
+                title="Izbriši stranko"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </section>
+    </AppShell>
   );
 }
