@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
+import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDrafts";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import type { ProfileFieldDefinition } from "../../../lib/eslog/profiles/types";
@@ -581,12 +582,20 @@ export default function NewInvoicePage() {
     );
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     const invoice = buildInvoice();
-    const drafts = safeJsonParse<Invoice[]>(localStorage.getItem("drafts"), []);
 
-    localStorage.setItem("drafts", JSON.stringify([invoice, ...drafts]));
-    toast.success("Osnutek je shranjen", "Račun lahko kasneje nadaljuješ iz osnutkov.");
+    try {
+      const savedDraft = await saveDbDraft(invoice);
+      prependLocalDraft(savedDraft);
+      toast.success("Osnutek je shranjen", "Račun je shranjen v bazo osnutkov.");
+    } catch {
+      prependLocalDraft(invoice);
+      toast.warning(
+        "Osnutek je shranjen lokalno",
+        "Shranjevanje v bazo ni uspelo, zato je osnutek začasno shranjen v tem brskalniku."
+      );
+    }
   }
 
   function validateWizardStep(stepIndex: number) {

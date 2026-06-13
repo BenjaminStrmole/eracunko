@@ -3,11 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  deleteDbDraft,
+  loadDraftsWithFallback,
+  saveDbDraft,
+  setLocalDrafts,
+  type ClientInvoiceDraft,
+} from "../../lib/client/invoiceDrafts";
 import AppShell from "../components/AppShell";
 import { useToast } from "../components/ToastProvider";
 
-type DraftInvoice = {
-  id?: number;
+type DraftInvoice = ClientInvoiceDraft & {
+  dbId?: string;
+  id?: string | number;
   number: string;
   createdAt?: string;
   updatedAt?: string;
@@ -46,8 +54,10 @@ export default function DraftsPage() {
   const [drafts, setDrafts] = useState<DraftInvoice[]>([]);
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("drafts") || "[]");
-    queueMicrotask(() => setDrafts(saved));
+    queueMicrotask(async () => {
+      const loadedDrafts = await loadDraftsWithFallback();
+      setDrafts(loadedDrafts as DraftInvoice[]);
+    });
   }, []);
 
   const sortedDrafts = useMemo(
@@ -64,9 +74,10 @@ export default function DraftsPage() {
     router.push(`/invoices/new?draft=${encodeURIComponent(draft.number)}`);
   }
 
-  function copyDraft(draft: DraftInvoice) {
+  async function copyDraft(draft: DraftInvoice) {
     const copy = {
       ...draft,
+      dbId: undefined,
       id: Date.now(),
       number: `${draft.number}-KOPIJA`,
       status: "DRAFT",
@@ -74,16 +85,41 @@ export default function DraftsPage() {
       updatedAt: new Date().toISOString(),
     };
 
-    const updated = [copy, ...drafts];
-    setDrafts(updated);
-    localStorage.setItem("drafts", JSON.stringify(updated));
-    toast.success("Osnutek je kopiran");
+    try {
+      const savedCopy = await saveDbDraft(copy);
+      const updated = [savedCopy as DraftInvoice, ...drafts];
+      setDrafts(updated);
+      setLocalDrafts(updated);
+      toast.success("Osnutek je kopiran");
+    } catch {
+      const updated = [copy, ...drafts];
+      setDrafts(updated);
+      setLocalDrafts(updated);
+      toast.warning("Kopija je shranjena lokalno", "Shranjevanje v bazo ni uspelo.");
+    }
   }
 
-  function deleteDraft(number: string) {
-    const updated = drafts.filter((draft) => draft.number !== number);
+  async function deleteDraft(draftToDelete: DraftInvoice) {
+    const updated = drafts.filter((draft) =>
+      draftToDelete.dbId
+        ? draft.dbId !== draftToDelete.dbId
+        : draft.number !== draftToDelete.number
+    );
     setDrafts(updated);
-    localStorage.setItem("drafts", JSON.stringify(updated));
+    setLocalDrafts(updated);
+
+    if (draftToDelete.dbId) {
+      try {
+        await deleteDbDraft(draftToDelete.dbId);
+      } catch {
+        toast.warning(
+          "Osnutek je odstranjen lokalno",
+          "Brisanje v bazi ni uspelo, zato bo morda še viden po ponovni prijavi."
+        );
+        return;
+      }
+    }
+
     toast.info("Osnutek je izbrisan");
   }
 
@@ -154,7 +190,7 @@ export default function DraftsPage() {
                 Kopiraj
               </button>
               <button
-                onClick={() => deleteDraft(draft.number)}
+                onClick={() => deleteDraft(draft)}
                 className="rounded-xl border border-red-500/25 px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
               >
                 Izbriši
