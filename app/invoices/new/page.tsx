@@ -2,11 +2,17 @@
 
 import {
   ArrowRight,
-  FileCode2,
+  CheckCircle2,
+  ChevronLeft,
+  ClipboardCheck,
   FilePlus2,
+  ListChecks,
   Plus,
+  ReceiptText,
   Save,
+  Send,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -90,6 +96,39 @@ const VAT_CATEGORIES: Array<{ value: VatCategory; label: string }> = [
   { value: "O", label: "O - Ni predmet DDV" },
   { value: "G", label: "G - Izvoz" },
   { value: "IC", label: "IC - Dobava znotraj EU" },
+];
+
+const WIZARD_STEPS = [
+  {
+    title: "Prejemnik",
+    shortTitle: "Prejemnik",
+    description: "Izberi kupca in vrsto racuna. Tehnicne podatke prikazemo sele, ko so potrebni.",
+    icon: UserRound,
+  },
+  {
+    title: "Podatki racuna",
+    shortTitle: "Racun",
+    description: "Osnovni datumi, stevilka racuna, placilo in reference za izbrani nacin posiljanja.",
+    icon: FilePlus2,
+  },
+  {
+    title: "Postavke",
+    shortTitle: "Postavke",
+    description: "Dodaj storitve ali izdelke. DDV in zneske izracunamo sproti.",
+    icon: ReceiptText,
+  },
+  {
+    title: "Pregled",
+    shortTitle: "Pregled",
+    description: "Preveri kupca, postavke, zneske in validacijska opozorila pred pripravo XML-ja.",
+    icon: ClipboardCheck,
+  },
+  {
+    title: "Posiljanje",
+    shortTitle: "Poslji",
+    description: "Pripravi racun za koncni eSLOG pregled in oddajo prek bizBox.",
+    icon: Send,
+  },
 ];
 
 function today() {
@@ -176,6 +215,7 @@ function lineVatAmount(line: EditableLine) {
 export default function NewInvoicePage() {
   const toast = useToast();
   const [profile, setProfile] = useState<InvoiceProfile>("standard");
+  const [step, setStep] = useState(0);
   const [profileData, setProfileData] = useState<ProfileDataState>(() => ({
     standard: {},
     hr: {
@@ -551,7 +591,72 @@ export default function NewInvoicePage() {
     toast.success("Osnutek je shranjen", "Račun lahko kasneje nadaljuješ iz osnutkov.");
   }
 
-  function continueToPreview() {
+  function validateWizardStep(stepIndex: number) {
+    if (stepIndex === 0) {
+      if (!activeCompany) {
+        toast.warning(
+          "Manjka aktivno podjetje",
+          "Najprej izberi podjetje, ki bo izdalo racun."
+        );
+        return false;
+      }
+
+      if (!buyer.name.trim()) {
+        toast.warning("Manjka prejemnik", "Vnesi naziv kupca ali izberi stranko.");
+        return false;
+      }
+
+      if (!buyer.vat.trim() && !buyer.eLocation.trim() && !buyer.eAddress.trim()) {
+        toast.warning(
+          "Manjka identifikacija kupca",
+          "Dodaj davcno stevilko, eLokacijo ali e-naslov prejemnika."
+        );
+        return false;
+      }
+    }
+
+    if (stepIndex === 1) {
+      if (!invoiceNumberNumericPart.trim()) {
+        toast.warning("Manjka stevilka racuna", "Vnesi zaporedno stevilko racuna.");
+        return false;
+      }
+
+      if (!issueDate || !serviceDate || !dueDate) {
+        toast.warning("Manjkajo datumi", "Vnesi datum izdaje, datum storitve in rok placila.");
+        return false;
+      }
+    }
+
+    if (stepIndex === 2) {
+      const invalidLine = lines.find(
+        (line) =>
+          !line.description.trim() ||
+          Number(line.quantity || 0) <= 0 ||
+          Number(line.price || 0) < 0
+      );
+
+      if (invalidLine) {
+        toast.warning(
+          "Preveri postavke",
+          "Vsaka postavka potrebuje opis, kolicino vecjo od 0 in veljavno ceno."
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function goNext() {
+    if (!validateWizardStep(step)) return;
+    setStep((current) => Math.min(current + 1, WIZARD_STEPS.length - 1));
+  }
+
+  function goBack() {
+    setStep((current) => Math.max(current - 1, 0));
+  }
+
+  function prepareForSending() {
     if (!activeCompany) {
       toast.warning(
         "Manjka aktivno podjetje",
@@ -574,19 +679,24 @@ export default function NewInvoicePage() {
 
     const invoice = prepared.invoice;
     localStorage.setItem("eracunko_current_invoice", JSON.stringify(invoice));
-    window.location.href = "/invoices/preview";
+    window.location.href = "/invoices/xml";
   }
+
+  const isReferenceProfile = profile === "ujp" || profile === "bank";
+  const currentStep = WIZARD_STEPS[step];
+  const CurrentStepIcon = currentStep.icon;
 
   return (
     <AppShell>
       <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="status-pill mb-4 inline-flex">eSLOG 2.0 / EN16931</div>
+          <div className="status-pill mb-4 inline-flex">Voden vnos racuna</div>
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
             Nov račun
           </h1>
           <p className="app-muted mt-3 max-w-2xl">
-            Vnesi vse podatke, ki jih potrebujeta eSLOG XML in bizBox ovojnica.
+            Korak za korakom vnesi samo podatke, ki jih ta trenutek potrebujes.
+            eSLOG in bizBox podrobnosti ostanejo skrite, dokler niso pomembne.
           </p>
         </div>
 
@@ -595,32 +705,8 @@ export default function NewInvoicePage() {
             <Save className="h-4 w-4" aria-hidden="true" />
             Shrani osnutek
           </button>
-
-          <button onClick={continueToPreview} className="primary-button h-12 px-6">
-            Nadaljuj
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </button>
         </div>
       </div>
-
-      <section className="solid-panel mb-8 rounded-[1.75rem] p-3">
-        <div className="grid gap-2 md:grid-cols-4">
-          {invoiceProfiles.map((invoiceProfile) => (
-            <button
-              key={invoiceProfile.id}
-              onClick={() => setProfile(invoiceProfile.id)}
-              className={`rounded-2xl border px-4 py-3 text-left transition ${
-                profile === invoiceProfile.id
-                  ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
-                  : "border-[var(--app-border)] hover:bg-[var(--app-soft)]"
-              }`}
-            >
-              <div className="font-semibold">{invoiceProfile.label}</div>
-              <div className="app-muted mt-1 text-xs">{invoiceProfile.description}</div>
-            </button>
-          ))}
-        </div>
-      </section>
 
       {!activeCompany && (
         <section className="mb-8 rounded-[1.75rem] border border-amber-500/25 bg-amber-500/10 p-5 text-amber-500">
@@ -628,273 +714,494 @@ export default function NewInvoicePage() {
         </section>
       )}
 
-      <div className="grid gap-8 xl:grid-cols-[1.25fr_0.75fr]">
-        <div className="space-y-8">
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <SectionHeader title="Podatki računa" icon={<FilePlus2 className="h-5 w-5 text-[var(--app-primary)]" />} />
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Zaporedna stevilka">
-                <input value={invoiceNumberNumericPart} onChange={(event) => setInvoiceNumberNumericPart(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Poslovni prostor">
-                <input value={businessPremiseCode} onChange={(event) => setBusinessPremiseCode(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Naprava">
-                <input value={deviceCode} onChange={(event) => setDeviceCode(event.target.value)} className="field-input" />
-              </Field>
-              <Info label="Stevilka racuna" value={invoiceNumber} />
-              <Field label="Tip dokumenta">
-                <select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="field-input">
-                  <option value="380">380 - Racun</option>
-                  <option value="381">381 - Dobropis</option>
-                  <option value="383">383 - Breme</option>
-                </select>
-              </Field>
-              <Field label="Poslovni proces">
-                <input value={businessProcess} onChange={(event) => setBusinessProcess(event.target.value)} className="field-input" placeholder="P1 ali P99:kupec" />
-              </Field>
-              <Field label="Maticna stevilka prodajalca">
-                <input value={sellerRegistrationNumber} onChange={(event) => setSellerRegistrationNumber(event.target.value)} className="field-input" placeholder="Obvezno za UJP/banka, ce je zahtevano" />
-              </Field>
-              <Field label="Datum izdaje">
-                <input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Datum storitve">
-                <input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Rok placila">
-                <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field-input" />
-              </Field>
+      <WizardStepper currentStep={step} onStepChange={setStep} />
+
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="solid-panel rounded-[1.75rem] p-6">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--app-soft)] text-[var(--app-primary)]">
+                <CurrentStepIcon className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="app-muted text-sm">Korak {step + 1} od {WIZARD_STEPS.length}</div>
+                <h2 className="text-2xl font-semibold">{currentStep.title}</h2>
+                <p className="app-muted mt-1 max-w-2xl text-sm">{currentStep.description}</p>
+              </div>
             </div>
-          </section>
+            <div className="status-pill shrink-0">{selectedProfile.label}</div>
+          </div>
 
-          <ProfileFieldsSection
-            profile={selectedProfile}
-            values={currentProfileData}
-            onChange={updateProfileField}
-          />
-
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <SectionHeader
-              title="Kupec"
-              description="Izberi stranko ali dopolni podatke rocno."
-              action={<Link href="/customers/new" className="text-sm font-semibold text-[var(--app-primary-strong)]">Dodaj stranko</Link>}
-            />
-            <select
-              value={selectedCustomerVat}
-              onChange={(event) => {
-                const selected = customers.find((customer) => customer.vatNumber === event.target.value);
-                setSelectedCustomerVat(event.target.value);
-                setBuyer(selected ? customerToBuyer(selected) : emptyBuyer());
-              }}
-              className="field-input"
-            >
-              <option value="">Rocni vnos ali izberi kupca...</option>
-              {customers.map((customer) => (
-                <option key={customer.vatNumber} value={customer.vatNumber}>
-                  {customer.name} - {customer.vatNumber}
-                </option>
-              ))}
-            </select>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <BuyerField label="Naziv" field="name" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="VAT/OIB" field="vat" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="Naslov" field="address" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="Postna stevilka" field="postCode" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="Mesto" field="city" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="Drzava" field="country" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="eAddress" field="eAddress" buyer={buyer} setBuyer={setBuyer} />
-              <BuyerField label="Maticna stevilka kupca" field="registrationNumber" buyer={buyer} setBuyer={setBuyer} />
-            </div>
-          </section>
-
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <SectionHeader title="Reference" />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Narocilo">
-                <input value={orderReference} onChange={(event) => setOrderReference(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Pogodba">
-                <input value={contractReference} onChange={(event) => setContractReference(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Dobavnica">
-                <input value={deliveryNoteReference} onChange={(event) => setDeliveryNoteReference(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Referenca kupca">
-                <input value={buyerReference} onChange={(event) => setBuyerReference(event.target.value)} className="field-input" />
-              </Field>
-            </div>
-          </section>
-
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <SectionHeader
-              title="Postavke"
-              description="BT-131, BT-146, BT-151, BT-152 in HR KPD podatki."
-              action={<button onClick={addLine} className="secondary-button h-10 px-4"><Plus className="h-4 w-4" aria-hidden="true" />Dodaj</button>}
-            />
-
-            <div className="space-y-4">
-              {lines.map((line, index) => (
-                <div key={line.id} className="rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <span className="status-pill">Postavka {index + 1}</span>
-                    <button onClick={() => removeLine(line.id)} className="rounded-xl border border-red-500/25 px-3 py-2 text-red-500 hover:bg-red-500/10">
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+          {step === 0 && (
+            <div className="space-y-7">
+              <div>
+                <SectionHeader
+                  title="Vrsta racuna"
+                  description="Izberi najblizji nacin posiljanja. Podatki, ki so posebni za profil, se prikazejo kasneje."
+                />
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {invoiceProfiles.map((invoiceProfile) => (
+                    <button
+                      key={invoiceProfile.id}
+                      onClick={() => setProfile(invoiceProfile.id)}
+                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                        profile === invoiceProfile.id
+                          ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
+                          : "border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-soft)]"
+                      }`}
+                    >
+                      <div className="font-semibold">{invoiceProfile.label}</div>
+                      <div className="app-muted mt-1 text-xs">{invoiceProfile.description}</div>
                     </button>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-6">
-                    <Field label="Sifra">
-                      <input value={line.itemCode || ""} onChange={(event) => updateLine(line.id, { itemCode: event.target.value })} className="field-input" />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <SectionHeader
+                  title="Kupec"
+                  description="Izberi shranjeno stranko ali vnesi osnovne podatke rocno."
+                  action={<Link href="/customers/new" className="text-sm font-semibold text-[var(--app-primary-strong)]">Dodaj stranko</Link>}
+                />
+                <select
+                  value={selectedCustomerVat}
+                  onChange={(event) => {
+                    const selected = customers.find((customer) => customer.vatNumber === event.target.value);
+                    setSelectedCustomerVat(event.target.value);
+                    setBuyer(selected ? customerToBuyer(selected) : emptyBuyer());
+                  }}
+                  className="field-input"
+                >
+                  <option value="">Rocni vnos ali izberi kupca...</option>
+                  {customers.map((customer) => (
+                    <option key={customer.vatNumber} value={customer.vatNumber}>
+                      {customer.name} - {customer.vatNumber}
+                    </option>
+                  ))}
+                </select>
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <BuyerField label="Naziv kupca" field="name" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="Davcna stevilka / OIB" field="vat" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="Naslov" field="address" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="Postna stevilka" field="postCode" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="Mesto" field="city" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="Drzava" field="country" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="e-naslov za prejem" field="eAddress" buyer={buyer} setBuyer={setBuyer} />
+                  {isReferenceProfile && (
+                    <BuyerField label="Maticna stevilka kupca" field="registrationNumber" buyer={buyer} setBuyer={setBuyer} />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="space-y-7">
+              <div>
+                <SectionHeader title="Osnovni podatki" />
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Field label="Zaporedna stevilka">
+                    <input value={invoiceNumberNumericPart} onChange={(event) => setInvoiceNumberNumericPart(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="Poslovni prostor">
+                    <input value={businessPremiseCode} onChange={(event) => setBusinessPremiseCode(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="Naprava">
+                    <input value={deviceCode} onChange={(event) => setDeviceCode(event.target.value)} className="field-input" />
+                  </Field>
+                  <Info label="Stevilka racuna" value={invoiceNumber} />
+                  <Field label="Tip dokumenta">
+                    <select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="field-input">
+                      <option value="380">Racun</option>
+                      <option value="381">Dobropis</option>
+                      <option value="383">Breme</option>
+                    </select>
+                  </Field>
+                  <Field label="Datum izdaje">
+                    <input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="Datum storitve">
+                    <input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="Rok placila">
+                    <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field-input" />
+                  </Field>
+                </div>
+              </div>
+
+              <div>
+                <SectionHeader
+                  title="Placilo"
+                  description="Uporabniku prijazna polja za sklic, namen in placilni racun."
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Nacin placila">
+                    <select value={paymentMeansCode} onChange={(event) => setPaymentMeansCode(event.target.value)} className="field-input">
+                      <option value="58">SEPA kreditni transfer</option>
+                      <option value="30">Kreditno nakazilo</option>
+                      <option value="10">Gotovina</option>
+                    </select>
+                  </Field>
+                  <Field label="Sklic placila">
+                    <input value={reference} onChange={(event) => setReference(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="Namen placila">
+                    <input value={paymentPurpose} onChange={(event) => setPaymentPurpose(event.target.value)} className="field-input" placeholder="Npr. placilo racuna" />
+                  </Field>
+                  <Field label="Koda namena">
+                    <input value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="IBAN prejemnika placila">
+                    <input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="BIC/SWIFT">
+                    <input value={bankBic} onChange={(event) => setBankBic(event.target.value)} className="field-input" />
+                  </Field>
+                  <Field label="Placilni pogoji">
+                    <input value={paymentTerms} onChange={(event) => setPaymentTerms(event.target.value)} className="field-input" />
+                  </Field>
+                </div>
+              </div>
+
+              {isReferenceProfile && (
+                <div>
+                  <SectionHeader
+                    title="Reference dokumentov"
+                    description="Za UJP ali bancno posiljanje dodaj vsaj eno referenco, ce jo zahteva prejemnik."
+                  />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Narocilo">
+                      <input value={orderReference} onChange={(event) => setOrderReference(event.target.value)} className="field-input" />
                     </Field>
-                    <div className="md:col-span-2">
-                      <Field label="Naziv/opis">
-                        <input value={line.description} onChange={(event) => updateLine(line.id, { description: event.target.value })} className="field-input" />
-                      </Field>
-                    </div>
-                    <Field label="Kolicina">
-                      <input type="number" value={line.quantity} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} className="field-input" />
+                    <Field label="Pogodba">
+                      <input value={contractReference} onChange={(event) => setContractReference(event.target.value)} className="field-input" />
                     </Field>
-                    <Field label="Enota">
-                      <input value={line.unit || ""} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input" />
+                    <Field label="Dobavnica">
+                      <input value={deliveryNoteReference} onChange={(event) => setDeliveryNoteReference(event.target.value)} className="field-input" />
                     </Field>
-                    <Field label="Neto cena">
-                      <input type="number" value={line.price} onChange={(event) => updateLine(line.id, { price: Number(event.target.value) })} className="field-input" />
+                    <Field label="Referenca kupca">
+                      <input value={buyerReference} onChange={(event) => setBuyerReference(event.target.value)} className="field-input" />
                     </Field>
-                    <Field label="DDV kategorija">
-                      <select value={line.vatCategory} onChange={(event) => updateLine(line.id, { vatCategory: event.target.value as VatCategory })} className="field-input">
-                        {VAT_CATEGORIES.map((category) => (
-                          <option key={category.value} value={category.value}>{category.label}</option>
-                        ))}
-                      </select>
+                    <Field label="Maticna stevilka prodajalca">
+                      <input value={sellerRegistrationNumber} onChange={(event) => setSellerRegistrationNumber(event.target.value)} className="field-input" />
                     </Field>
-                    <Field label="DDV %">
-                      <input type="number" value={line.vatRate} onChange={(event) => updateLine(line.id, { vatRate: Number(event.target.value) })} className="field-input" />
-                    </Field>
-                    {lineProfileFields.map((field) => (
-                      <LineProfileField
-                        key={field.name}
-                        field={field}
-                        line={line}
-                        onChange={(value) =>
-                          updateLine(line.id, {
-                            [field.name]: value,
-                            ...(field.name === "kpdCode" ? { kpdListId: "CG" } : {}),
-                          } as Partial<EditableLine>)
-                        }
-                      />
-                    ))}
-                    <div className="md:col-span-2">
-                      <Field label="Razlog oprostitve">
-                        <input value={line.taxExemptionReason || ""} onChange={(event) => updateLine(line.id, { taxExemptionReason: event.target.value })} className="field-input" />
-                      </Field>
-                    </div>
-                    <div className="md:col-span-6">
-                      <Field label="Dodatni opis">
-                        <input value={line.itemDescription || line.note || ""} onChange={(event) => updateLine(line.id, { itemDescription: event.target.value })} className="field-input" />
-                      </Field>
-                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
+              )}
 
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <SectionHeader title="Placilo" />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Payment means code">
-                <select value={paymentMeansCode} onChange={(event) => setPaymentMeansCode(event.target.value)} className="field-input">
-                  <option value="58">58 - SEPA kreditni transfer</option>
-                  <option value="30">30 - Kreditno nakazilo</option>
-                  <option value="10">10 - Gotovina</option>
-                </select>
-              </Field>
-              <Field label="Koda namena">
-                <input value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Namen placila">
-                <input value={paymentPurpose} onChange={(event) => setPaymentPurpose(event.target.value)} className="field-input" placeholder="Loceno od kode namena, npr. placilo racuna" />
-              </Field>
-              <Field label="IBAN placilnega racuna">
-                <input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="BIC/SWIFT placilnega racuna">
-                <input value={bankBic} onChange={(event) => setBankBic(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Sklic placila">
-                <input value={reference} onChange={(event) => setReference(event.target.value)} className="field-input" />
-              </Field>
-              <Field label="Placilni pogoji">
-                <input value={paymentTerms} onChange={(event) => setPaymentTerms(event.target.value)} className="field-input" />
+              <ProfileFieldsSection
+                profile={selectedProfile}
+                values={currentProfileData}
+                onChange={updateProfileField}
+              />
+
+              <Field label="Opomba za racun">
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="field-input min-h-24 resize-none" />
               </Field>
             </div>
-            <div className="mt-4">
-              <Field label="Opomba">
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="field-input min-h-28 resize-none" />
-              </Field>
+          )}
+
+          {step === 2 && (
+            <div>
+              <SectionHeader
+                title="Postavke racuna"
+                description="Za prvo posiljanje je dovolj naziv, kolicina, cena in DDV. Dodatna polja se prikazejo samo za izbrani profil."
+                action={<button onClick={addLine} className="secondary-button h-10 px-4"><Plus className="h-4 w-4" aria-hidden="true" />Dodaj</button>}
+              />
+
+              <div className="space-y-4">
+                {lines.map((line, index) => (
+                  <div key={line.id} className="rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="status-pill">Postavka {index + 1}</span>
+                      <button onClick={() => removeLine(line.id)} className="rounded-xl border border-red-500/25 px-3 py-2 text-red-500 hover:bg-red-500/10" aria-label="Odstrani postavko">
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-6">
+                      <Field label="Sifra">
+                        <input value={line.itemCode || ""} onChange={(event) => updateLine(line.id, { itemCode: event.target.value })} className="field-input" />
+                      </Field>
+                      <div className="md:col-span-2">
+                        <Field label="Naziv ali opis">
+                          <input value={line.description} onChange={(event) => updateLine(line.id, { description: event.target.value })} className="field-input" />
+                        </Field>
+                      </div>
+                      <Field label="Kolicina">
+                        <input type="number" value={line.quantity} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} className="field-input" />
+                      </Field>
+                      <Field label="Enota">
+                        <input value={line.unit || ""} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input" />
+                      </Field>
+                      <Field label="Neto cena">
+                        <input type="number" value={line.price} onChange={(event) => updateLine(line.id, { price: Number(event.target.value) })} className="field-input" />
+                      </Field>
+                      <Field label="DDV kategorija">
+                        <select value={line.vatCategory} onChange={(event) => updateLine(line.id, { vatCategory: event.target.value as VatCategory })} className="field-input">
+                          {VAT_CATEGORIES.map((category) => (
+                            <option key={category.value} value={category.value}>{category.label}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="DDV %">
+                        <input type="number" value={line.vatRate} onChange={(event) => updateLine(line.id, { vatRate: Number(event.target.value) })} className="field-input" />
+                      </Field>
+                      {lineProfileFields.map((field) => (
+                        <LineProfileField
+                          key={field.name}
+                          field={field}
+                          line={line}
+                          onChange={(value) =>
+                            updateLine(line.id, {
+                              [field.name]: value,
+                              ...(field.name === "kpdCode" ? { kpdListId: "CG" } : {}),
+                            } as Partial<EditableLine>)
+                          }
+                        />
+                      ))}
+                      {line.vatCategory !== "S" && (
+                        <div className="md:col-span-2">
+                          <Field label="Razlog oprostitve ali posebne DDV obravnave">
+                            <input value={line.taxExemptionReason || ""} onChange={(event) => updateLine(line.id, { taxExemptionReason: event.target.value })} className="field-input" />
+                          </Field>
+                        </div>
+                      )}
+                      <div className="md:col-span-6">
+                        <Field label="Dodatni opis">
+                          <input value={line.itemDescription || line.note || ""} onChange={(event) => updateLine(line.id, { itemDescription: event.target.value })} className="field-input" />
+                        </Field>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </section>
+          )}
 
-        </div>
+          {step === 3 && (
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <ReviewBox title="Kupec">
+                  <p className="font-semibold">{buyer.name || "-"}</p>
+                  <p className="app-muted mt-1 text-sm">{buyer.vat || "Brez davcne stevilke"}</p>
+                  <p className="app-muted mt-1 text-sm">{buildAddress(buyer) || "Naslov ni vnesen"}</p>
+                </ReviewBox>
+                <ReviewBox title="Racun">
+                  <SummaryRow label="Stevilka" value={invoiceNumber} />
+                  <SummaryRow label="Izdaja" value={issueDate} />
+                  <SummaryRow label="Rok placila" value={dueDate} />
+                </ReviewBox>
+              </div>
 
-        <aside className="space-y-8">
+              <ReviewBox title="Postavke">
+                <div className="space-y-3">
+                  {lines.map((line) => (
+                    <div key={line.id} className="flex items-start justify-between gap-4 border-b border-[var(--app-border)] pb-3 last:border-b-0 last:pb-0">
+                      <div>
+                        <div className="font-medium">{line.description || "Brez opisa"}</div>
+                        <div className="app-muted text-sm">{line.quantity} x {Number(line.price || 0).toFixed(2)} EUR · DDV {line.vatRate}%</div>
+                      </div>
+                      <div className="text-right font-semibold">
+                        {(Number(line.quantity || 0) * Number(line.price || 0)).toFixed(2)} EUR
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ReviewBox>
+
+              <ReviewBox title="DDV in skupaj">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(prepared.invoice.vatBreakdown || []).map((item) => (
+                    <div key={`${item.vatCategory}-${item.vatRate}`} className="rounded-2xl bg-[var(--app-soft)] p-4">
+                      <div className="font-semibold">{item.vatCategory} / {item.vatRate}%</div>
+                      <div className="app-muted mt-1 text-sm">Osnova {item.taxableAmount.toFixed(2)} EUR · DDV {item.vatAmount.toFixed(2)} EUR</div>
+                    </div>
+                  ))}
+                </div>
+              </ReviewBox>
+
+              <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} />
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className={`rounded-[1.5rem] border p-5 ${
+                prepared.validation.errors.length > 0
+                  ? "border-red-500/25 bg-red-500/10 text-red-500"
+                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
+              }`}>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5" aria-hidden="true" />
+                  <div>
+                    <h3 className="font-semibold">
+                      {prepared.validation.errors.length > 0
+                        ? "Racun potrebuje se nekaj popravkov"
+                        : "Racun je pripravljen za eSLOG pripravo"}
+                    </h3>
+                    <p className="mt-1 text-sm opacity-90">
+                      {prepared.validation.errors.length > 0
+                        ? "Pred oddajo preveri napake spodaj. Racun lahko vseeno odpres v XML pregledu za diagnostiko."
+                        : "V naslednjem zaslonu lahko preveris XML in ga oddas prek bizBox."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <ReviewBox title="Koncni povzetek">
+                <SummaryRow label="Profil" value={selectedProfile.label} />
+                <SummaryRow label="Prejemnik" value={buyer.name || "-"} />
+                <SummaryRow label="Stevilka racuna" value={invoiceNumber} />
+                <SummaryRow label="Za placilo" value={`${(prepared.invoice.totals.payable || prepared.invoice.totals.gross).toFixed(2)} EUR`} strong />
+              </ReviewBox>
+
+              <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} />
+            </div>
+          )}
+
+          <div className="mt-8 flex flex-col-reverse gap-3 border-t border-[var(--app-border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <button onClick={goBack} disabled={step === 0} className="secondary-button h-12 px-5 disabled:cursor-not-allowed disabled:opacity-50">
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              Nazaj
+            </button>
+            {step < WIZARD_STEPS.length - 1 ? (
+              <button onClick={goNext} className="primary-button h-12 px-6">
+                Nadaljuj
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : (
+              <button onClick={prepareForSending} className="primary-button h-12 px-6">
+                Pripravi za posiljanje
+                <Send className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </section>
+
+        <aside className="space-y-4">
           <section className="glass-panel rounded-[1.75rem] p-6">
             <h2 className="text-xl font-semibold">Povzetek</h2>
-            <div className="app-muted mt-1 text-sm">
-              Profil: {invoiceProfiles.find((item) => item.id === profile)?.label}
-            </div>
+            <div className="app-muted mt-1 text-sm">{selectedProfile.label}</div>
             <div className="mt-5 space-y-3 text-sm">
-              <SummaryRow label="BT-106 neto" value={`${prepared.invoice.totals.net.toFixed(2)} EUR`} />
-              <SummaryRow label="BT-110 DDV" value={`${prepared.invoice.totals.vat.toFixed(2)} EUR`} />
-              <SummaryRow label="BT-112 bruto" value={`${prepared.invoice.totals.gross.toFixed(2)} EUR`} />
-              <SummaryRow label="BT-115 za placilo" value={`${(prepared.invoice.totals.payable || prepared.invoice.totals.gross).toFixed(2)} EUR`} strong />
+              <SummaryRow label="Prejemnik" value={buyer.name || "-"} />
+              <SummaryRow label="Postavke" value={String(lines.length)} />
+              <SummaryRow label="Neto" value={`${prepared.invoice.totals.net.toFixed(2)} EUR`} />
+              <SummaryRow label="DDV" value={`${prepared.invoice.totals.vat.toFixed(2)} EUR`} />
+              <SummaryRow label="Za placilo" value={`${(prepared.invoice.totals.payable || prepared.invoice.totals.gross).toFixed(2)} EUR`} strong />
             </div>
           </section>
 
-          <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} />
-
           <section className="solid-panel rounded-[1.75rem] p-6">
-            <h2 className="text-xl font-semibold">DDV breakdown</h2>
-            <div className="mt-4 space-y-3 text-sm">
-              {(prepared.invoice.vatBreakdown || []).map((item) => (
-                <div key={`${item.vatCategory}-${item.vatRate}`} className="rounded-2xl bg-[var(--app-soft)] p-4">
-                  <div className="font-semibold">{item.vatCategory} / {item.vatRate}%</div>
-                  <div className="app-muted mt-1">Osnova {item.taxableAmount.toFixed(2)} EUR · DDV {item.vatAmount.toFixed(2)} EUR</div>
-                </div>
+            <h2 className="text-xl font-semibold">Napredek</h2>
+            <div className="mt-4 space-y-3">
+              {WIZARD_STEPS.map((wizardStep, index) => (
+                <button
+                  key={wizardStep.title}
+                  onClick={() => setStep(index)}
+                  className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                    index === step
+                      ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
+                      : "border-[var(--app-border)] hover:bg-[var(--app-soft)]"
+                  }`}
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[var(--app-soft)] text-sm font-semibold">
+                    {index + 1}
+                  </span>
+                  <span className="font-medium">{wizardStep.shortTitle}</span>
+                </button>
               ))}
             </div>
           </section>
 
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <FileCode2 className="h-5 w-5 text-[var(--app-primary)]" />
-              <h2 className="text-xl font-semibold">XML predogled</h2>
-            </div>
-            <pre className="max-h-[520px] overflow-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] p-4 text-xs leading-relaxed app-muted">
-              {prepared.xml || "XML bo generiran, ko so odpravljene obvezne napake."}
-            </pre>
-          </section>
-
-          {process.env.NODE_ENV !== "production" && (
+          {step >= 3 && (
             <section className="solid-panel rounded-[1.75rem] p-6">
-              <h2 className="text-xl font-semibold">Debug profil</h2>
-              <pre className="mt-4 max-h-80 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-blue-100">
-                {JSON.stringify(
-                  {
-                    profile: prepared.invoice.profile,
-                    profileData: currentProfileData,
-                    validationErrors: prepared.validation.errors,
-                  },
-                  null,
-                  2
-                )}
-              </pre>
+              <div className="mb-4 flex items-center gap-2">
+                <ListChecks className="h-5 w-5 text-[var(--app-primary)]" aria-hidden="true" />
+                <h2 className="text-xl font-semibold">Validacija</h2>
+              </div>
+              <p className="app-muted text-sm">
+                {prepared.validation.errors.length === 0
+                  ? "Ni blokirnih napak."
+                  : `${prepared.validation.errors.length} napak za pregled.`}
+              </p>
+              {prepared.validation.warnings.length > 0 && (
+                <p className="mt-2 text-sm text-amber-500">
+                  {prepared.validation.warnings.length} opozoril.
+                </p>
+              )}
             </section>
           )}
         </aside>
       </div>
     </AppShell>
+  );
+}
+
+function WizardStepper({
+  currentStep,
+  onStepChange,
+}: {
+  currentStep: number;
+  onStepChange: (step: number) => void;
+}) {
+  return (
+    <section className="solid-panel mb-8 rounded-[1.75rem] p-3">
+      <div className="grid gap-2 md:grid-cols-5">
+        {WIZARD_STEPS.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = index === currentStep;
+          const isDone = index < currentStep;
+
+          return (
+            <button
+              key={step.title}
+              onClick={() => onStepChange(index)}
+              className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                isActive
+                  ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
+                  : "border-[var(--app-border)] hover:bg-[var(--app-soft)]"
+              }`}
+            >
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                  isDone
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : "bg-[var(--app-soft)] text-[var(--app-primary)]"
+                }`}
+              >
+                {isDone ? (
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                )}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">{step.shortTitle}</span>
+                <span className="app-muted mt-0.5 hidden text-xs xl:block">
+                  Korak {index + 1}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ReviewBox({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
+      <h3 className="mb-4 text-lg font-semibold">{title}</h3>
+      {children}
+    </div>
   );
 }
 
@@ -939,7 +1246,7 @@ function ProfileFieldsSection({
   if (invoiceFields.length === 0) return null;
 
   return (
-    <section className="solid-panel rounded-[1.75rem] p-6">
+    <div className="rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
       <SectionHeader title={profile.label} description={profile.description} />
       <div className="grid gap-4 md:grid-cols-2">
         {invoiceFields.map((field) => (
@@ -951,7 +1258,7 @@ function ProfileFieldsSection({
           />
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
