@@ -3,6 +3,7 @@
 import { ArrowRight, Download, Printer } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import AppShell from "../../components/AppShell";
 import type { Invoice, Party } from "../../../types/invoice";
@@ -119,18 +120,19 @@ export default function InvoicePreviewPage() {
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("eracunko_current_invoice");
+    const load = async () => {
+      const saved = localStorage.getItem("eracunko_current_invoice");
 
-    if (!saved) {
-      window.location.href = "/invoices/new";
-      return;
-    }
+      if (!saved) {
+        window.location.href = "/invoices/new";
+        return;
+      }
 
-    const savedCompany = localStorage.getItem("activeCompany");
-    queueMicrotask(() => {
       setInvoice(JSON.parse(saved));
-      setActiveCompany(savedCompany ? JSON.parse(savedCompany) : null);
-    });
+      setActiveCompany((await loadActiveCompanyWithFallback()) as ActiveCompany | null);
+    };
+
+    queueMicrotask(load);
   }, []);
 
   if (!invoice) {

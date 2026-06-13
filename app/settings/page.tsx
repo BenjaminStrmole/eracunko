@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { syncDbActiveCompany } from "../../lib/client/activeCompany";
 import AppShell from "../components/AppShell";
 import { useToast } from "../components/ToastProvider";
 
@@ -109,6 +110,7 @@ export default function SettingsPage() {
       };
 
       localStorage.setItem("activeCompany", JSON.stringify(updatedCompany));
+      syncDbActiveCompany(updatedCompany).catch(() => {});
       window.dispatchEvent(new CustomEvent("active-company-changed"));
     }
 

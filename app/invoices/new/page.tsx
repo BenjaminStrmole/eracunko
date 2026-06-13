@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import type { ProfileFieldDefinition } from "../../../lib/eslog/profiles/types";
@@ -286,10 +287,6 @@ export default function NewInvoicePage() {
   );
 
   useEffect(() => {
-    const company = safeJsonParse<ActiveCompany | null>(
-      localStorage.getItem("activeCompany"),
-      null
-    );
     const savedCustomers = safeJsonParse<Customer[]>(
       localStorage.getItem("customers"),
       []
@@ -301,7 +298,8 @@ export default function NewInvoicePage() {
     const params = new URLSearchParams(window.location.search);
     const vat = params.get("vat");
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
+      const company = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
       const nextPart = nextInvoiceNumberPart();
 
       setActiveCompany(company);

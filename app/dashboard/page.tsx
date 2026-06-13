@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
 import CompanySelector from "../components/CompanySelector";
+import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
 
 type RawParam = {
   parameterName?: string;
@@ -319,9 +320,7 @@ export default function DashboardPage() {
   async function loadDashboard(options: { force?: boolean } = {}) {
     const force = options.force || false;
     setRefreshing(force);
-    const company = JSON.parse(
-      localStorage.getItem("activeCompany") || "null"
-    ) as ActiveCompany | null;
+    const company = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
     const localSent = safeJsonParse<LocalInvoice[]>(localStorage.getItem("sent"), []);
     const localDrafts = safeJsonParse<LocalInvoice[]>(
       localStorage.getItem("drafts"),

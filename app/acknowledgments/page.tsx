@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
 import { useToast } from "../components/ToastProvider";
+import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
 
 const PAGE_SIZE = 25;
 
@@ -157,9 +158,7 @@ export default function AcknowledgementsPage() {
     setEnrichedCount(0);
 
     try {
-      const activeCompany = JSON.parse(
-        localStorage.getItem("activeCompany") || "null"
-      );
+      const activeCompany = await loadActiveCompanyWithFallback();
 
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
 

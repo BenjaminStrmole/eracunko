@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
 import { useToast } from "../components/ToastProvider";
+import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
 
 const PAGE_SIZE = 25;
 
@@ -71,9 +72,7 @@ export default function InboxPage() {
     setError("");
 
     try {
-      const activeCompany = JSON.parse(
-        localStorage.getItem("activeCompany") || "null"
-      ) as ActiveCompany | null;
+      const activeCompany = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
 
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
       const response = await fetch(

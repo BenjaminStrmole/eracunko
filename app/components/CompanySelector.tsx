@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  fetchDbActiveCompany,
+  getStoredActiveCompany,
+  storeActiveCompany,
+  syncDbActiveCompany,
+  type ClientActiveCompany,
+} from "../../lib/client/activeCompany";
 
-export type ActiveCompany = {
+export type ActiveCompany = ClientActiveCompany & {
   name: string;
   taxId: string;
   locationName: string;
@@ -25,22 +32,35 @@ export default function CompanySelector() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/bizbox/my-companies");
-      const data = await response.json();
+      const localCompany = getStoredActiveCompany() as ActiveCompany | null;
+      const [dbCompany, companiesResponse] = await Promise.all([
+        fetchDbActiveCompany().catch(() => null),
+        fetch("/api/bizbox/my-companies"),
+      ]);
+      const data = await companiesResponse.json();
+
+      if (dbCompany) {
+        storeActiveCompany(dbCompany);
+        setActiveCompany(dbCompany as ActiveCompany);
+        window.dispatchEvent(new CustomEvent("active-company-changed"));
+      } else if (localCompany) {
+        setActiveCompany(localCompany);
+        syncDbActiveCompany(localCompany).catch(() => {});
+      }
 
       if (!data.success) return;
 
       setCompanies(data.companies || []);
 
-      const saved = localStorage.getItem("activeCompany");
-
-      if (!saved && data.companies?.length > 0) {
+      if (!dbCompany && !localCompany && data.companies?.length > 0) {
         const firstSender =
           data.companies.find((company: ActiveCompany) => company.canSendInvoices) ||
           data.companies[0];
 
-        localStorage.setItem("activeCompany", JSON.stringify(firstSender));
+        storeActiveCompany(firstSender);
         setActiveCompany(firstSender);
+        window.dispatchEvent(new CustomEvent("active-company-changed"));
+        syncDbActiveCompany(firstSender).catch(() => {});
       }
     } finally {
       setLoading(false);
@@ -48,27 +68,28 @@ export default function CompanySelector() {
   }
 
   useEffect(() => {
-    const saved = localStorage.getItem("activeCompany");
+    const saved = getStoredActiveCompany() as ActiveCompany | null;
 
     queueMicrotask(() => {
       if (saved) {
-        setActiveCompany(JSON.parse(saved));
+        setActiveCompany(saved);
       }
 
       loadCompanies();
     });
   }, []);
 
-  function selectCompany(value: string) {
+  async function selectCompany(value: string) {
     const selected = companies.find(
       (company) => `${company.taxId}-${company.locationId}` === value
     );
 
     if (!selected) return;
 
-    localStorage.setItem("activeCompany", JSON.stringify(selected));
+    storeActiveCompany(selected);
     window.dispatchEvent(new CustomEvent("active-company-changed"));
     setActiveCompany(selected);
+    syncDbActiveCompany(selected).catch(() => {});
   }
 
   return (

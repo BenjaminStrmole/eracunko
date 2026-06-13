@@ -2,6 +2,7 @@
 
 import { Download, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import type { Invoice, Party } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
@@ -102,7 +103,7 @@ export default function InvoiceXmlPage() {
   const [xmlReadyToastKey, setXmlReadyToastKey] = useState("");
 
   useEffect(() => {
-    const load = () => {
+    const load = async () => {
       const saved = localStorage.getItem("eracunko_current_invoice");
 
       if (!saved) {
@@ -111,9 +112,7 @@ export default function InvoiceXmlPage() {
       }
 
       setInvoice(safeJsonParse<Invoice | null>(saved, null));
-      setActiveCompany(
-        safeJsonParse<SenderCompany | null>(localStorage.getItem("activeCompany"), null)
-      );
+      setActiveCompany((await loadActiveCompanyWithFallback()) as SenderCompany | null);
     };
 
     queueMicrotask(load);
