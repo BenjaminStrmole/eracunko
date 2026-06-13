@@ -4,6 +4,9 @@ import { RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
+import PaginationControls from "../components/PaginationControls";
+
+const PAGE_SIZE = 25;
 
 type DocumentParam = {
   parameterName?: string;
@@ -144,6 +147,7 @@ export default function AcknowledgementsPage() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [scanLimit, setScanLimit] = useState(25);
   const [enrichedCount, setEnrichedCount] = useState(0);
+  const [page, setPage] = useState(1);
 
   async function loadDocuments(limit = scanLimit) {
     setLoading(true);
@@ -214,12 +218,21 @@ export default function AcknowledgementsPage() {
     [allAcknowledgements]
   );
 
-  const displayedAcknowledgements = useMemo(() => {
+  const filteredAcknowledgements = useMemo(() => {
     const source =
       filter === "error" ? errorAcknowledgements : allAcknowledgements;
 
     return source.slice(0, scanLimit);
   }, [allAcknowledgements, errorAcknowledgements, filter, scanLimit]);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAcknowledgements.length / PAGE_SIZE)
+  );
+  const currentPage = Math.min(page, totalPages);
+  const displayedAcknowledgements = filteredAcknowledgements.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   return (
     <AppShell>
@@ -240,6 +253,7 @@ export default function AcknowledgementsPage() {
                 onChange={(event) => {
                   const value = Number(event.target.value);
                   setScanLimit(value);
+                  setPage(1);
                   loadDocuments(value);
                 }}
                 className="field-input h-12 w-44 text-sm"
@@ -265,7 +279,10 @@ export default function AcknowledgementsPage() {
 
           <div className="mt-8 flex gap-3">
             <button
-              onClick={() => setFilter("all")}
+              onClick={() => {
+                setFilter("all");
+                setPage(1);
+              }}
               className={`rounded-full px-5 py-2 text-sm font-semibold ${
                 filter === "all"
                   ? "bg-[var(--app-primary)] text-white"
@@ -276,7 +293,10 @@ export default function AcknowledgementsPage() {
             </button>
 
             <button
-              onClick={() => setFilter("error")}
+              onClick={() => {
+                setFilter("error");
+                setPage(1);
+              }}
               className={`rounded-full px-5 py-2 text-sm font-semibold ${
                 filter === "error"
                   ? "bg-red-600 text-white"
@@ -294,76 +314,90 @@ export default function AcknowledgementsPage() {
           )}
 
           <div className="solid-panel mt-8 overflow-hidden rounded-[1.75rem]">
-            <div className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
-              <div>Dokument</div>
-              <div>Vrsta</div>
-              <div>Ref. sporočilo</div>
-              <div>Status</div>
-              <div>Datum</div>
-              <div>Akcija</div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[980px]">
+                <div className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
+                  <div>Dokument</div>
+                  <div>Vrsta</div>
+                  <div>Ref. sporočilo</div>
+                  <div>Status</div>
+                  <div>Datum</div>
+                  <div>Akcija</div>
+                </div>
+
+                {loading && (
+                  <div className="app-muted px-6 py-8">
+                    Nalagam povratnice in metadata ...
+                  </div>
+                )}
+
+                {!loading && displayedAcknowledgements.length === 0 && !error && (
+                  <div className="app-muted px-6 py-8">
+                    {filter === "error"
+                      ? "Ni povratnic z napako med trenutno pregledanimi rezultati."
+                      : "Ni povratnic za izbrano podjetje."}
+                  </div>
+                )}
+
+                {!loading &&
+                  displayedAcknowledgements.map((doc) => {
+                    const confirmationType = getConfirmationType(doc);
+                    const refMsgId =
+                      doc.acknowledgement?.refMsgId ||
+                      getParam(doc, "RefMsgId") ||
+                      "-";
+                    const issueDate =
+                      doc.acknowledgement?.issueDate ||
+                      getParam(doc, "DatumIzdaje") ||
+                      doc.date;
+                    const roleType =
+                      doc.acknowledgement?.roleType ||
+                      getParam(doc, "DOC_ROLE_TYPE") ||
+                      doc.metadata?.type ||
+                      doc.type;
+                    const description = getDescription(doc);
+
+                    return (
+                      <Link
+                        key={doc.id}
+                        href={`/inbox/${doc.id}`}
+                        className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 last:border-b-0 hover:bg-[var(--app-soft)]"
+                      >
+                        <div className="font-medium">{getTitle(doc)}</div>
+                        <div className="app-muted">{roleType}</div>
+                        <div className="app-muted">{refMsgId}</div>
+                        <div>
+                          <span
+                            className={`rounded-full px-3 py-1 text-sm font-semibold ${getBadgeStyle(
+                              confirmationType
+                            )}`}
+                          >
+                            {confirmationType}
+                          </span>
+
+                          {description && isErrorAck(doc) && (
+                            <div className="mt-2 max-w-xs truncate text-xs text-red-500">
+                              {cleanErrorText(description)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="app-muted">{issueDate}</div>
+                        <div className="text-[var(--app-primary-strong)]">Odpri →</div>
+                      </Link>
+                    );
+                  })}
+              </div>
             </div>
 
-            {loading && (
-              <div className="app-muted px-6 py-8">
-                Nalagam povratnice in metadata ...
-              </div>
+            {!loading && filteredAcknowledgements.length > 0 && (
+              <PaginationControls
+                page={currentPage}
+                totalPages={totalPages}
+                pageSize={PAGE_SIZE}
+                totalItems={filteredAcknowledgements.length}
+                onPageChange={setPage}
+              />
             )}
-
-            {!loading && displayedAcknowledgements.length === 0 && !error && (
-              <div className="app-muted px-6 py-8">
-                {filter === "error"
-                  ? "Ni povratnic z napako med trenutno pregledanimi rezultati."
-                  : "Ni povratnic za izbrano podjetje."}
-              </div>
-            )}
-
-            {!loading &&
-              displayedAcknowledgements.map((doc) => {
-                const confirmationType = getConfirmationType(doc);
-                const refMsgId =
-                  doc.acknowledgement?.refMsgId ||
-                  getParam(doc, "RefMsgId") ||
-                  "-";
-                const issueDate =
-                  doc.acknowledgement?.issueDate ||
-                  getParam(doc, "DatumIzdaje") ||
-                  doc.date;
-                const roleType =
-                  doc.acknowledgement?.roleType ||
-                  getParam(doc, "DOC_ROLE_TYPE") ||
-                  doc.metadata?.type ||
-                  doc.type;
-                const description = getDescription(doc);
-
-                return (
-                  <Link
-                    key={doc.id}
-                    href={`/inbox/${doc.id}`}
-                    className="grid grid-cols-6 border-b border-[var(--app-border)] px-6 py-4 last:border-b-0 hover:bg-[var(--app-soft)]"
-                  >
-                    <div className="font-medium">{getTitle(doc)}</div>
-                    <div className="app-muted">{roleType}</div>
-                    <div className="app-muted">{refMsgId}</div>
-                    <div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-sm font-semibold ${getBadgeStyle(
-                          confirmationType
-                        )}`}
-                      >
-                        {confirmationType}
-                      </span>
-
-                      {description && isErrorAck(doc) && (
-                        <div className="mt-2 max-w-xs truncate text-xs text-red-500">
-                          {cleanErrorText(description)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="app-muted">{issueDate}</div>
-                    <div className="text-[var(--app-primary-strong)]">Odpri →</div>
-                  </Link>
-                );
-              })}
           </div>
 
           <div className="app-muted mt-4 text-sm">

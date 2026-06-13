@@ -1,17 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Download, RefreshCw } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import errorPatterns from "../../../povratnice_folder_view.json";
+import AppShell from "../../components/AppShell";
 
 type ErrorPattern = {
   pattern: string;
   response: string;
 };
 
-function getParam(metadata: any, name: string) {
+type MetadataParam = {
+  parameterName?: string;
+  parameterValue?: string;
+};
+
+type DocumentMetadata = {
+  organization?: string;
+  title?: string;
+  type?: string;
+  classificationName?: string;
+  parameters?: {
+    param?: MetadataParam[];
+  };
+};
+
+function getParam(metadata: DocumentMetadata | null, name: string) {
   const params = metadata?.parameters?.param || [];
-  const found = params.find((item: any) => item.parameterName === name);
+  const found = params.find((item) => item.parameterName === name);
   return found?.parameterValue || "";
 }
 
@@ -48,7 +66,7 @@ function findErrorExplanation(errorText: string) {
   return "";
 }
 
-function isAcknowledgement(metadata: any) {
+function isAcknowledgement(metadata: DocumentMetadata) {
   const actualType = getParam(metadata, "ACTUAL_TYPE");
   const roleType = getParam(metadata, "DOC_ROLE_TYPE");
   const classification = metadata?.classificationName || "";
@@ -61,7 +79,7 @@ function isAcknowledgement(metadata: any) {
   );
 }
 
-function isOutgoingDocument(metadata: any) {
+function isOutgoingDocument(metadata: DocumentMetadata) {
   const docRole = getParam(metadata, "DOC_ROLE");
   const roleType = getParam(metadata, "DOC_ROLE_TYPE");
   const classification = metadata?.classificationName || "";
@@ -75,7 +93,7 @@ function isOutgoingDocument(metadata: any) {
   );
 }
 
-function isErrorAcknowledgement(metadata: any) {
+function isErrorAcknowledgement(metadata: DocumentMetadata) {
   const confirmation = (getParam(metadata, "VrstaPotrditve") || "").toLowerCase();
   const title = String(metadata?.title || "").toLowerCase();
   const description = (getParam(metadata, "Opis") || "").toLowerCase();
@@ -106,11 +124,11 @@ export default function InboxDocumentPage() {
   const params = useParams();
   const id = String(params.id);
 
-  const [metadata, setMetadata] = useState<any>(null);
+  const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function loadMetadata() {
+  const loadMetadata = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -128,17 +146,21 @@ export default function InboxDocumentPage() {
         return;
       }
 
-      setMetadata(data.metadata);
-    } catch (err: any) {
-      setError(err.message || "Napaka pri pridobivanju metadata.");
+      setMetadata(data.metadata as DocumentMetadata);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Napaka pri pridobivanju metadata."
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
-    loadMetadata();
-  }, [id]);
+    queueMicrotask(() => {
+      loadMetadata();
+    });
+  }, [loadMetadata]);
 
   const documentInfo = useMemo(() => {
     if (!metadata) return null;
@@ -197,61 +219,46 @@ export default function InboxDocumentPage() {
     ? "Poslani dokument"
     : "Prejeti dokument";
 
-  const activeNavClass = "block rounded-lg bg-blue-600/20 px-4 py-3 text-blue-200";
-  const navClass = "block rounded-lg px-4 py-3 hover:bg-slate-800";
-
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-800 bg-slate-900 p-6">
-          <div className="mb-10">
-            <h1 className="text-2xl font-bold">eRačunko</h1>
-            <p className="text-sm text-slate-400">e-računi brez komplikacij</p>
-          </div>
-
-          <nav className="space-y-2">
-            <a href="/dashboard" className={navClass}>🏠 Domov</a>
-            <a href="/inbox" className={documentInfo?.isIncoming && !documentInfo?.isAcknowledgement ? activeNavClass : navClass}>📥 Prejeti računi</a>
-            <a href="/acknowledgments" className={documentInfo?.isAcknowledgement ? activeNavClass : navClass}>📨 Povratnice</a>
-            <a href="/sent" className={documentInfo?.isOutgoing && !documentInfo?.isAcknowledgement ? activeNavClass : navClass}>📤 Poslani računi</a>
-            <a href="/drafts" className={navClass}>📝 Osnutki</a>
-            <a href="/invoices/new" className={navClass}>🧾 Nov račun</a>
-            <a href="/customers" className={navClass}>👥 Moje stranke</a>
-            <a href="/settings" className={navClass}>⚙️ Nastavitve</a>
-          </nav>
-        </aside>
-
-        <section className="flex-1 p-10">
-          <div className="flex items-start justify-between">
+    <AppShell>
+          <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <a href={backHref} className="text-sm text-blue-300 hover:text-blue-200">
-                ← Nazaj
-              </a>
+              <Link
+                href={backHref}
+                className="text-sm font-semibold text-[var(--app-primary-strong)]"
+              >
+                Nazaj
+              </Link>
+              <div className="status-pill mt-5 mb-4 inline-flex">
+                Detajl dokumenta
+              </div>
+              <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+                {pageTitle}
+              </h1>
 
-              <h2 className="mt-4 text-4xl font-bold">{pageTitle}</h2>
-
-              <p className="mt-2 text-slate-400">
+              <p className="app-muted mt-3 max-w-2xl">
                 Dokument ID:{" "}
-                <span className="font-semibold text-slate-200">{id}</span>
+                <span className="font-semibold text-[var(--foreground)]">{id}</span>
               </p>
             </div>
 
-            <a
+            <Link
               href={`/api/bizbox/document/${id}`}
-              className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500"
+              className="primary-button h-12 px-6"
             >
+              <Download className="h-4 w-4" aria-hidden="true" />
               Prenesi ZIP
-            </a>
+            </Link>
           </div>
 
           {loading && (
-            <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-400">
+            <div className="solid-panel rounded-[1.75rem] p-6 app-muted">
               Nalagam podatke dokumenta ...
             </div>
           )}
 
           {error && (
-            <div className="mt-8 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-200">
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-500">
               {error}
             </div>
           )}
@@ -259,32 +266,32 @@ export default function InboxDocumentPage() {
           {!loading && metadata && documentInfo && (
             <>
               {documentInfo.isErrorAck && documentInfo.errorDescription && (
-                <div className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
-                  <div className="text-sm font-semibold text-red-300">
+                <div className="rounded-[1.75rem] border border-red-500/30 bg-red-500/10 p-6">
+                  <div className="text-sm font-semibold text-red-500">
                     Opis napake
                   </div>
 
-                  <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-950/60 p-4 text-sm text-red-100">
+                  <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 text-sm text-red-100">
                     {documentInfo.errorDescription}
                   </pre>
                 </div>
               )}
 
               {documentInfo.isErrorAck && (
-                <div className="mt-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-6">
-                  <div className="text-sm font-semibold text-blue-200">
+                <div className="mt-6 rounded-[1.75rem] border border-[var(--app-primary)]/30 bg-[var(--app-soft)] p-6">
+                  <div className="text-sm font-semibold text-[var(--app-primary-strong)]">
                     Razlaga napake
                   </div>
 
                   {documentInfo.errorExplanation ? (
                     <div
-                      className="mt-3 rounded-xl bg-slate-950/60 p-4 text-sm leading-6 text-blue-100"
+                      className="app-muted mt-3 rounded-2xl bg-[var(--app-surface)] p-4 text-sm leading-6"
                       dangerouslySetInnerHTML={{
                         __html: documentInfo.errorExplanation,
                       }}
                     />
                   ) : (
-                    <div className="mt-3 rounded-xl bg-slate-950/60 p-4 text-sm text-slate-300">
+                    <div className="app-muted mt-3 rounded-2xl bg-[var(--app-surface)] p-4 text-sm">
                       Za to napako še ni pripravljene razlage v bazi povratnic.
                     </div>
                   )}
@@ -292,23 +299,23 @@ export default function InboxDocumentPage() {
               )}
 
               <div className="mt-8 grid gap-6 lg:grid-cols-3">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:col-span-2">
+                <div className="solid-panel rounded-[1.75rem] p-6 lg:col-span-2">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-sm text-slate-400">Tip dokumenta</div>
+                      <div className="app-muted text-sm">Tip dokumenta</div>
 
-                      <h3 className="mt-1 text-3xl font-bold">
+                      <h2 className="mt-1 text-3xl font-semibold">
                         {documentInfo.type}
-                      </h3>
+                      </h2>
 
-                      <p className="mt-2 text-slate-400">
+                      <p className="app-muted mt-2">
                         {documentInfo.title}
                       </p>
                     </div>
 
                     {documentInfo.isAcknowledgement ? (
-                      <div className="rounded-2xl border border-slate-800 bg-slate-950 px-5 py-4 text-right">
-                        <div className="text-sm text-slate-400">Status povratnice</div>
+                      <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] px-5 py-4 text-right">
+                        <div className="app-muted text-sm">Status povratnice</div>
                         <div
                           className={`mt-2 inline-block rounded-full px-4 py-2 text-sm font-semibold ${getBadgeStyle(
                             documentInfo.confirmationType
@@ -318,11 +325,11 @@ export default function InboxDocumentPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-green-500/20 bg-green-500/10 px-5 py-4 text-right">
-                        <div className="text-sm text-green-300">
+                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-4 text-right">
+                        <div className="text-sm text-emerald-500">
                           Znesek za plačilo
                         </div>
-                        <div className="mt-1 text-2xl font-bold text-green-200">
+                        <div className="mt-1 text-2xl font-semibold text-emerald-500">
                           {documentInfo.amount}
                         </div>
                       </div>
@@ -358,33 +365,35 @@ export default function InboxDocumentPage() {
                   )}
                 </div>
 
-                <aside className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                  <h3 className="text-xl font-bold">Akcije</h3>
+                <aside className="glass-panel rounded-[1.75rem] p-6">
+                  <h2 className="text-xl font-semibold">Akcije</h2>
 
                   <div className="mt-6 space-y-3">
-                    <a
+                    <Link
                       href={`/api/bizbox/document/${id}`}
-                      className="block rounded-lg bg-blue-600 px-5 py-3 text-center font-semibold hover:bg-blue-500"
+                      className="primary-button h-12 w-full px-5"
                     >
+                      <Download className="h-4 w-4" aria-hidden="true" />
                       Prenesi originalni ZIP
-                    </a>
+                    </Link>
 
                     <button
                       onClick={loadMetadata}
-                      className="w-full rounded-lg border border-white/15 px-5 py-3 font-semibold hover:bg-white/10"
+                      className="secondary-button h-12 w-full px-5"
                     >
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
                       Osveži metadata
                     </button>
                   </div>
 
-                  <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm">
+                  <div className="mt-6 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Sprejeto</span>
+                      <span className="app-muted">Sprejeto</span>
                       <span>{documentInfo.accepted}</span>
                     </div>
 
                     <div className="mt-3 flex justify-between gap-4">
-                      <span className="text-slate-500">Čas sprejema</span>
+                      <span className="app-muted">Čas sprejema</span>
                       <span className="text-right">
                         {documentInfo.acceptedTime}
                       </span>
@@ -393,12 +402,12 @@ export default function InboxDocumentPage() {
                 </aside>
               </div>
 
-              <details className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <summary className="cursor-pointer font-semibold text-blue-200">
+              <details className="solid-panel mt-8 rounded-[1.75rem] p-5">
+                <summary className="cursor-pointer font-semibold text-[var(--app-primary-strong)]">
                   Raw metadata
                 </summary>
 
-                <pre className="mt-4 max-h-[500px] overflow-auto rounded-xl bg-slate-950 p-4 text-sm text-slate-300">
+                <pre className="mt-4 max-h-[500px] overflow-auto rounded-2xl bg-slate-950 p-4 text-sm text-slate-200">
                   {typeof metadata === "string"
                     ? metadata
                     : JSON.stringify(metadata, null, 2)}
@@ -406,17 +415,15 @@ export default function InboxDocumentPage() {
               </details>
             </>
           )}
-        </section>
-      </div>
-    </main>
+    </AppShell>
   );
 }
 
-function Info({ label, value }: { label: string; value: any }) {
+function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-1 break-words font-semibold text-slate-200">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+      <div className="app-muted text-sm">{label}</div>
+      <div className="mt-1 break-words font-semibold">
         {value || "-"}
       </div>
     </div>

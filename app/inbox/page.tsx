@@ -4,6 +4,9 @@ import { RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
+import PaginationControls from "../components/PaginationControls";
+
+const PAGE_SIZE = 25;
 
 type RawParam = {
   parameterName?: string;
@@ -59,6 +62,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [raw, setRaw] = useState<unknown>(null);
+  const [page, setPage] = useState(1);
 
   async function loadInbox() {
     setLoading(true);
@@ -107,6 +111,12 @@ export default function InboxPage() {
     () => documents.filter((doc) => !isAcknowledgement(doc)),
     [documents]
   );
+  const totalPages = Math.max(1, Math.ceil(incomingDocuments.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedDocuments = incomingDocuments.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   return (
     <AppShell>
@@ -138,44 +148,58 @@ export default function InboxPage() {
       )}
 
       <section className="solid-panel overflow-hidden rounded-[1.75rem]">
-        <div className="grid grid-cols-5 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
-          <div>Številka</div>
-          <div>Pošiljatelj</div>
-          <div>Tip</div>
-          <div>Status</div>
-          <div>Datum</div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[840px]">
+            <div className="grid grid-cols-5 border-b border-[var(--app-border)] px-6 py-4 text-sm app-muted">
+              <div>Številka</div>
+              <div>Pošiljatelj</div>
+              <div>Tip</div>
+              <div>Status</div>
+              <div>Datum</div>
+            </div>
+
+            {loading && (
+              <div className="app-muted px-6 py-8">
+                Nalagam dokumente iz bizBox ...
+              </div>
+            )}
+
+            {!loading && incomingDocuments.length === 0 && !error && (
+              <div className="app-muted px-6 py-8">
+                Ni prejetih dokumentov ali pa endpoint vrača drugačno strukturo.
+              </div>
+            )}
+
+            {!loading &&
+              pagedDocuments.map((doc) => (
+                <Link
+                  key={doc.id}
+                  href={`/inbox/${doc.id}`}
+                  className="grid grid-cols-5 border-b border-[var(--app-border)] px-6 py-4 last:border-b-0 hover:bg-[var(--app-soft)]"
+                >
+                  <div className="font-medium">{doc.number}</div>
+                  <div className="app-muted">{doc.sender}</div>
+                  <div className="app-muted">{doc.type}</div>
+                  <div>
+                    <span className="rounded-full bg-[var(--app-soft)] px-3 py-1 text-sm font-semibold text-[var(--app-primary-strong)]">
+                      {doc.status}
+                    </span>
+                  </div>
+                  <div className="app-muted">{doc.date}</div>
+                </Link>
+              ))}
+          </div>
         </div>
 
-        {loading && (
-          <div className="app-muted px-6 py-8">
-            Nalagam dokumente iz bizBox ...
-          </div>
+        {!loading && incomingDocuments.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            pageSize={PAGE_SIZE}
+            totalItems={incomingDocuments.length}
+            onPageChange={setPage}
+          />
         )}
-
-        {!loading && incomingDocuments.length === 0 && !error && (
-          <div className="app-muted px-6 py-8">
-            Ni prejetih dokumentov ali pa endpoint vrača drugačno strukturo.
-          </div>
-        )}
-
-        {!loading &&
-          incomingDocuments.map((doc) => (
-            <Link
-              key={doc.id}
-              href={`/inbox/${doc.id}`}
-              className="grid grid-cols-5 border-b border-[var(--app-border)] px-6 py-4 last:border-b-0 hover:bg-[var(--app-soft)]"
-            >
-              <div className="font-medium">{doc.number}</div>
-              <div className="app-muted">{doc.sender}</div>
-              <div className="app-muted">{doc.type}</div>
-              <div>
-                <span className="rounded-full bg-[var(--app-soft)] px-3 py-1 text-sm font-semibold text-[var(--app-primary-strong)]">
-                  {doc.status}
-                </span>
-              </div>
-              <div className="app-muted">{doc.date}</div>
-            </Link>
-          ))}
       </section>
 
       {raw !== null && (

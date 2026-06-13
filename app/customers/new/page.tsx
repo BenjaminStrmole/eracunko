@@ -350,7 +350,7 @@ export default function NewCustomerPage() {
           </div>
 
           {dropdownOpen && (
-            <div className="absolute left-0 right-28 top-14 z-40 overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] shadow-[var(--app-shadow)]">
+            <div className="absolute left-0 right-0 top-14 z-50 max-h-[min(420px,70vh)] overflow-y-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] shadow-[var(--app-shadow)] sm:right-28">
               {suggestionsLoading && (
                 <div className="app-muted flex items-center gap-3 px-4 py-4 text-sm">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--app-border)] border-t-[var(--app-primary)]" />
