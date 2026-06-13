@@ -3,10 +3,13 @@
 import {
   AlertCircle,
   ArrowRight,
+  ChevronRight,
   FileCheck2,
   FileClock,
   Inbox,
+  PlusCircle,
   Send,
+  Upload,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -277,6 +280,7 @@ export function getDashboardStats({
 }
 
 export default function DashboardPage() {
+  const [ackFilter, setAckFilter] = useState<"all" | "success" | "error" | "pending">("all");
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [sentInvoices, setSentInvoices] = useState<LocalInvoice[]>([]);
@@ -376,6 +380,7 @@ export default function DashboardPage() {
   );
 
   const latestAcks = acknowledgements.slice(0, 5);
+  const latestReceived = receivedInvoices.slice(0, 5);
   const stats = useMemo(
     () =>
       getDashboardStats({
@@ -388,29 +393,43 @@ export default function DashboardPage() {
   );
   const latestSent = sentInvoices.slice(-5).reverse();
   const latestDrafts = draftInvoices.slice(0, 5);
+  const filteredAcks = useMemo(() => {
+    if (ackFilter === "error") return acknowledgements.filter(isErrorAck);
+    if (ackFilter === "success") return acknowledgements.filter((doc) => !isErrorAck(doc));
+    if (ackFilter === "pending") {
+      return acknowledgements.filter((doc) => {
+        const text = `${doc.status} ${getParam(doc, "VrstaPotrditve")} ${getParam(doc, "Opis")}`.toLowerCase();
+        return text.includes("čaka") || text.includes("caka") || text.includes("obdelavi") || text.includes("pending");
+      });
+    }
+
+    return acknowledgements;
+  }, [ackFilter, acknowledgements]);
+  const displayedAcks = filteredAcks.slice(0, 5);
 
   return (
     <AppShell>
-      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <div className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="status-pill mb-4 inline-flex">Pregled poslovanja</div>
-          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
-            Domov
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            Pregled poslovanja
           </h1>
-          <p className="app-muted mt-3 max-w-2xl text-base">
-            Ključni statusi e-računov, povratnic, osnutkov in strank za aktivno
-            podjetje.
+          <p className="app-muted mt-2 max-w-2xl text-sm">
+            Operativni pregled e-računov, povratnic, osnutkov in strank za aktivno podjetje.
           </p>
         </div>
 
-        <Link href="/invoices/new" className="primary-button h-12 px-6">
-          Nov račun
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-      </div>
-
-      <div className="mb-8">
-        <CompanySelector />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <CompanySelector />
+          <Link href="/invoices/xml" className="secondary-button h-12 px-5 text-sm">
+            <Upload className="h-4 w-4" aria-hidden="true" />
+            Uvozi XML
+          </Link>
+          <Link href="/invoices/new" className="primary-button h-12 px-6">
+            Nov račun
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
@@ -418,144 +437,247 @@ export default function DashboardPage() {
           href="/inbox"
           label="Prejeti računi"
           value={stats.receivedCount}
+          detail="v aktivnem podjetju"
           icon={Inbox}
+          tone="blue"
         />
         <StatCard
-          href="/acknowledgments"
-          label="Povratnice"
-          value={stats.acknowledgementCount}
-          icon={FileCheck2}
+          href="/sent"
+          label="Poslani računi"
+          value={stats.sentCount}
+          detail={formatMoney(stats.sentTotal)}
+          icon={Send}
+          tone="blue"
         />
-        <StatCard href="/sent" label="Poslani" value={stats.sentCount} icon={Send} />
+        <StatCard
+          href="/sent"
+          label="Čakajo na potrditev"
+          value={stats.pendingSentCount}
+          detail="čakajo na povratnico"
+          icon={FileCheck2}
+          tone="amber"
+        />
+        <StatCard
+          href="/acknowledgments?status=error"
+          label="Napake"
+          value={stats.failedAcknowledgementCount}
+          detail="neuspešne povratnice"
+          icon={AlertCircle}
+          tone="red"
+        />
         <StatCard
           href="/drafts"
           label="Osnutki"
           value={stats.draftCount}
+          detail={formatMoney(stats.draftTotal)}
           icon={FileClock}
+          tone="violet"
         />
         <StatCard
           href="/customers"
           label="Stranke"
           value={stats.customerCount}
+          detail="v šifrantu"
           icon={Users}
-        />
-        <StatCard
-          label="Napake"
-          value={stats.failedAcknowledgementCount}
-          icon={AlertCircle}
-          danger
+          tone="green"
         />
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <MoneyCard
-          label="Vrednost poslanih"
-          value={formatMoney(stats.sentTotal)}
-          detail={`${stats.sentCount} poslanih računov za aktivno podjetje`}
-        />
-        <MoneyCard
-          label="Vrednost osnutkov"
-          value={formatMoney(stats.draftTotal)}
-          detail={`${stats.draftCount} odprtih osnutkov`}
-        />
-        <div className="solid-panel rounded-[1.5rem] p-5">
-          <div className="app-muted text-sm font-medium">Naslednji korak</div>
-          <div className="mt-2 text-lg font-semibold">
-            {draftInvoices.length > 0
-              ? "Dokončaj osnutek računa"
-              : "Ustvari nov eSLOG račun"}
-          </div>
-          <Link href="/invoices/new" className="secondary-button mt-4 h-10 px-4 text-sm">
-            Odpri obrazec
-          </Link>
-        </div>
-      </div>
-
-      <div className="mt-8 grid gap-6 xl:grid-cols-3">
-        <div className="solid-panel rounded-[1.75rem] p-6 xl:col-span-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Zadnje povratnice</h2>
-              <p className="app-muted mt-1 text-sm">
-                Hitri pregled uspešnih in zavrnjenih potrditev.
-              </p>
-            </div>
-            <Link href="/acknowledgments" className="secondary-button h-10 px-4 text-sm">
-              Vse povratnice
-            </Link>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {loading && <div className="app-muted">Nalagam podatke ...</div>}
-
-            {!loading && latestAcks.length === 0 && (
-              <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] p-5 app-muted">
-                Ni povratnic za prikaz.
-              </div>
-            )}
-
-            {latestAcks.map((doc) => {
-              const status = getParam(doc, "VrstaPotrditve") || doc.number;
-              const ref = getParam(doc, "RefMsgId") || "-";
-              const hasError = isErrorAck(doc);
-
-              return (
-                <Link
-                  key={doc.id}
-                  href={`/inbox/${doc.id}`}
-                  className="flex items-center justify-between rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 hover:bg-[var(--app-soft)]"
-                >
-                  <div>
-                    <div className="font-semibold">{status}</div>
-                    <div className="app-muted mt-1 text-sm">RefMsgId: {ref}</div>
-                  </div>
-
-                  <span
-                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                      hasError
-                        ? "bg-red-500/10 text-red-500"
-                        : "bg-emerald-500/10 text-emerald-500"
-                    }`}
-                  >
-                    {hasError ? "Napaka" : "OK"}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        <aside className="glass-panel rounded-[1.75rem] p-6">
-          <h2 className="text-xl font-semibold">Aktivno podjetje</h2>
-          <p className="app-muted mt-1 text-sm">
-            Podatki, ki se uporabijo pri pripravi računov.
-          </p>
-
-          <div className="mt-5 space-y-3 text-sm">
-            <Info label="Naziv" value={activeCompany?.name} />
-            <Info
-              label="Davčna"
-              value={activeCompany?.vatNumber || activeCompany?.taxId}
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          <section className="solid-panel overflow-hidden rounded-[1.5rem]">
+            <PanelHeader
+              title="Zadnja aktivnost"
+              actionHref="/inbox"
+              actionLabel="Poglej vse"
             />
-            <Info label="eLokacija" value={activeCompany?.eLocation} />
-            <Info label="eNaslov" value={activeCompany?.eAddress} />
-          </div>
-        </aside>
-      </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-2">
-        <DocumentListPanel
-          title="Zadnji poslani računi"
-          emptyText="Ni lokalno shranjenih poslanih računov."
-          invoices={latestSent}
-          href="/sent"
-        />
-        <DocumentListPanel
-          title="Zadnji osnutki"
-          emptyText="Ni odprtih osnutkov."
-          invoices={latestDrafts}
-          href="/drafts"
-        />
+            <div className="divide-y divide-[var(--app-border)]">
+              {loading && <div className="app-muted px-5 py-6">Nalagam podatke ...</div>}
+              {!loading && latestReceived.length === 0 && latestSent.length === 0 && latestAcks.length === 0 && (
+                <EmptyState text="Ni zadnje aktivnosti za prikaz." />
+              )}
+              {latestReceived.slice(0, 2).map((doc) => (
+                <ActivityRow
+                  key={`received-${doc.id}`}
+                  href={`/inbox/${doc.id}`}
+                  icon={Inbox}
+                  typeLabel="Prejeti račun"
+                  title={doc.number}
+                  subtitle={doc.sender}
+                  date={doc.date}
+                  status="Prejeto"
+                  tone="blue"
+                />
+              ))}
+              {latestSent.slice(0, 2).map((invoice, index) => (
+                <ActivityRow
+                  key={`sent-${invoice.id || invoice.docId || invoice.number || index}`}
+                  href={invoice.id || invoice.docId ? `/inbox/${invoice.id || invoice.docId}` : "/sent"}
+                  icon={Send}
+                  typeLabel="Poslani račun"
+                  title={invoice.number || "Brez številke"}
+                  subtitle={invoice.receiver || invoice.buyer?.name || "Prejemnik ni vpisan"}
+                  date={invoice.date || invoice.sentAt || "-"}
+                  status={invoice.status || "Poslano"}
+                  tone="green"
+                />
+              ))}
+              {latestAcks.slice(0, 2).map((doc) => {
+                const hasError = isErrorAck(doc);
+
+                return (
+                  <ActivityRow
+                    key={`ack-${doc.id}`}
+                    href={`/inbox/${doc.id}`}
+                    icon={hasError ? AlertCircle : FileCheck2}
+                    typeLabel="Povratnica"
+                    title={doc.number}
+                    subtitle={getParam(doc, "RefMsgId") || getParam(doc, "Opis") || doc.sender}
+                    date={doc.date}
+                    status={hasError ? "Napaka" : "Sprejeto"}
+                    tone={hasError ? "red" : "amber"}
+                  />
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="solid-panel overflow-hidden rounded-[1.5rem]">
+            <PanelHeader title="Povratnice in napake" actionHref="/acknowledgments" actionLabel="Vse povratnice" />
+
+            <div className="border-b border-[var(--app-border)] px-5 pb-4">
+              <div className="flex flex-wrap gap-2">
+                <FilterButton active={ackFilter === "all"} onClick={() => setAckFilter("all")}>
+                  Vse
+                </FilterButton>
+                <FilterButton active={ackFilter === "success"} onClick={() => setAckFilter("success")}>
+                  Uspešne
+                </FilterButton>
+                <FilterButton active={ackFilter === "error"} onClick={() => setAckFilter("error")}>
+                  Napake
+                </FilterButton>
+                <FilterButton active={ackFilter === "pending"} onClick={() => setAckFilter("pending")}>
+                  Čakajoče
+                </FilterButton>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <div className="min-w-[720px]">
+                <div className="grid grid-cols-[1.3fr_0.8fr_0.8fr_1.3fr_0.8fr] gap-3 border-b border-[var(--app-border)] px-5 py-3 text-xs font-semibold app-muted">
+                  <div>Dokument</div>
+                  <div>Tip</div>
+                  <div>Status</div>
+                  <div>Sporočilo</div>
+                  <div>Prejeto</div>
+                </div>
+
+                {loading && <div className="app-muted px-5 py-6">Nalagam povratnice ...</div>}
+                {!loading && displayedAcks.length === 0 && (
+                  <div className="app-muted px-5 py-6">Ni povratnic za izbrani filter.</div>
+                )}
+
+                {displayedAcks.map((doc) => {
+                  const hasError = isErrorAck(doc);
+                  const status = getParam(doc, "VrstaPotrditve") || doc.status || "-";
+                  const message = getParam(doc, "Opis") || getParam(doc, "RefMsgId") || "-";
+
+                  return (
+                    <Link
+                      key={doc.id}
+                      href={`/inbox/${doc.id}`}
+                      className="grid grid-cols-[1.3fr_0.8fr_0.8fr_1.3fr_0.8fr] gap-3 border-b border-[var(--app-border)] px-5 py-4 text-sm last:border-b-0 hover:bg-[var(--app-soft)]"
+                    >
+                      <div className="font-semibold">{doc.number}</div>
+                      <div className="app-muted">{doc.type}</div>
+                      <div>
+                        <StatusBadge tone={hasError ? "red" : "green"}>
+                          {hasError ? "Napaka" : status}
+                        </StatusBadge>
+                      </div>
+                      <div className="app-muted truncate">{message}</div>
+                      <div className="app-muted">{doc.date}</div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside className="space-y-4">
+          <section className="solid-panel rounded-[1.5rem] p-5">
+            <h2 className="text-lg font-semibold">Naslednji korak</h2>
+            <div className={`mt-4 rounded-2xl border p-4 ${
+              stats.failedAcknowledgementCount > 0
+                ? "border-red-500/25 bg-red-500/10"
+                : "border-[var(--app-border)] bg-[var(--app-soft)]"
+            }`}>
+              <div className={stats.failedAcknowledgementCount > 0 ? "text-red-500" : "text-[var(--app-primary-strong)]"}>
+                <AlertCircle className="mb-2 h-4 w-4" aria-hidden="true" />
+                <div className="font-semibold">
+                  {stats.failedAcknowledgementCount > 0
+                    ? `Imaš ${stats.failedAcknowledgementCount} neuspešnih povratnic`
+                    : draftInvoices.length > 0
+                      ? "Nadaljuj odprt osnutek"
+                      : "Ustvari nov eSLOG račun"}
+                </div>
+                <div className="mt-1 text-sm opacity-80">
+                  {stats.failedAcknowledgementCount > 0
+                    ? "Preglej in ukrepaj."
+                    : "Pripravi naslednji dokument."}
+                </div>
+              </div>
+              <Link
+                href={stats.failedAcknowledgementCount > 0 ? "/acknowledgments?status=error" : "/invoices/new"}
+                className="primary-button mt-4 h-10 w-full px-4 text-sm"
+              >
+                {stats.failedAcknowledgementCount > 0 ? "Preveri napake" : "Odpri obrazec"}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
+            <div className="mt-4 space-y-2">
+              <NextStepLink href="/drafts" label="Nadaljuj osnutek" count={stats.draftCount} />
+              <NextStepLink href="/invoices/new" label="Ustvari nov eSLOG račun" />
+              <NextStepLink href="/invoices/xml" label="Uvozi XML datoteko" />
+            </div>
+          </section>
+
+          <section className="solid-panel rounded-[1.5rem] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold">Aktivno podjetje</h2>
+              <StatusBadge tone="green">Aktivno</StatusBadge>
+            </div>
+
+            <div className="mt-4 space-y-3 text-sm">
+              <div>
+                <div className="font-semibold">{activeCompany?.name || "-"}</div>
+                <div className="app-muted mt-1">
+                  Davčna št.: {activeCompany?.vatNumber || activeCompany?.taxId || "-"}
+                </div>
+              </div>
+              <Info label="eNaslov" value={activeCompany?.eAddress} />
+              <Info label="eLokacija" value={activeCompany?.eLocation} />
+            </div>
+
+            <Link href="/settings" className="secondary-button mt-4 h-10 w-full px-4 text-sm">
+              Uredi podjetje
+            </Link>
+          </section>
+
+          <section className="solid-panel rounded-[1.5rem] p-5">
+            <h2 className="text-lg font-semibold">Hitre bližnjice</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <QuickLink href="/invoices/new" icon={PlusCircle} label="Nov račun" />
+              <QuickLink href="/inbox" icon={Inbox} label="Prejeti računi" />
+              <QuickLink href="/sent" icon={Send} label="Poslani računi" />
+              <QuickLink href="/acknowledgments?status=error" icon={AlertCircle} label="Napake" danger />
+              <QuickLink href="/drafts" icon={FileClock} label="Osnutki" />
+              <QuickLink href="/customers" icon={Users} label="Stranke" />
+            </div>
+          </section>
+        </aside>
       </div>
     </AppShell>
   );
@@ -565,31 +687,44 @@ function StatCard({
   href,
   label,
   value,
+  detail,
   icon: Icon,
-  danger,
+  tone = "blue",
 }: {
   href?: string;
   label: string;
   value: number;
+  detail?: string;
   icon: React.ElementType;
-  danger?: boolean;
+  tone?: "blue" | "amber" | "red" | "violet" | "green";
 }) {
+  const toneClass = {
+    blue: "bg-blue-500/10 text-[var(--app-primary)]",
+    amber: "bg-amber-500/10 text-amber-500",
+    red: "bg-red-500/10 text-red-500",
+    violet: "bg-violet-500/10 text-violet-500",
+    green: "bg-emerald-500/10 text-emerald-500",
+  }[tone];
+
   const content = (
     <>
       <div
-        className={`mb-5 flex h-11 w-11 items-center justify-center rounded-2xl ${
-          danger ? "bg-red-500/10 text-red-500" : "bg-[var(--app-soft)] text-[var(--app-primary)]"
-        }`}
+        className={`mb-4 flex h-10 w-10 items-center justify-center rounded-2xl ${toneClass}`}
       >
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="app-muted text-sm font-medium">{label}</div>
       <div className="mt-2 text-3xl font-semibold tracking-tight">{value}</div>
+      {detail && <div className="app-muted mt-2 min-h-5 text-xs">{detail}</div>}
+      <div className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-[var(--app-primary-strong)]">
+        Prikaži
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </div>
     </>
   );
 
   const className =
-    "solid-panel block rounded-[1.5rem] p-5 hover:-translate-y-0.5 hover:border-[var(--app-primary)]";
+    "solid-panel block min-h-44 rounded-[1.25rem] p-4 hover:-translate-y-0.5 hover:border-[var(--app-primary)] sm:p-5";
 
   if (!href) return <div className={className}>{content}</div>;
 
@@ -600,78 +735,172 @@ function StatCard({
   );
 }
 
-function MoneyCard({
-  label,
-  value,
-  detail,
+function PanelHeader({
+  title,
+  actionHref,
+  actionLabel,
 }: {
-  label: string;
-  value: string;
-  detail: string;
+  title: string;
+  actionHref: string;
+  actionLabel: string;
 }) {
   return (
-    <div className="solid-panel rounded-[1.5rem] p-5">
-      <div className="app-muted text-sm font-medium">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
-      <div className="app-muted mt-2 text-sm">{detail}</div>
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--app-border)] px-5 py-4">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <Link href={actionHref} className="text-xs font-semibold text-[var(--app-primary-strong)]">
+        {actionLabel}
+      </Link>
     </div>
   );
 }
 
-function DocumentListPanel({
-  title,
-  emptyText,
-  invoices,
+function ActivityRow({
   href,
+  icon: Icon,
+  typeLabel,
+  title,
+  subtitle,
+  date,
+  status,
+  tone,
 }: {
-  title: string;
-  emptyText: string;
-  invoices: LocalInvoice[];
   href: string;
+  icon: React.ElementType;
+  typeLabel: string;
+  title: string;
+  subtitle?: string;
+  date?: string;
+  status: string;
+  tone: "blue" | "green" | "amber" | "red";
+}) {
+  const iconClass = {
+    blue: "bg-blue-500/10 text-[var(--app-primary)]",
+    green: "bg-emerald-500/10 text-emerald-500",
+    amber: "bg-amber-500/10 text-amber-500",
+    red: "bg-red-500/10 text-red-500",
+  }[tone];
+
+  return (
+    <Link href={href} className="grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-4 hover:bg-[var(--app-soft)]">
+      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${iconClass}`}>
+        <Icon className="h-4.5 w-4.5" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <StatusBadge tone={tone}>{typeLabel}</StatusBadge>
+        <div className="mt-1 truncate font-semibold">{title}</div>
+        <div className="app-muted mt-1 truncate text-sm">{subtitle || "-"}</div>
+      </div>
+      <div className="text-right text-xs">
+        <div className="app-muted">{date || "-"}</div>
+        <div className="mt-2">
+          <StatusBadge tone={tone}>{status}</StatusBadge>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function FilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <section className="solid-panel rounded-[1.75rem] p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <Link href={href} className="secondary-button h-10 px-4 text-sm">
-          Odpri
-        </Link>
-      </div>
-
-      <div className="mt-5 space-y-3">
-        {invoices.length === 0 && (
-          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] p-5 app-muted">
-            {emptyText}
-          </div>
-        )}
-
-        {invoices.map((invoice, index) => (
-          <div
-            key={`${invoice.number || "invoice"}-${index}`}
-            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="font-semibold">{invoice.number || "Brez številke"}</div>
-                <div className="app-muted mt-1 text-sm">
-                  {invoice.buyer?.name || "Kupec ni vpisan"}
-                </div>
-              </div>
-              <div className="text-right font-semibold">
-                {formatMoney(invoice.totals?.gross || invoice.totals?.payable || 0)}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+    <button
+      onClick={onClick}
+      className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+        active
+          ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
+          : "border-[var(--app-border)] app-muted hover:bg-[var(--app-soft)]"
+      }`}
+    >
+      {children}
+    </button>
   );
+}
+
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: "blue" | "green" | "amber" | "red";
+  children: React.ReactNode;
+}) {
+  const className = {
+    blue: "bg-blue-500/10 text-[var(--app-primary-strong)]",
+    green: "bg-emerald-500/10 text-emerald-500",
+    amber: "bg-amber-500/10 text-amber-500",
+    red: "bg-red-500/10 text-red-500",
+  }[tone];
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function NextStepLink({
+  href,
+  label,
+  count,
+}: {
+  href: string;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <Link href={href} className="flex items-center justify-between rounded-xl px-2 py-2 text-sm hover:bg-[var(--app-soft)]">
+      <span className="font-medium">{label}</span>
+      <span className="flex items-center gap-2 app-muted">
+        {typeof count === "number" && (
+          <span className="rounded-full bg-[var(--app-soft)] px-2 py-0.5 text-xs font-semibold">
+            {count}
+          </span>
+        )}
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </span>
+    </Link>
+  );
+}
+
+function QuickLink({
+  href,
+  icon: Icon,
+  label,
+  danger,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  danger?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-16 items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-3 text-xs font-semibold hover:bg-[var(--app-soft)]"
+    >
+      <Icon
+        className={`h-4 w-4 shrink-0 ${danger ? "text-red-500" : "text-[var(--app-primary)]"}`}
+        aria-hidden="true"
+      />
+      <span>{label}</span>
+    </Link>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="app-muted px-5 py-6 text-sm">{text}</div>;
 }
 
 function Info({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-      <div className="app-muted">{label}</div>
+    <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3">
+      <div className="app-muted text-xs">{label}</div>
       <div className="mt-1 break-words font-semibold">{value || "-"}</div>
     </div>
   );
