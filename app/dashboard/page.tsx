@@ -25,6 +25,8 @@ type RawDocument = {
   };
   classificationname?: string;
   classificationName?: string;
+  title?: string;
+  type?: string;
 };
 
 type DocumentItem = {
@@ -35,8 +37,15 @@ type DocumentItem = {
   status: string;
   date: string;
   raw?: RawDocument;
+  metadata?: RawDocument;
   parameters?: {
     param?: RawParam[];
+  };
+  acknowledgement?: {
+    confirmationType?: string;
+    description?: string;
+    roleType?: string;
+    isError?: boolean;
   };
 };
 
@@ -50,8 +59,17 @@ type ActiveCompany = {
 
 type LocalInvoice = {
   number?: string;
+  id?: string;
+  docId?: string;
+  receiver?: string;
+  amount?: string;
+  date?: string;
   buyer?: {
     name?: string;
+  };
+  seller?: {
+    vat?: string;
+    taxId?: string;
   };
   totals?: {
     net?: number;
@@ -62,6 +80,18 @@ type LocalInvoice = {
   createdAt?: string;
   sentAt?: string;
   status?: string;
+};
+
+type DashboardStats = {
+  receivedCount: number;
+  sentCount: number;
+  acknowledgementCount: number;
+  failedAcknowledgementCount: number;
+  pendingSentCount: number;
+  draftCount: number;
+  customerCount: number;
+  sentTotal: number;
+  draftTotal: number;
 };
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {
@@ -82,28 +112,168 @@ function formatMoney(value: number) {
 }
 
 function getParam(item: DocumentItem, name: string) {
-  const params = item.raw?.parameters?.param || item.parameters?.param || [];
+  const params =
+    item.metadata?.parameters?.param ||
+    item.raw?.parameters?.param ||
+    item.parameters?.param ||
+    [];
   const found = params.find((param) => param.parameterName === name);
   return found?.parameterValue || "";
 }
 
 function isAcknowledgement(item: DocumentItem) {
   const actualType = getParam(item, "ACTUAL_TYPE");
-  const roleType = getParam(item, "DOC_ROLE_TYPE");
+  const roleType = item.acknowledgement?.roleType || getParam(item, "DOC_ROLE_TYPE");
   const classification =
-    item.raw?.classificationname || item.raw?.classificationName || "";
+    item.metadata?.classificationname ||
+    item.metadata?.classificationName ||
+    item.raw?.classificationname ||
+    item.raw?.classificationName ||
+    "";
 
   return (
     item.type === "Povratnica" ||
+    item.metadata?.type === "Povratnica" ||
     actualType === "IFTMAN" ||
     roleType.toLowerCase().includes("povratnica") ||
     classification.toLowerCase().includes("iftman")
   );
 }
 
+function documentSearchText(item: DocumentItem) {
+  return [
+    item.number,
+    item.type,
+    item.status,
+    item.raw?.title,
+    item.raw?.type,
+    item.metadata?.title,
+    item.metadata?.type,
+    item.acknowledgement?.confirmationType,
+    item.acknowledgement?.description,
+    item.acknowledgement?.roleType,
+    getParam(item, "VrstaPotrditve"),
+    getParam(item, "Opis"),
+    getParam(item, "DOC_ROLE_TYPE"),
+    getParam(item, "Status"),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function isFailedAcknowledgement(item: DocumentItem) {
+  if (item.acknowledgement?.isError) return true;
+
+  const confirmation = String(
+    item.acknowledgement?.confirmationType || getParam(item, "VrstaPotrditve") || ""
+  ).toLowerCase();
+  const text = documentSearchText(item);
+
+  return (
+    confirmation.startsWith("27") ||
+    confirmation.includes("-99") ||
+    text.includes("-99") ||
+    text.includes("zavrnj") ||
+    text.includes("reject") ||
+    text.includes("failed") ||
+    text.includes("failure") ||
+    text.includes("error") ||
+    text.includes("napaka") ||
+    text.includes("neuspe") ||
+    text.includes("ni usp") ||
+    text.includes("nedostav") ||
+    (text.includes("dostav") && text.includes("napak")) ||
+    (text.includes("fiskal") && text.includes("napak")) ||
+    (text.includes("fiscal") && (text.includes("fail") || text.includes("error"))) ||
+    (text.includes("report") && (text.includes("fail") || text.includes("error"))) ||
+    (text.includes("poroč") && text.includes("napak"))
+  );
+}
+
 function isErrorAck(item: DocumentItem) {
-  const confirmation = (getParam(item, "VrstaPotrditve") || "").toLowerCase();
-  return confirmation.startsWith("27") || confirmation.includes("-99");
+  return isFailedAcknowledgement(item);
+}
+
+function normalizeTaxId(value?: string | null) {
+  return String(value || "").replace(/\s/g, "").toUpperCase();
+}
+
+function invoiceMatchesActiveCompany(
+  invoice: LocalInvoice,
+  activeCompany: ActiveCompany | null
+) {
+  if (!activeCompany) return false;
+
+  const companyTaxId = normalizeTaxId(activeCompany.vatNumber || activeCompany.taxId);
+  const invoiceTaxId = normalizeTaxId(invoice.seller?.vat || invoice.seller?.taxId);
+
+  if (!invoiceTaxId) return true;
+  return invoiceTaxId === companyTaxId;
+}
+
+function mergeUniqueInvoices(
+  localInvoices: LocalInvoice[],
+  remoteInvoices: LocalInvoice[]
+) {
+  return [...localInvoices, ...remoteInvoices].filter((invoice, index, array) => {
+    const key = invoice.id || invoice.docId || invoice.number;
+    return array.findIndex((item) => (item.id || item.docId || item.number) === key) === index;
+  });
+}
+
+export function countFailedAcknowledgements(acknowledgements: DocumentItem[]) {
+  return acknowledgements.filter(isFailedAcknowledgement).length;
+}
+
+export function countPendingSentInvoices(invoices: LocalInvoice[]) {
+  return invoices.filter((invoice) => {
+    const text = String(invoice.status || "").toLowerCase();
+    return (
+      text.includes("pending") ||
+      text.includes("čaka") ||
+      text.includes("caka") ||
+      text.includes("v obdelavi") ||
+      text.includes("processing") ||
+      text.includes("poslano") ||
+      text.includes("sent")
+    );
+  }).length;
+}
+
+export function getDashboardStats({
+  documents,
+  sentInvoices,
+  draftInvoices,
+  customerCount,
+}: {
+  documents: DocumentItem[];
+  sentInvoices: LocalInvoice[];
+  draftInvoices: LocalInvoice[];
+  customerCount: number;
+}): DashboardStats {
+  const receivedInvoices = documents.filter((doc) => !isAcknowledgement(doc));
+  const acknowledgements = documents.filter(isAcknowledgement);
+  const sentTotal = sentInvoices.reduce(
+    (sum, invoice) => sum + (invoice.totals?.gross || invoice.totals?.payable || 0),
+    0
+  );
+  const draftTotal = draftInvoices.reduce(
+    (sum, invoice) => sum + (invoice.totals?.gross || invoice.totals?.payable || 0),
+    0
+  );
+
+  return {
+    receivedCount: receivedInvoices.length,
+    sentCount: sentInvoices.length,
+    acknowledgementCount: acknowledgements.length,
+    failedAcknowledgementCount: countFailedAcknowledgements(acknowledgements),
+    pendingSentCount: countPendingSentInvoices(sentInvoices),
+    draftCount: draftInvoices.length,
+    customerCount,
+    sentTotal,
+    draftTotal,
+  };
 }
 
 export default function DashboardPage() {
@@ -111,8 +281,6 @@ export default function DashboardPage() {
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [sentInvoices, setSentInvoices] = useState<LocalInvoice[]>([]);
   const [draftInvoices, setDraftInvoices] = useState<LocalInvoice[]>([]);
-  const [sentCount, setSentCount] = useState(0);
-  const [draftCount, setDraftCount] = useState(0);
   const [customerCount, setCustomerCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -122,8 +290,8 @@ export default function DashboardPage() {
     const company = JSON.parse(
       localStorage.getItem("activeCompany") || "null"
     ) as ActiveCompany | null;
-    const sent = safeJsonParse<LocalInvoice[]>(localStorage.getItem("sent"), []);
-    const drafts = safeJsonParse<LocalInvoice[]>(
+    const localSent = safeJsonParse<LocalInvoice[]>(localStorage.getItem("sent"), []);
+    const localDrafts = safeJsonParse<LocalInvoice[]>(
       localStorage.getItem("drafts"),
       []
     );
@@ -132,23 +300,48 @@ export default function DashboardPage() {
       []
     );
 
+    const companySent = localSent.filter((invoice) =>
+      invoiceMatchesActiveCompany(invoice, company)
+    );
+    const companyDrafts = localDrafts.filter((invoice) =>
+      invoiceMatchesActiveCompany(invoice, company)
+    );
+
     setActiveCompany(company);
-    setSentInvoices(sent);
-    setDraftInvoices(drafts);
-    setSentCount(sent.length);
-    setDraftCount(drafts.length);
+    setSentInvoices(companySent);
+    setDraftInvoices(companyDrafts);
     setCustomerCount(customers.length);
 
     try {
       const taxNumber = company?.vatNumber || company?.taxId || "";
-      const response = await fetch(
-        `/api/bizbox/inbox?taxNumber=${encodeURIComponent(taxNumber)}`,
-        { cache: "no-store" }
-      );
-      const data = await response.json();
+      const [inboxResponse, sentResponse] = await Promise.all([
+        fetch(
+          `/api/bizbox/inbox?taxNumber=${encodeURIComponent(
+            taxNumber
+          )}&includeMetadata=true&limit=300`,
+          { cache: "no-store" }
+        ),
+        fetch(
+          `/api/bizbox/sent?taxNumber=${encodeURIComponent(taxNumber)}&limit=150`,
+          { cache: "no-store" }
+        ),
+      ]);
 
-      if (data.success) {
-        setDocuments(data.documents || []);
+      const [inboxData, sentData] = await Promise.all([
+        inboxResponse.json(),
+        sentResponse.json(),
+      ]);
+
+      if (inboxData.success) {
+        setDocuments(inboxData.documents || []);
+      } else {
+        setDocuments([]);
+      }
+
+      if (sentData.success) {
+        setSentInvoices(
+          mergeUniqueInvoices(companySent, sentData.documents || [])
+        );
       }
     } finally {
       setLoading(false);
@@ -183,13 +376,15 @@ export default function DashboardPage() {
   );
 
   const latestAcks = acknowledgements.slice(0, 5);
-  const sentTotal = sentInvoices.reduce(
-    (sum, invoice) => sum + (invoice.totals?.gross || invoice.totals?.payable || 0),
-    0
-  );
-  const draftTotal = draftInvoices.reduce(
-    (sum, invoice) => sum + (invoice.totals?.gross || invoice.totals?.payable || 0),
-    0
+  const stats = useMemo(
+    () =>
+      getDashboardStats({
+        documents,
+        sentInvoices,
+        draftInvoices,
+        customerCount,
+      }),
+    [customerCount, documents, draftInvoices, sentInvoices]
   );
   const latestSent = sentInvoices.slice(-5).reverse();
   const latestDrafts = draftInvoices.slice(0, 5);
@@ -222,31 +417,31 @@ export default function DashboardPage() {
         <StatCard
           href="/inbox"
           label="Prejeti računi"
-          value={receivedInvoices.length}
+          value={stats.receivedCount}
           icon={Inbox}
         />
         <StatCard
           href="/acknowledgments"
           label="Povratnice"
-          value={acknowledgements.length}
+          value={stats.acknowledgementCount}
           icon={FileCheck2}
         />
-        <StatCard href="/sent" label="Poslani" value={sentCount} icon={Send} />
+        <StatCard href="/sent" label="Poslani" value={stats.sentCount} icon={Send} />
         <StatCard
           href="/drafts"
           label="Osnutki"
-          value={draftCount}
+          value={stats.draftCount}
           icon={FileClock}
         />
         <StatCard
           href="/customers"
           label="Stranke"
-          value={customerCount}
+          value={stats.customerCount}
           icon={Users}
         />
         <StatCard
           label="Napake"
-          value={errorAcks.length}
+          value={stats.failedAcknowledgementCount}
           icon={AlertCircle}
           danger
         />
@@ -255,13 +450,13 @@ export default function DashboardPage() {
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         <MoneyCard
           label="Vrednost poslanih"
-          value={formatMoney(sentTotal)}
-          detail={`${sentInvoices.length} lokalno shranjenih poslanih računov`}
+          value={formatMoney(stats.sentTotal)}
+          detail={`${stats.sentCount} poslanih računov za aktivno podjetje`}
         />
         <MoneyCard
           label="Vrednost osnutkov"
-          value={formatMoney(draftTotal)}
-          detail={`${draftInvoices.length} odprtih osnutkov`}
+          value={formatMoney(stats.draftTotal)}
+          detail={`${stats.draftCount} odprtih osnutkov`}
         />
         <div className="solid-panel rounded-[1.5rem] p-5">
           <div className="app-muted text-sm font-medium">Naslednji korak</div>
