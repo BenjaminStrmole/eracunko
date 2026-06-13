@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "prisma:generate": "sh -c 'set -a; [ -f .env.local ] && . ./.env.local; set +a; prisma generate'",
+    "prisma:migrate": "sh -c 'set -a; [ -f .env.local ] && . ./.env.local; set +a; prisma migrate dev'",
+    "prisma:studio": "sh -c 'set -a; [ -f .env.local ] && . ./.env.local; set +a; prisma studio'"
   },
   "dependencies": {
+    "@prisma/client": "6.19.3",
     "jszip": "^3.10.1",
     "lucide-react": "^1.18.0",
     "next": "16.2.7",
@@ -22,6 +26,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "prisma": "6.19.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
