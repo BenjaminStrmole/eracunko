@@ -8,6 +8,7 @@ import {
   FileClock,
   Inbox,
   PlusCircle,
+  RefreshCw,
   Send,
   Upload,
   Users,
@@ -96,6 +97,15 @@ type DashboardStats = {
   sentTotal: number;
   draftTotal: number;
 };
+
+type DashboardRemoteCache = {
+  documents: DocumentItem[];
+  remoteSentInvoices: LocalInvoice[];
+  timestamp: number;
+};
+
+const DASHBOARD_CACHE_TTL_MS = 45_000;
+const dashboardCache = new Map<string, DashboardRemoteCache>();
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -225,6 +235,22 @@ function mergeUniqueInvoices(
   });
 }
 
+function dashboardCacheKey(activeCompany: ActiveCompany | null) {
+  return normalizeTaxId(activeCompany?.vatNumber || activeCompany?.taxId) || "no-company";
+}
+
+function getFreshDashboardCache(key: string) {
+  const cached = dashboardCache.get(key);
+  if (!cached) return null;
+
+  if (Date.now() - cached.timestamp > DASHBOARD_CACHE_TTL_MS) {
+    dashboardCache.delete(key);
+    return null;
+  }
+
+  return cached;
+}
+
 export function countFailedAcknowledgements(acknowledgements: DocumentItem[]) {
   return acknowledgements.filter(isFailedAcknowledgement).length;
 }
@@ -286,11 +312,13 @@ export default function DashboardPage() {
   const [sentInvoices, setSentInvoices] = useState<LocalInvoice[]>([]);
   const [draftInvoices, setDraftInvoices] = useState<LocalInvoice[]>([]);
   const [customerCount, setCustomerCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [sentLoading, setSentLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  async function loadDashboard() {
-    setLoading(true);
-
+  async function loadDashboard(options: { force?: boolean } = {}) {
+    const force = options.force || false;
+    setRefreshing(force);
     const company = JSON.parse(
       localStorage.getItem("activeCompany") || "null"
     ) as ActiveCompany | null;
@@ -316,40 +344,85 @@ export default function DashboardPage() {
     setDraftInvoices(companyDrafts);
     setCustomerCount(customers.length);
 
-    try {
-      const taxNumber = company?.vatNumber || company?.taxId || "";
-      const [inboxResponse, sentResponse] = await Promise.all([
-        fetch(
-          `/api/bizbox/inbox?taxNumber=${encodeURIComponent(
-            taxNumber
-          )}&includeMetadata=true&limit=300`,
-          { cache: "no-store" }
-        ),
-        fetch(
-          `/api/bizbox/sent?taxNumber=${encodeURIComponent(taxNumber)}&limit=150`,
-          { cache: "no-store" }
-        ),
-      ]);
+    const cacheKey = dashboardCacheKey(company);
+    const cached = force ? null : getFreshDashboardCache(cacheKey);
 
-      const [inboxData, sentData] = await Promise.all([
-        inboxResponse.json(),
-        sentResponse.json(),
-      ]);
-
-      if (inboxData.success) {
-        setDocuments(inboxData.documents || []);
-      } else {
-        setDocuments([]);
-      }
-
-      if (sentData.success) {
-        setSentInvoices(
-          mergeUniqueInvoices(companySent, sentData.documents || [])
-        );
-      }
-    } finally {
-      setLoading(false);
+    if (cached) {
+      setDocuments(cached.documents);
+      setSentInvoices(mergeUniqueInvoices(companySent, cached.remoteSentInvoices));
+      setDocumentsLoading(false);
+      setSentLoading(false);
+      setRefreshing(false);
+      return;
     }
+
+    setDocumentsLoading(true);
+    setSentLoading(true);
+
+    const taxNumber = company?.vatNumber || company?.taxId || "";
+    let nextDocuments: DocumentItem[] = [];
+    let nextRemoteSentInvoices: LocalInvoice[] = [];
+    let documentsLoaded = false;
+    let sentLoaded = false;
+
+    const inboxPromise = fetch(
+      `/api/bizbox/inbox?taxNumber=${encodeURIComponent(
+        taxNumber
+      )}&includeMetadata=true&limit=300`,
+      { cache: "no-store" }
+    )
+      .then((response) => response.json())
+      .then((inboxData) => {
+      if (inboxData.success) {
+          nextDocuments = inboxData.documents || [];
+          documentsLoaded = true;
+          setDocuments(nextDocuments);
+      } else {
+          nextDocuments = [];
+          setDocuments([]);
+      }
+      })
+      .catch(() => {
+        nextDocuments = [];
+        setDocuments([]);
+      })
+      .finally(() => {
+        setDocumentsLoading(false);
+      });
+
+    const sentPromise = fetch(
+      `/api/bizbox/sent?taxNumber=${encodeURIComponent(taxNumber)}&limit=150`,
+      { cache: "no-store" }
+    )
+      .then((response) => response.json())
+      .then((sentData) => {
+      if (sentData.success) {
+          nextRemoteSentInvoices = sentData.documents || [];
+          sentLoaded = true;
+          setSentInvoices(mergeUniqueInvoices(companySent, nextRemoteSentInvoices));
+      } else {
+          nextRemoteSentInvoices = [];
+          setSentInvoices(companySent);
+      }
+      })
+      .catch(() => {
+        nextRemoteSentInvoices = [];
+        setSentInvoices(companySent);
+      })
+      .finally(() => {
+        setSentLoading(false);
+      });
+
+    await Promise.all([inboxPromise, sentPromise]);
+
+    if (documentsLoaded && sentLoaded) {
+      dashboardCache.set(cacheKey, {
+        documents: nextDocuments,
+        remoteSentInvoices: nextRemoteSentInvoices,
+        timestamp: Date.now(),
+      });
+    }
+    setRefreshing(false);
   }
 
   useEffect(() => {
@@ -357,10 +430,12 @@ export default function DashboardPage() {
       loadDashboard();
     });
 
-    window.addEventListener("active-company-changed", loadDashboard);
+    const handleActiveCompanyChanged = () => loadDashboard({ force: true });
+
+    window.addEventListener("active-company-changed", handleActiveCompanyChanged);
 
     return () => {
-      window.removeEventListener("active-company-changed", loadDashboard);
+      window.removeEventListener("active-company-changed", handleActiveCompanyChanged);
     };
   }, []);
 
@@ -406,6 +481,7 @@ export default function DashboardPage() {
     return acknowledgements;
   }, [ackFilter, acknowledgements]);
   const displayedAcks = filteredAcks.slice(0, 5);
+  const activityLoading = documentsLoading || sentLoading;
 
   return (
     <AppShell>
@@ -421,6 +497,17 @@ export default function DashboardPage() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <CompanySelector />
+          <button
+            onClick={() => loadDashboard({ force: true })}
+            disabled={refreshing}
+            className="secondary-button h-12 px-5 text-sm disabled:opacity-60"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            Osveži
+          </button>
           <Link href="/invoices/xml" className="secondary-button h-12 px-5 text-sm">
             <Upload className="h-4 w-4" aria-hidden="true" />
             Uvozi XML
@@ -493,8 +580,10 @@ export default function DashboardPage() {
             />
 
             <div className="divide-y divide-[var(--app-border)]">
-              {loading && <div className="app-muted px-5 py-6">Nalagam podatke ...</div>}
-              {!loading && latestReceived.length === 0 && latestSent.length === 0 && latestAcks.length === 0 && (
+              {activityLoading && latestReceived.length === 0 && latestSent.length === 0 && latestAcks.length === 0 && (
+                <div className="app-muted px-5 py-6">Nalagam zadnjo aktivnost ...</div>
+              )}
+              {!activityLoading && latestReceived.length === 0 && latestSent.length === 0 && latestAcks.length === 0 && (
                 <EmptyState text="Ni zadnje aktivnosti za prikaz." />
               )}
               {latestReceived.slice(0, 2).map((doc) => (
@@ -573,8 +662,10 @@ export default function DashboardPage() {
                   <div>Prejeto</div>
                 </div>
 
-                {loading && <div className="app-muted px-5 py-6">Nalagam povratnice ...</div>}
-                {!loading && displayedAcks.length === 0 && (
+                {documentsLoading && displayedAcks.length === 0 && (
+                  <div className="app-muted px-5 py-6">Nalagam povratnice ...</div>
+                )}
+                {!documentsLoading && displayedAcks.length === 0 && (
                   <div className="app-muted px-5 py-6">Ni povratnic za izbrani filter.</div>
                 )}
 
