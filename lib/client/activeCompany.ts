@@ -27,6 +27,18 @@ export function getStoredActiveCompany() {
   return parseStoredActiveCompany(localStorage.getItem("activeCompany"));
 }
 
+export function activeCompanyKey(company: ClientActiveCompany | null | undefined) {
+  if (!company) return "no-company";
+  return [
+    company.vatNumber || company.taxId || "",
+    company.locationId || "",
+    company.eLocation || "",
+  ]
+    .filter(Boolean)
+    .join(":")
+    .toUpperCase() || "no-company";
+}
+
 export function storeActiveCompany(company: ClientActiveCompany | null) {
   if (!company) {
     localStorage.removeItem("activeCompany");
@@ -59,6 +71,11 @@ export async function syncDbActiveCompany(company: ClientActiveCompany | null) {
 
 export async function loadActiveCompanyWithFallback() {
   const localCompany = getStoredActiveCompany();
+
+  if (localCompany) {
+    syncDbActiveCompany(localCompany).catch(() => {});
+    return localCompany;
+  }
 
   try {
     const dbCompany = await fetchDbActiveCompany();

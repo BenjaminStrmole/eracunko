@@ -2,11 +2,12 @@
 
 import { Copy, FilePlus2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
 import { useToast } from "../components/ToastProvider";
 import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
+import { getSentData } from "../../lib/client/bizboxDataCache";
 
 const PAGE_SIZE = 25;
 
@@ -75,31 +76,30 @@ function generateInvoiceNumber() {
 
 export default function SentInvoicesPage() {
   const toast = useToast();
+  const loadIdRef = useRef(0);
   const [invoices, setInvoices] = useState<SentInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
 
   async function loadSentInvoices() {
+    const loadId = ++loadIdRef.current;
     setLoading(true);
     setError("");
 
     try {
       const activeCompany = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
+      if (loadId !== loadIdRef.current) return;
 
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
 
-      const response = await fetch(
-        `/api/bizbox/sent?taxNumber=${encodeURIComponent(taxNumber)}&limit=150`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
-
-      const data = await response.json();
-
-      if (!data.success) {
+      const applyData = (data: {
+        success: boolean;
+        documents?: SentInvoice[];
+        message?: string;
+      }) => {
+        if (loadId !== loadIdRef.current) return;
+        if (!data.success) {
         const message = data.message || "Napaka pri pridobivanju poslanih računov.";
         setError(message);
         toast.error("Poslanih računov ni bilo mogoče naložiti", message);
@@ -123,7 +123,26 @@ export default function SentInvoicesPage() {
       });
 
       setInvoices(unique);
+      };
+
+      const result = await getSentData<SentInvoice>({
+        taxNumber,
+        limit: 150,
+        timeoutMs: 15_000,
+      });
+
+      applyData(result.data);
+
+      if (result.fromCache && result.refresh) {
+        setLoading(false);
+        result.refresh
+          .then((freshData) => {
+            if (freshData) applyData(freshData);
+          })
+          .catch(() => {});
+      }
     } catch (err) {
+      if (loadId !== loadIdRef.current) return;
       const message =
         err instanceof Error
           ? err.message
@@ -132,7 +151,9 @@ export default function SentInvoicesPage() {
       toast.error("Poslanih računov ni bilo mogoče naložiti", message);
       setInvoices([]);
     } finally {
-      setLoading(false);
+      if (loadId === loadIdRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -140,6 +161,17 @@ export default function SentInvoicesPage() {
     queueMicrotask(() => {
       loadSentInvoices();
     });
+
+    const handleActiveCompanyChanged = () => {
+      setPage(1);
+      loadSentInvoices();
+    };
+
+    window.addEventListener("active-company-changed", handleActiveCompanyChanged);
+
+    return () => {
+      window.removeEventListener("active-company-changed", handleActiveCompanyChanged);
+    };
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(invoices.length / PAGE_SIZE));

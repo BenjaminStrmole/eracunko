@@ -2,11 +2,12 @@
 
 import { RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
 import { useToast } from "../components/ToastProvider";
 import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
+import { getInboxData } from "../../lib/client/bizboxDataCache";
 
 const PAGE_SIZE = 25;
 
@@ -61,6 +62,7 @@ function isAcknowledgement(item: InboxDocument) {
 
 export default function InboxPage() {
   const toast = useToast();
+  const loadIdRef = useRef(0);
   const [documents, setDocuments] = useState<InboxDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,24 +70,23 @@ export default function InboxPage() {
   const [page, setPage] = useState(1);
 
   async function loadInbox() {
+    const loadId = ++loadIdRef.current;
     setLoading(true);
     setError("");
 
     try {
       const activeCompany = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
+      if (loadId !== loadIdRef.current) return;
 
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
-      const response = await fetch(
-        `/api/bizbox/inbox?taxNumber=${encodeURIComponent(taxNumber)}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
-
-      const data = await response.json();
-
-      if (!data.success) {
+      const applyData = (data: {
+        success: boolean;
+        documents?: InboxDocument[];
+        raw?: unknown;
+        message?: string;
+      }) => {
+        if (loadId !== loadIdRef.current) return;
+        if (!data.success) {
         const message = data.message || "Napaka pri pridobivanju inboxa.";
         setError(message);
         toast.error("Dokumentov ni bilo mogoče naložiti", message);
@@ -95,13 +96,33 @@ export default function InboxPage() {
 
       setDocuments(data.documents || []);
       setRaw(data.raw);
+      };
+
+      const result = await getInboxData<InboxDocument>({
+        taxNumber,
+        timeoutMs: 15_000,
+      });
+
+      applyData(result.data);
+
+      if (result.fromCache && result.refresh) {
+        setLoading(false);
+        result.refresh
+          .then((freshData) => {
+            if (freshData) applyData(freshData);
+          })
+          .catch(() => {});
+      }
     } catch (err) {
+      if (loadId !== loadIdRef.current) return;
       const message =
         err instanceof Error ? err.message : "Napaka pri pridobivanju inboxa.";
       setError(message);
       toast.error("Dokumentov ni bilo mogoče naložiti", message);
     } finally {
-      setLoading(false);
+      if (loadId === loadIdRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -109,6 +130,17 @@ export default function InboxPage() {
     queueMicrotask(() => {
       loadInbox();
     });
+
+    const handleActiveCompanyChanged = () => {
+      setPage(1);
+      loadInbox();
+    };
+
+    window.addEventListener("active-company-changed", handleActiveCompanyChanged);
+
+    return () => {
+      window.removeEventListener("active-company-changed", handleActiveCompanyChanged);
+    };
   }, []);
 
   const incomingDocuments = useMemo(

@@ -14,10 +14,11 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import CompanySelector from "../components/CompanySelector";
 import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
+import { getInboxData, getSentData } from "../../lib/client/bizboxDataCache";
 
 type RawParam = {
   parameterName?: string;
@@ -105,7 +106,7 @@ type DashboardRemoteCache = {
   timestamp: number;
 };
 
-const DASHBOARD_CACHE_TTL_MS = 45_000;
+const DASHBOARD_CACHE_TTL_MS = 60_000;
 const dashboardCache = new Map<string, DashboardRemoteCache>();
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {
@@ -307,6 +308,7 @@ export function getDashboardStats({
 }
 
 export default function DashboardPage() {
+  const loadIdRef = useRef(0);
   const [ackFilter, setAckFilter] = useState<"all" | "success" | "error" | "pending">("all");
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
@@ -315,12 +317,16 @@ export default function DashboardPage() {
   const [customerCount, setCustomerCount] = useState(0);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [sentLoading, setSentLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function loadDashboard(options: { force?: boolean } = {}) {
+    const loadId = ++loadIdRef.current;
     const force = options.force || false;
     setRefreshing(force);
     const company = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
+    if (loadId !== loadIdRef.current) return;
+
     const localSent = safeJsonParse<LocalInvoice[]>(localStorage.getItem("sent"), []);
     const localDrafts = safeJsonParse<LocalInvoice[]>(
       localStorage.getItem("drafts"),
@@ -342,21 +348,22 @@ export default function DashboardPage() {
     setSentInvoices(companySent);
     setDraftInvoices(companyDrafts);
     setCustomerCount(customers.length);
+    setStatsLoading(false);
 
     const cacheKey = dashboardCacheKey(company);
-    const cached = force ? null : getFreshDashboardCache(cacheKey);
+    const cached = getFreshDashboardCache(cacheKey);
 
     if (cached) {
       setDocuments(cached.documents);
       setSentInvoices(mergeUniqueInvoices(companySent, cached.remoteSentInvoices));
       setDocumentsLoading(false);
       setSentLoading(false);
-      setRefreshing(false);
-      return;
+      setStatsLoading(false);
+    } else {
+      setDocuments([]);
+      setDocumentsLoading(true);
+      setSentLoading(true);
     }
-
-    setDocumentsLoading(true);
-    setSentLoading(true);
 
     const taxNumber = company?.vatNumber || company?.taxId || "";
     let nextDocuments: DocumentItem[] = [];
@@ -364,55 +371,99 @@ export default function DashboardPage() {
     let documentsLoaded = false;
     let sentLoaded = false;
 
-    const inboxPromise = fetch(
-      `/api/bizbox/inbox?taxNumber=${encodeURIComponent(
-        taxNumber
-      )}&includeMetadata=true&limit=300`,
-      { cache: "no-store" }
-    )
-      .then((response) => response.json())
-      .then((inboxData) => {
+    setDocumentsLoading(true);
+    setSentLoading(true);
+    setStatsLoading(true);
+
+    const applyInboxData = (inboxData: {
+      success: boolean;
+      documents?: DocumentItem[];
+    }) => {
+      if (loadId !== loadIdRef.current) return;
+
       if (inboxData.success) {
-          nextDocuments = inboxData.documents || [];
-          documentsLoaded = true;
-          setDocuments(nextDocuments);
+        nextDocuments = inboxData.documents || [];
+        documentsLoaded = true;
+        setDocuments(nextDocuments);
       } else {
-          nextDocuments = [];
-          setDocuments([]);
+        nextDocuments = [];
+        if (!cached) setDocuments([]);
       }
+    };
+
+    const applySentData = (sentData: {
+      success: boolean;
+      documents?: LocalInvoice[];
+    }) => {
+      if (loadId !== loadIdRef.current) return;
+
+      if (sentData.success) {
+        nextRemoteSentInvoices = sentData.documents || [];
+        sentLoaded = true;
+        setSentInvoices(mergeUniqueInvoices(companySent, nextRemoteSentInvoices));
+      } else {
+        nextRemoteSentInvoices = [];
+        setSentInvoices(companySent);
+      }
+    };
+
+    const inboxPromise = getInboxData<DocumentItem>({
+      taxNumber,
+      includeMetadata: true,
+      limit: 300,
+      timeoutMs: 15_000,
+    })
+      .then((result) => {
+        applyInboxData(result.data);
+
+        if (result.fromCache && result.refresh) {
+          result.refresh
+            .then((freshData) => {
+              if (freshData) applyInboxData(freshData);
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
+        if (loadId !== loadIdRef.current) return;
         nextDocuments = [];
-        setDocuments([]);
+        if (!cached) setDocuments([]);
       })
       .finally(() => {
-        setDocumentsLoading(false);
+        if (loadId === loadIdRef.current) {
+          setDocumentsLoading(false);
+        }
       });
 
-    const sentPromise = fetch(
-      `/api/bizbox/sent?taxNumber=${encodeURIComponent(taxNumber)}&limit=150`,
-      { cache: "no-store" }
-    )
-      .then((response) => response.json())
-      .then((sentData) => {
-      if (sentData.success) {
-          nextRemoteSentInvoices = sentData.documents || [];
-          sentLoaded = true;
-          setSentInvoices(mergeUniqueInvoices(companySent, nextRemoteSentInvoices));
-      } else {
-          nextRemoteSentInvoices = [];
-          setSentInvoices(companySent);
-      }
+    const sentPromise = getSentData<LocalInvoice>({
+      taxNumber,
+      limit: 150,
+      timeoutMs: 15_000,
+    })
+      .then((result) => {
+        applySentData(result.data);
+
+        if (result.fromCache && result.refresh) {
+          result.refresh
+            .then((freshData) => {
+              if (freshData) applySentData(freshData);
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
+        if (loadId !== loadIdRef.current) return;
         nextRemoteSentInvoices = [];
         setSentInvoices(companySent);
       })
       .finally(() => {
-        setSentLoading(false);
+        if (loadId === loadIdRef.current) {
+          setSentLoading(false);
+        }
       });
 
     await Promise.all([inboxPromise, sentPromise]);
+    if (loadId !== loadIdRef.current) return;
 
     if (documentsLoaded && sentLoaded) {
       dashboardCache.set(cacheKey, {
@@ -421,6 +472,7 @@ export default function DashboardPage() {
         timestamp: Date.now(),
       });
     }
+    setStatsLoading(false);
     setRefreshing(false);
   }
 
@@ -526,6 +578,7 @@ export default function DashboardPage() {
           detail="v aktivnem podjetju"
           icon={Inbox}
           tone="blue"
+          loading={statsLoading && stats.receivedCount === 0}
         />
         <StatCard
           href="/sent"
@@ -534,6 +587,7 @@ export default function DashboardPage() {
           detail={formatMoney(stats.sentTotal)}
           icon={Send}
           tone="blue"
+          loading={statsLoading && stats.sentCount === 0}
         />
         <StatCard
           href="/sent"
@@ -542,6 +596,7 @@ export default function DashboardPage() {
           detail="čakajo na povratnico"
           icon={FileCheck2}
           tone="amber"
+          loading={statsLoading && stats.pendingSentCount === 0}
         />
         <StatCard
           href="/acknowledgments?status=error"
@@ -550,6 +605,7 @@ export default function DashboardPage() {
           detail="neuspešne povratnice"
           icon={AlertCircle}
           tone="red"
+          loading={statsLoading && stats.failedAcknowledgementCount === 0}
         />
         <StatCard
           href="/drafts"
@@ -780,6 +836,7 @@ function StatCard({
   detail,
   icon: Icon,
   tone = "blue",
+  loading = false,
 }: {
   href?: string;
   label: string;
@@ -787,6 +844,7 @@ function StatCard({
   detail?: string;
   icon: React.ElementType;
   tone?: "blue" | "amber" | "red" | "violet" | "green";
+  loading?: boolean;
 }) {
   const toneClass = {
     blue: "bg-blue-500/10 text-[var(--app-primary)]",
@@ -804,7 +862,9 @@ function StatCard({
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="app-muted text-sm font-medium">{label}</div>
-      <div className="mt-2 text-3xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight">
+        {loading ? "..." : value}
+      </div>
       {detail && <div className="app-muted mt-2 min-h-5 text-xs">{detail}</div>}
       <div className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-[var(--app-primary-strong)]">
         Prikaži

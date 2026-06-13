@@ -2,11 +2,12 @@
 
 import { RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
 import { useToast } from "../components/ToastProvider";
 import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
+import { getInboxData } from "../../lib/client/bizboxDataCache";
 
 const PAGE_SIZE = 25;
 
@@ -144,6 +145,7 @@ function getBadgeStyle(value: string) {
 
 export default function AcknowledgementsPage() {
   const toast = useToast();
+  const loadIdRef = useRef(0);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -153,28 +155,25 @@ export default function AcknowledgementsPage() {
   const [page, setPage] = useState(1);
 
   async function loadDocuments(limit = scanLimit) {
+    const loadId = ++loadIdRef.current;
     setLoading(true);
     setError("");
     setEnrichedCount(0);
 
     try {
       const activeCompany = await loadActiveCompanyWithFallback();
+      if (loadId !== loadIdRef.current) return;
 
       const taxNumber = activeCompany?.vatNumber || activeCompany?.taxId || "";
 
-      const response = await fetch(
-        `/api/bizbox/inbox?taxNumber=${encodeURIComponent(
-          taxNumber
-        )}&includeMetadata=true&limit=${limit}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
-
-      const data = await response.json();
-
-      if (!data.success) {
+      const applyData = (data: {
+        success: boolean;
+        documents?: DocumentItem[];
+        metadata?: { enrichedCount?: number };
+        message?: string;
+      }) => {
+        if (loadId !== loadIdRef.current) return;
+        if (!data.success) {
         const message = data.message || "Napaka pri pridobivanju povratnic.";
         setError(message);
         toast.error("Povratnic ni bilo mogoče naložiti", message);
@@ -186,7 +185,27 @@ export default function AcknowledgementsPage() {
 
       setDocuments(onlyAcks);
       setEnrichedCount(data.metadata?.enrichedCount || 0);
+      };
+
+      const result = await getInboxData<DocumentItem>({
+        taxNumber,
+        includeMetadata: true,
+        limit,
+        timeoutMs: 15_000,
+      });
+
+      applyData(result.data);
+
+      if (result.fromCache && result.refresh) {
+        setLoading(false);
+        result.refresh
+          .then((freshData) => {
+            if (freshData) applyData(freshData);
+          })
+          .catch(() => {});
+      }
     } catch (err) {
+      if (loadId !== loadIdRef.current) return;
       const message =
         err instanceof Error
           ? err.message
@@ -194,7 +213,9 @@ export default function AcknowledgementsPage() {
       setError(message);
       toast.error("Povratnic ni bilo mogoče naložiti", message);
     } finally {
-      setLoading(false);
+      if (loadId === loadIdRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -209,6 +230,17 @@ export default function AcknowledgementsPage() {
 
       loadDocuments();
     });
+
+    const handleActiveCompanyChanged = () => {
+      setPage(1);
+      loadDocuments();
+    };
+
+    window.addEventListener("active-company-changed", handleActiveCompanyChanged);
+
+    return () => {
+      window.removeEventListener("active-company-changed", handleActiveCompanyChanged);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  activeCompanyKey,
   fetchDbActiveCompany,
   getStoredActiveCompany,
   storeActiveCompany,
@@ -33,8 +34,14 @@ export default function CompanySelector() {
 
     try {
       const localCompany = getStoredActiveCompany() as ActiveCompany | null;
+
+      if (localCompany) {
+        setActiveCompany(localCompany);
+        syncDbActiveCompany(localCompany).catch(() => {});
+      }
+
       const [dbCompany, companiesResponse] = await Promise.all([
-        fetchDbActiveCompany().catch(() => null),
+        localCompany ? Promise.resolve(null) : fetchDbActiveCompany().catch(() => null),
         fetch("/api/bizbox/my-companies"),
       ]);
       const data = await companiesResponse.json();
@@ -42,10 +49,10 @@ export default function CompanySelector() {
       if (dbCompany) {
         storeActiveCompany(dbCompany);
         setActiveCompany(dbCompany as ActiveCompany);
-        window.dispatchEvent(new CustomEvent("active-company-changed"));
-      } else if (localCompany) {
-        setActiveCompany(localCompany);
-        syncDbActiveCompany(localCompany).catch(() => {});
+
+        if (activeCompanyKey(dbCompany) !== activeCompanyKey(localCompany)) {
+          window.dispatchEvent(new CustomEvent("active-company-changed"));
+        }
       }
 
       if (!data.success) return;
