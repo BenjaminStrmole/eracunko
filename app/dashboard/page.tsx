@@ -109,6 +109,11 @@ type DashboardRemoteCache = {
 const DASHBOARD_CACHE_TTL_MS = 60_000;
 const dashboardCache = new Map<string, DashboardRemoteCache>();
 
+function isAbortError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return error.name === "AbortError" || error.message.toLowerCase().includes("abort");
+}
+
 function safeJsonParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
 
@@ -411,7 +416,7 @@ export default function DashboardPage() {
       taxNumber,
       includeMetadata: true,
       limit: 300,
-      timeoutMs: 15_000,
+      timeoutMs: 90_000,
     })
       .then((result) => {
         applyInboxData(result.data);
@@ -424,7 +429,8 @@ export default function DashboardPage() {
             .catch(() => {});
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        if (isAbortError(error)) return;
         if (loadId !== loadIdRef.current) return;
         nextDocuments = [];
         if (!cached) setDocuments([]);
@@ -438,7 +444,7 @@ export default function DashboardPage() {
     const sentPromise = getSentData<LocalInvoice>({
       taxNumber,
       limit: 150,
-      timeoutMs: 15_000,
+      timeoutMs: 90_000,
     })
       .then((result) => {
         applySentData(result.data);
@@ -451,7 +457,8 @@ export default function DashboardPage() {
             .catch(() => {});
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        if (isAbortError(error)) return;
         if (loadId !== loadIdRef.current) return;
         nextRemoteSentInvoices = [];
         setSentInvoices(companySent);

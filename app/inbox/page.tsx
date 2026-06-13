@@ -11,6 +11,11 @@ import { getInboxData } from "../../lib/client/bizboxDataCache";
 
 const PAGE_SIZE = 25;
 
+function isAbortError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return error.name === "AbortError" || error.message.toLowerCase().includes("abort");
+}
+
 type RawParam = {
   parameterName?: string;
   parameterValue?: string;
@@ -100,7 +105,7 @@ export default function InboxPage() {
 
       const result = await getInboxData<InboxDocument>({
         taxNumber,
-        timeoutMs: 15_000,
+        timeoutMs: 90_000,
       });
 
       applyData(result.data);
@@ -115,6 +120,7 @@ export default function InboxPage() {
       }
     } catch (err) {
       if (loadId !== loadIdRef.current) return;
+      if (isAbortError(err)) return;
       const message =
         err instanceof Error ? err.message : "Napaka pri pridobivanju inboxa.";
       setError(message);

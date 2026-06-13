@@ -11,6 +11,11 @@ import { getInboxData } from "../../lib/client/bizboxDataCache";
 
 const PAGE_SIZE = 25;
 
+function isAbortError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return error.name === "AbortError" || error.message.toLowerCase().includes("abort");
+}
+
 type DocumentParam = {
   parameterName?: string;
   parameterValue?: string;
@@ -191,7 +196,7 @@ export default function AcknowledgementsPage() {
         taxNumber,
         includeMetadata: true,
         limit,
-        timeoutMs: 15_000,
+        timeoutMs: 90_000,
       });
 
       applyData(result.data);
@@ -206,6 +211,7 @@ export default function AcknowledgementsPage() {
       }
     } catch (err) {
       if (loadId !== loadIdRef.current) return;
+      if (isAbortError(err)) return;
       const message =
         err instanceof Error
           ? err.message

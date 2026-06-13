@@ -11,6 +11,11 @@ import { getSentData } from "../../lib/client/bizboxDataCache";
 
 const PAGE_SIZE = 25;
 
+function isAbortError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return error.name === "AbortError" || error.message.toLowerCase().includes("abort");
+}
+
 type SentInvoice = {
   id?: string;
   number: string;
@@ -128,7 +133,7 @@ export default function SentInvoicesPage() {
       const result = await getSentData<SentInvoice>({
         taxNumber,
         limit: 150,
-        timeoutMs: 15_000,
+        timeoutMs: 90_000,
       });
 
       applyData(result.data);
@@ -143,6 +148,7 @@ export default function SentInvoicesPage() {
       }
     } catch (err) {
       if (loadId !== loadIdRef.current) return;
+      if (isAbortError(err)) return;
       const message =
         err instanceof Error
           ? err.message
