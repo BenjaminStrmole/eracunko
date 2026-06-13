@@ -11,9 +11,7 @@ function getInitialTheme(): Theme {
   const saved = window.localStorage.getItem("eracunko-theme");
   if (saved === "light" || saved === "dark") return saved;
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  return "light";
 }
 
 function applyTheme(theme: Theme) {
