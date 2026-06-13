@@ -32,6 +32,7 @@ type Customer = {
   postCode?: string;
   city?: string;
   country?: string;
+  registrationNumber?: string;
   format: string;
   isFavorite?: boolean;
 };
@@ -47,6 +48,7 @@ type ActiveCompany = {
   city?: string;
   country?: string;
   locationId?: string;
+  registrationNumber?: string;
 };
 
 type CompanySettings = {
@@ -54,6 +56,7 @@ type CompanySettings = {
   bic?: string;
   defaultDueDays?: string;
   invoicePrefix?: string;
+  registrationNumber?: string;
 };
 
 type BuyerForm = {
@@ -65,6 +68,7 @@ type BuyerForm = {
   country: string;
   eLocation: string;
   eAddress: string;
+  registrationNumber: string;
 };
 
 type EditableLine = InvoiceLine & {
@@ -138,6 +142,7 @@ function emptyBuyer(): BuyerForm {
     country: "SI",
     eLocation: "",
     eAddress: "",
+    registrationNumber: "",
   };
 }
 
@@ -151,6 +156,7 @@ function customerToBuyer(customer: Customer): BuyerForm {
     country: customer.country || taxCountry(customer.vatNumber),
     eLocation: customer.eLocation || "",
     eAddress: customer.eAddress || "",
+    registrationNumber: customer.registrationNumber || "",
   };
 }
 
@@ -204,10 +210,12 @@ export default function NewInvoicePage() {
 
   const [paymentMeansCode, setPaymentMeansCode] = useState("58");
   const [purposeCode, setPurposeCode] = useState("OTHR");
+  const [paymentPurpose, setPaymentPurpose] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [bankBic, setBankBic] = useState("");
   const [reference, setReference] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [sellerRegistrationNumber, setSellerRegistrationNumber] = useState("");
 
   const [orderReference, setOrderReference] = useState("");
   const [contractReference, setContractReference] = useState("");
@@ -262,6 +270,9 @@ export default function NewInvoicePage() {
       setReference(`SI00-${nextPart}PP0101`);
       setBankAccount(settings.iban || "");
       setBankBic(settings.bic || "");
+      setSellerRegistrationNumber(
+        company?.registrationNumber || settings.registrationNumber || ""
+      );
 
       if (company?.taxId || company?.vatNumber) {
         const operatorOib = (company.taxId || company.vatNumber || "")
@@ -418,6 +429,7 @@ export default function NewInvoicePage() {
         eAddress: activeCompany?.eAddress || "",
         endpointId: sellerVat.replace(/\D/g, "").slice(0, 11) || sellerVat,
         endpointSchemeId: "9934",
+        registrationNumber: sellerRegistrationNumber,
       },
       buyer: {
         name: buyer.name,
@@ -433,6 +445,7 @@ export default function NewInvoicePage() {
         eAddress: buyer.eAddress,
         endpointId: buyer.vat.replace(/\D/g, "").slice(0, 11) || buyer.vat,
         endpointSchemeId: "9934",
+        registrationNumber: buyer.registrationNumber,
       },
       payment: {
         paymentMeansCode: bankPaymentMeansCode,
@@ -442,6 +455,7 @@ export default function NewInvoicePage() {
         bankBic,
         bic: bankBic,
         reference: bankPaymentReference,
+        paymentPurpose,
         paymentTerms,
       },
       references: {
@@ -639,6 +653,9 @@ export default function NewInvoicePage() {
               <Field label="Poslovni proces">
                 <input value={businessProcess} onChange={(event) => setBusinessProcess(event.target.value)} className="field-input" placeholder="P1 ali P99:kupec" />
               </Field>
+              <Field label="Maticna stevilka prodajalca">
+                <input value={sellerRegistrationNumber} onChange={(event) => setSellerRegistrationNumber(event.target.value)} className="field-input" placeholder="Obvezno za UJP/banka, ce je zahtevano" />
+              </Field>
               <Field label="Datum izdaje">
                 <input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className="field-input" />
               </Field>
@@ -688,6 +705,7 @@ export default function NewInvoicePage() {
               <BuyerField label="Drzava" field="country" buyer={buyer} setBuyer={setBuyer} />
               <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} />
               <BuyerField label="eAddress" field="eAddress" buyer={buyer} setBuyer={setBuyer} />
+              <BuyerField label="Maticna stevilka kupca" field="registrationNumber" buyer={buyer} setBuyer={setBuyer} />
             </div>
           </section>
 
@@ -795,13 +813,16 @@ export default function NewInvoicePage() {
               <Field label="Koda namena">
                 <input value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input" />
               </Field>
-              <Field label="IBAN">
+              <Field label="Namen placila">
+                <input value={paymentPurpose} onChange={(event) => setPaymentPurpose(event.target.value)} className="field-input" placeholder="Loceno od kode namena, npr. placilo racuna" />
+              </Field>
+              <Field label="IBAN placilnega racuna">
                 <input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} className="field-input" />
               </Field>
-              <Field label="BIC">
+              <Field label="BIC/SWIFT placilnega racuna">
                 <input value={bankBic} onChange={(event) => setBankBic(event.target.value)} className="field-input" />
               </Field>
-              <Field label="Sklic">
+              <Field label="Sklic placila">
                 <input value={reference} onChange={(event) => setReference(event.target.value)} className="field-input" />
               </Field>
               <Field label="Placilni pogoji">

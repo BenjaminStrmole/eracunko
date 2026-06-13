@@ -250,6 +250,7 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
       eAddress: clean(invoice.buyer.eAddress || defaultEAddress(buyerVat)),
       endpointId: clean(invoice.buyer.endpointId || buyerOib || buyerVat),
       endpointSchemeId: clean(invoice.buyer.endpointSchemeId || "9934"),
+      registrationNumber: clean(invoice.buyer.registrationNumber),
       contactName: clean(invoice.buyer.contactName),
       contactEmail: clean(invoice.buyer.contactEmail),
     },

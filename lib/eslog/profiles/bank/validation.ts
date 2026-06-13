@@ -23,6 +23,15 @@ export function validateBankProfile(invoice: Invoice): ProfileValidationOutput {
   const iban = bankData.payeeIban || payment.iban || payment.bankAccount || invoice.bankAccount;
   const bic = bankData.payeeBic || payment.bic || payment.bankBic || invoice.bankBic;
   const reference = bankData.paymentReference || payment.reference || invoice.reference;
+  const hasReference = !isEmpty(
+    invoice.references?.orderReference ||
+      invoice.references?.contractReference ||
+      invoice.references?.deliveryNoteReference
+  );
+
+  if (!hasReference) {
+    errors.push("Banka: manjka vsaj en referenčni dokument: pogodba, naročilo ali dobavnica.");
+  }
 
   if (!isIban(iban)) {
     errors.push("Banka: IBAN ni v veljavnem formatu.");
@@ -54,4 +63,3 @@ export function validateBankProfile(invoice: Invoice): ProfileValidationOutput {
 
   return { errors, warnings };
 }
-

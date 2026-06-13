@@ -9,17 +9,17 @@ export function validateUjpProfile(invoice: Invoice): ProfileValidationOutput {
   const errors: string[] = [];
   const warnings: string[] = [];
   const ujpData = invoice.ujpData || {};
+  const hasReference = !isEmpty(
+    invoice.references?.orderReference ||
+      ujpData.orderReference ||
+      invoice.references?.contractReference ||
+      ujpData.contractReference ||
+      invoice.references?.deliveryNoteReference ||
+      ujpData.deliveryNoteReference
+  );
 
-  if (isEmpty(invoice.references?.orderReference || ujpData.orderReference)) {
-    warnings.push("UJP: manjka naročilnica.");
-  }
-
-  if (isEmpty(invoice.references?.contractReference || ujpData.contractReference)) {
-    warnings.push("UJP: manjka pogodba.");
-  }
-
-  if (isEmpty(invoice.references?.buyerReference || ujpData.buyerReference)) {
-    warnings.push("UJP: manjka referenca kupca.");
+  if (!hasReference) {
+    errors.push("UJP: manjka vsaj en referenčni dokument: pogodba, naročilo ali dobavnica.");
   }
 
   if (isEmpty(ujpData.budgetUser || ujpData.ujpRecipient)) {
@@ -28,4 +28,3 @@ export function validateUjpProfile(invoice: Invoice): ProfileValidationOutput {
 
   return { errors, warnings };
 }
-

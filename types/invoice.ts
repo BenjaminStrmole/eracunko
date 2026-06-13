@@ -68,6 +68,7 @@ export type InvoicePayment = {
   method?: string;
   paymentMeansCode?: string;
   purposeCode?: string;
+  paymentPurpose?: string;
   bankAccount?: string;
   iban?: string;
   bankBic?: string;
