@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
+import { useToast } from "../components/ToastProvider";
 
 const PAGE_SIZE = 25;
 
@@ -72,10 +73,10 @@ function generateInvoiceNumber() {
 }
 
 export default function SentInvoicesPage() {
+  const toast = useToast();
   const [invoices, setInvoices] = useState<SentInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
   const [page, setPage] = useState(1);
 
   async function loadSentInvoices() {
@@ -100,7 +101,9 @@ export default function SentInvoicesPage() {
       const data = await response.json();
 
       if (!data.success) {
-        setError(data.message || "Napaka pri pridobivanju poslanih računov.");
+        const message = data.message || "Napaka pri pridobivanju poslanih računov.";
+        setError(message);
+        toast.error("Poslanih računov ni bilo mogoče naložiti", message);
         setInvoices([]);
         return;
       }
@@ -127,6 +130,7 @@ export default function SentInvoicesPage() {
           ? err.message
           : "Napaka pri pridobivanju poslanih računov.";
       setError(message);
+      toast.error("Poslanih računov ni bilo mogoče naložiti", message);
       setInvoices([]);
     } finally {
       setLoading(false);
@@ -139,13 +143,6 @@ export default function SentInvoicesPage() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-
-    const timer = setTimeout(() => setToast(""), 4000);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
   const totalPages = Math.max(1, Math.ceil(invoices.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pagedInvoices = invoices.slice(
@@ -155,8 +152,9 @@ export default function SentInvoicesPage() {
 
   function copyInvoice(invoice: SentInvoice) {
     if (!invoice.buyer && !invoice.lines) {
-      setToast(
-        "Tega bizBox dokumenta še ni mogoče kopirati, ker nima shranjene strukture računa v eRačunku."
+      toast.info(
+        "Kopiranje ni na voljo",
+        "Ta bizBox dokument še nima shranjene strukture računa v eRačunku."
       );
       return;
     }
@@ -177,7 +175,7 @@ export default function SentInvoicesPage() {
     };
 
     localStorage.setItem("eracunko_current_invoice", JSON.stringify(newInvoice));
-    setToast("Račun je kopiran. Odpiram nov račun ...");
+    toast.success("Račun je kopiran", "Odpiram nov račun ...");
 
     setTimeout(() => {
       window.location.href = "/invoices/new";
@@ -186,12 +184,6 @@ export default function SentInvoicesPage() {
 
   return (
     <AppShell>
-      {toast && (
-        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-[var(--foreground)]">
-          ℹ️ {toast}
-        </div>
-      )}
-
       <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="status-pill mb-4 inline-flex">Izhodni dokumenti</div>

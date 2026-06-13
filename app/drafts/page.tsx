@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "../components/AppShell";
+import { useToast } from "../components/ToastProvider";
 
 type DraftInvoice = {
   id?: number;
@@ -41,20 +42,13 @@ function formatDate(value?: string) {
 
 export default function DraftsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [drafts, setDrafts] = useState<DraftInvoice[]>([]);
-  const [toast, setToast] = useState("");
 
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem("drafts") || "[]");
     queueMicrotask(() => setDrafts(saved));
   }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-
-    const timer = setTimeout(() => setToast(""), 3500);
-    return () => clearTimeout(timer);
-  }, [toast]);
 
   const sortedDrafts = useMemo(
     () =>
@@ -83,24 +77,18 @@ export default function DraftsPage() {
     const updated = [copy, ...drafts];
     setDrafts(updated);
     localStorage.setItem("drafts", JSON.stringify(updated));
-    setToast("Osnutek je kopiran.");
+    toast.success("Osnutek je kopiran");
   }
 
   function deleteDraft(number: string) {
     const updated = drafts.filter((draft) => draft.number !== number);
     setDrafts(updated);
     localStorage.setItem("drafts", JSON.stringify(updated));
-    setToast("Osnutek je izbrisan.");
+    toast.info("Osnutek je izbrisan");
   }
 
   return (
     <AppShell>
-      {toast && (
-        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-[var(--foreground)]">
-          ℹ️ {toast}
-        </div>
-      )}
-
       <div className="mb-8 flex items-center justify-between">
         <div>
           <div className="status-pill mb-4 inline-flex">Delovni dokumenti</div>

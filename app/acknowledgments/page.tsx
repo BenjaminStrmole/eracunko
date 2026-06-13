@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
+import { useToast } from "../components/ToastProvider";
 
 const PAGE_SIZE = 25;
 
@@ -141,6 +142,7 @@ function getBadgeStyle(value: string) {
 }
 
 export default function AcknowledgementsPage() {
+  const toast = useToast();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -174,7 +176,9 @@ export default function AcknowledgementsPage() {
       const data = await response.json();
 
       if (!data.success) {
-        setError(data.message || "Napaka pri pridobivanju povratnic.");
+        const message = data.message || "Napaka pri pridobivanju povratnic.";
+        setError(message);
+        toast.error("Povratnic ni bilo mogoče naložiti", message);
         return;
       }
 
@@ -189,6 +193,7 @@ export default function AcknowledgementsPage() {
           ? err.message
           : "Napaka pri pridobivanju povratnic.";
       setError(message);
+      toast.error("Povratnic ni bilo mogoče naložiti", message);
     } finally {
       setLoading(false);
     }

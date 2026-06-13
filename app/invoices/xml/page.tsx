@@ -6,6 +6,7 @@ import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslo
 import type { Invoice, Party } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
 import CompanySelector from "../../components/CompanySelector";
+import { useToast } from "../../components/ToastProvider";
 
 type SenderCompany = {
   name?: string;
@@ -93,10 +94,12 @@ function companyToParty(company: SenderCompany | null, fallback?: Party): Party 
 }
 
 export default function InvoiceXmlPage() {
+  const toast = useToast();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [activeCompany, setActiveCompany] = useState<SenderCompany | null>(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
+  const [xmlReadyToastKey, setXmlReadyToastKey] = useState("");
 
   useEffect(() => {
     const load = () => {
@@ -136,8 +139,25 @@ export default function InvoiceXmlPage() {
   const xml = prepared?.xml || "";
   const validation = prepared?.validation;
 
+  useEffect(() => {
+    if (!prepared || !xml) return;
+
+    const key = `${prepared.invoice.number}-${prepared.invoice.seller?.vat || ""}`;
+    if (xmlReadyToastKey === key) return;
+
+    toast.info(
+      "XML je generiran",
+      `Račun ${prepared.invoice.number} je pripravljen za pregled ali prenos.`
+    );
+    setXmlReadyToastKey(key);
+  }, [prepared, toast, xml, xmlReadyToastKey]);
+
   async function sendToBizBox() {
     if (!prepared || !prepared.validation.valid || !xml) {
+      toast.error(
+        "Pošiljanje je blokirano",
+        "Račun ima validacijske napake. Preveri validacijski seznam."
+      );
       setSendResult({
         success: false,
         message: "Račun ima validacijske napake. Pošiljanje je blokirano.",
@@ -164,6 +184,10 @@ export default function InvoiceXmlPage() {
       const data = (await response.json()) as BizBoxSendResponse;
 
       if (!data.success) {
+        toast.error(
+          "Pošiljanje ni uspelo",
+          data.message || "bizBox je vrnil napako pri pošiljanju."
+        );
         setSendResult({
           success: false,
           message: data.message || "Pošiljanje ni uspelo.",
@@ -193,6 +217,18 @@ export default function InvoiceXmlPage() {
       localStorage.setItem("eracunko_current_invoice", JSON.stringify(sentInvoice));
 
       setInvoice(sentInvoice);
+      toast.success(
+        "Račun je bil uspešno poslan",
+        data.docId
+          ? `Dokument je bil oddan v pošiljanje. ID: ${data.docId}`
+          : "Dokument je bil oddan v pošiljanje."
+      );
+      if ((data.validationWarnings || []).length > 0) {
+        toast.warning(
+          "Pošiljanje ima opozorila",
+          (data.validationWarnings || []).slice(0, 2).join(" ")
+        );
+      }
       setSendResult({
         success: true,
         message: data.message || "Dokument uspešno poslan.",
@@ -200,6 +236,10 @@ export default function InvoiceXmlPage() {
         warnings: data.validationWarnings || [],
       });
     } catch (error) {
+      toast.error(
+        "Pošiljanje ni uspelo",
+        error instanceof Error ? error.message : "Napaka pri pošiljanju."
+      );
       setSendResult({
         success: false,
         message: error instanceof Error ? error.message : "Napaka pri pošiljanju.",
@@ -271,7 +311,13 @@ export default function InvoiceXmlPage() {
       <div className="mt-6 flex flex-wrap gap-3">
         <button
           onClick={() => {
-            if (!xml) return;
+            if (!xml) {
+              toast.warning(
+                "XML še ni pripravljen",
+                "Najprej odpravi validacijske napake."
+              );
+              return;
+            }
             const blob = new Blob([xml], { type: "application/xml" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -279,6 +325,10 @@ export default function InvoiceXmlPage() {
             a.download = `racun-${prepared.invoice.number}.xml`;
             a.click();
             URL.revokeObjectURL(url);
+            toast.success(
+              "XML je pripravljen za prenos",
+              `Datoteka racun-${prepared.invoice.number}.xml je bila ustvarjena.`
+            );
           }}
           disabled={!xml}
           className="primary-button h-12 px-6 disabled:opacity-60"

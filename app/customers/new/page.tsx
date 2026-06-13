@@ -4,6 +4,7 @@ import { Search, Star, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../../components/AppShell";
+import { useToast } from "../../components/ToastProvider";
 
 type Customer = {
   name: string;
@@ -92,6 +93,7 @@ function validateVatNumber(value: string) {
 }
 
 export default function NewCustomerPage() {
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -100,17 +102,10 @@ export default function NewCustomerPage() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsFinished, setSuggestionsFinished] = useState(false);
   const [message, setMessage] = useState("");
-  const [toast, setToast] = useState("");
   const [hasError, setHasError] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const trimmedQuery = useMemo(() => query.trim(), [query]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(""), 5000);
-    return () => clearTimeout(timer);
-  }, [toast]);
 
   useEffect(() => {
     const value = trimmedQuery;
@@ -145,12 +140,20 @@ export default function NewCustomerPage() {
 
         if (!data.success) {
           setSuggestions([]);
+          toast.error(
+            "Predlogov ni bilo mogoče naložiti",
+            data.message || "Napaka pri iskanju podjetij."
+          );
           return;
         }
 
         setSuggestions(data.companies || []);
-      } catch {
+      } catch (error) {
         setSuggestions([]);
+        toast.error(
+          "Predlogov ni bilo mogoče naložiti",
+          error instanceof Error ? error.message : "Napaka pri iskanju podjetij."
+        );
       } finally {
         setSuggestionsLoading(false);
         setSuggestionsFinished(true);
@@ -158,7 +161,7 @@ export default function NewCustomerPage() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [trimmedQuery]);
+  }, [trimmedQuery, toast]);
 
   async function searchCustomerByVat(vatValue: string) {
     const validation = validateVatNumber(vatValue);
@@ -166,7 +169,7 @@ export default function NewCustomerPage() {
     if (!validation.valid) {
       setHasError(true);
       setMessage(validation.message);
-      setToast(validation.message);
+      toast.warning("Preveri iskanje", validation.message);
       return;
     }
 
@@ -176,7 +179,6 @@ export default function NewCustomerPage() {
     setSearched(true);
     setCustomer(null);
     setMessage("");
-    setToast("");
     setHasError(false);
     setDropdownOpen(false);
     setLoading(true);
@@ -193,7 +195,7 @@ export default function NewCustomerPage() {
 
         setHasError(true);
         setMessage(errorMessage);
-        setToast(errorMessage);
+        toast.error("Iskanje ni uspelo", errorMessage);
         return;
       }
 
@@ -202,7 +204,7 @@ export default function NewCustomerPage() {
       const errorMessage = "Napaka pri klicu eImenika.";
       setHasError(true);
       setMessage(errorMessage);
-      setToast(errorMessage);
+      toast.error("Iskanje ni uspelo", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -215,7 +217,7 @@ export default function NewCustomerPage() {
       const errorMessage = "Vnesi davčno številko ali naziv podjetja.";
       setHasError(true);
       setMessage(errorMessage);
-      setToast(errorMessage);
+      toast.warning("Manjka iskalni niz", errorMessage);
       return;
     }
 
@@ -229,7 +231,7 @@ export default function NewCustomerPage() {
         "Za iskanje po nazivu vpiši vsaj 3 znake ali vpiši davčno z oznako države.";
       setHasError(true);
       setMessage(errorMessage);
-      setToast(errorMessage);
+      toast.warning("Prekratek iskalni niz", errorMessage);
       return;
     }
 
@@ -239,7 +241,7 @@ export default function NewCustomerPage() {
       const errorMessage =
         "Ni predlogov. Poskusi z daljšim nazivom ali davčno številko.";
       setMessage(errorMessage);
-      setToast(errorMessage);
+      toast.info("Ni predlogov", errorMessage);
     }
   }
 
@@ -276,12 +278,6 @@ export default function NewCustomerPage() {
 
   return (
     <AppShell>
-      {toast && (
-        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-red-500">
-          {toast}
-        </div>
-      )}
-
       <div className="mb-8">
         <Link
           href="/customers"
@@ -307,10 +303,12 @@ export default function NewCustomerPage() {
         <div className="relative">
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 app-muted"
-                aria-hidden="true"
-              />
+              {!query && (
+                <Search
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 app-muted"
+                  aria-hidden="true"
+                />
+              )}
               <input
                 value={query}
                 onChange={(event) => {
@@ -327,7 +325,9 @@ export default function NewCustomerPage() {
                   if (event.key === "Enter") handleSearch();
                   if (event.key === "Escape") setDropdownOpen(false);
                 }}
-                className={`field-input pl-11 pr-11 ${
+                className={`field-input field-input-with-right-action ${
+                  query ? "" : "field-input-with-left-icon"
+                } ${
                   hasError ? "border-red-500" : ""
                 }`}
                 placeholder="SI66666666 ali Petrol, DARS, ZZI ..."

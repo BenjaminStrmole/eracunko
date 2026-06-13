@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "../components/AppShell";
+import { useToast } from "../components/ToastProvider";
 
 type CompanySettings = {
   name: string;
@@ -48,8 +49,8 @@ function buildAddress(settings: CompanySettings) {
 }
 
 export default function SettingsPage() {
+  const toast = useToast();
   const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
-  const [toast, setToast] = useState("");
 
   useEffect(() => {
     const savedSettings = localStorage.getItem("companySettings");
@@ -76,13 +77,6 @@ export default function SettingsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-
-    const timer = setTimeout(() => setToast(""), 3500);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
   function updateField<K extends keyof CompanySettings>(
     field: K,
     value: CompanySettings[K]
@@ -92,12 +86,12 @@ export default function SettingsPage() {
 
   function saveSettings() {
     if (!settings.name.trim()) {
-      setToast("Vnesi naziv podjetja.");
+      toast.warning("Manjka naziv podjetja", "Vnesi naziv podjetja.");
       return;
     }
 
     if (!settings.vatNumber.trim()) {
-      setToast("Vnesi davčno številko podjetja.");
+      toast.warning("Manjka davčna številka", "Vnesi davčno številko podjetja.");
       return;
     }
 
@@ -118,17 +112,11 @@ export default function SettingsPage() {
       window.dispatchEvent(new CustomEvent("active-company-changed"));
     }
 
-    setToast("Nastavitve podjetja so shranjene.");
+    toast.success("Nastavitve so shranjene", "Podatki podjetja so posodobljeni.");
   }
 
   return (
     <AppShell>
-      {toast && (
-        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm text-[var(--foreground)]">
-          ℹ️ {toast}
-        </div>
-      )}
-
       <div className="mb-8">
         <div className="status-pill mb-4 inline-flex">Profil izdajatelja</div>
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">

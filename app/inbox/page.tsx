@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../components/AppShell";
 import PaginationControls from "../components/PaginationControls";
+import { useToast } from "../components/ToastProvider";
 
 const PAGE_SIZE = 25;
 
@@ -58,6 +59,7 @@ function isAcknowledgement(item: InboxDocument) {
 }
 
 export default function InboxPage() {
+  const toast = useToast();
   const [documents, setDocuments] = useState<InboxDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -85,7 +87,9 @@ export default function InboxPage() {
       const data = await response.json();
 
       if (!data.success) {
-        setError(data.message || "Napaka pri pridobivanju inboxa.");
+        const message = data.message || "Napaka pri pridobivanju inboxa.";
+        setError(message);
+        toast.error("Dokumentov ni bilo mogoče naložiti", message);
         setRaw(data.raw || data);
         return;
       }
@@ -96,6 +100,7 @@ export default function InboxPage() {
       const message =
         err instanceof Error ? err.message : "Napaka pri pridobivanju inboxa.";
       setError(message);
+      toast.error("Dokumentov ni bilo mogoče naložiti", message);
     } finally {
       setLoading(false);
     }

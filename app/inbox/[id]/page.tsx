@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import errorPatterns from "../../../povratnice_folder_view.json";
 import AppShell from "../../components/AppShell";
+import { useToast } from "../../components/ToastProvider";
 
 type ErrorPattern = {
   pattern: string;
@@ -121,6 +122,7 @@ function getBadgeStyle(value: string) {
 }
 
 export default function InboxDocumentPage() {
+  const toast = useToast();
   const params = useParams();
   const id = String(params.id);
 
@@ -141,20 +143,23 @@ export default function InboxDocumentPage() {
       const data = await response.json();
 
       if (!data.success) {
-        setError(data.message || "Napaka pri pridobivanju metadata.");
+        const message = data.message || "Napaka pri pridobivanju metadata.";
+        setError(message);
+        toast.error("Detajla dokumenta ni bilo mogoče naložiti", message);
         setMetadata(data.raw || data);
         return;
       }
 
       setMetadata(data.metadata as DocumentMetadata);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Napaka pri pridobivanju metadata."
-      );
+      const message =
+        err instanceof Error ? err.message : "Napaka pri pridobivanju metadata.";
+      setError(message);
+      toast.error("Detajla dokumenta ni bilo mogoče naložiti", message);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, toast]);
 
   useEffect(() => {
     queueMicrotask(() => {

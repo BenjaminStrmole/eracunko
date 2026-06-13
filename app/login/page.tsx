@@ -4,8 +4,10 @@ import { ArrowRight, Building2, Lock, ShieldCheck, User } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import ThemeToggle from "../components/ThemeToggle";
+import { useToast } from "../components/ToastProvider";
 
 export default function LoginPage() {
+  const toast = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,9 @@ export default function LoginPage() {
     const trimmedUsername = username.trim();
 
     if (!trimmedUsername || !password) {
-      setMessage("Vnesi uporabniško ime in geslo.");
+      const message = "Vnesi uporabniško ime in geslo.";
+      setMessage(message);
+      toast.warning("Manjkajo prijavni podatki", message);
       return;
     }
 
@@ -41,13 +45,20 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!data.success) {
-        setMessage(data.message || "Prijava ni uspela.");
+        const message = data.message || "Prijava ni uspela.";
+        setMessage(message);
+        toast.error("Prijava ni uspela", message);
         return;
       }
 
       window.location.href = "/dashboard";
-    } catch {
-      setMessage("Napaka pri povezavi s strežnikom.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Napaka pri povezavi s strežnikom.";
+      setMessage(message);
+      toast.error("Prijava ni uspela", message);
     } finally {
       setLoading(false);
     }
@@ -108,7 +119,7 @@ export default function LoginPage() {
                   autoComplete="username"
                   autoFocus
                   disabled={loading}
-                  className="field-input pl-11 disabled:opacity-60"
+                  className="field-input field-input-with-left-icon disabled:opacity-60"
                   placeholder="npr. DEMO.USER"
                 />
               </Field>
@@ -122,7 +133,7 @@ export default function LoginPage() {
                   type="password"
                   autoComplete="current-password"
                   disabled={loading}
-                  className="field-input pl-11 disabled:opacity-60"
+                  className="field-input field-input-with-left-icon disabled:opacity-60"
                   placeholder="••••••••"
                 />
               </Field>

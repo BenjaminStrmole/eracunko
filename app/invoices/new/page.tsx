@@ -20,6 +20,7 @@ import type {
   VatCategory,
 } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
+import { useToast } from "../../components/ToastProvider";
 
 type Customer = {
   name: string;
@@ -167,6 +168,7 @@ function lineVatAmount(line: EditableLine) {
 }
 
 export default function NewInvoicePage() {
+  const toast = useToast();
   const [profile, setProfile] = useState<InvoiceProfile>("standard");
   const [profileData, setProfileData] = useState<ProfileDataState>(() => ({
     standard: {},
@@ -229,8 +231,6 @@ export default function NewInvoicePage() {
       kpdListId: "CG",
     },
   ]);
-
-  const [toast, setToast] = useState("");
 
   const invoiceNumber = useMemo(
     () => `${invoiceNumberNumericPart}-${businessPremiseCode}-${deviceCode}`,
@@ -534,13 +534,28 @@ export default function NewInvoicePage() {
     const drafts = safeJsonParse<Invoice[]>(localStorage.getItem("drafts"), []);
 
     localStorage.setItem("drafts", JSON.stringify([invoice, ...drafts]));
-    setToast("Osnutek računa je shranjen.");
+    toast.success("Osnutek je shranjen", "Račun lahko kasneje nadaljuješ iz osnutkov.");
   }
 
   function continueToPreview() {
     if (!activeCompany) {
-      setToast("Najprej izberi aktivno podjetje v zgornjem izbirniku.");
+      toast.warning(
+        "Manjka aktivno podjetje",
+        "Najprej izberi aktivno podjetje v zgornjem izbirniku."
+      );
       return;
+    }
+
+    if (prepared.validation.errors.length > 0) {
+      toast.error(
+        "Račun ima validacijske napake",
+        prepared.validation.errors.slice(0, 2).join(" ")
+      );
+    } else if (prepared.validation.warnings.length > 0) {
+      toast.warning(
+        "Račun ima opozorila",
+        prepared.validation.warnings.slice(0, 2).join(" ")
+      );
     }
 
     const invoice = prepared.invoice;
@@ -550,12 +565,6 @@ export default function NewInvoicePage() {
 
   return (
     <AppShell>
-      {toast && (
-        <div className="glass-panel fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm">
-          {toast}
-        </div>
-      )}
-
       <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="status-pill mb-4 inline-flex">eSLOG 2.0 / EN16931</div>

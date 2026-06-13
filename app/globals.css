@@ -137,9 +137,22 @@ html.dark .app-bg {
   outline: none;
 }
 
+.field-input::placeholder {
+  color: color-mix(in srgb, var(--app-muted), transparent 18%);
+  opacity: 1;
+}
+
 .field-input:focus {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary), transparent 84%);
+}
+
+.field-input-with-left-icon {
+  padding-left: 2.75rem;
+}
+
+.field-input-with-right-action {
+  padding-right: 2.75rem;
 }
 
 .status-pill {
@@ -150,4 +163,19 @@ html.dark .app-bg {
   padding: 0.28rem 0.72rem;
   font-size: 0.8rem;
   font-weight: 650;
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.toast-progress {
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
 }
