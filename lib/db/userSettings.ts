@@ -14,9 +14,16 @@ export type StoredActiveCompany = {
   eLocation?: string;
   eAddress?: string;
   address?: string;
+  street?: string;
   postCode?: string;
   city?: string;
   country?: string;
+  registrationNumber?: string;
+  iban?: string;
+  bic?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
   canSendInvoices?: boolean;
 };
 

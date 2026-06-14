@@ -61,6 +61,16 @@ type ActiveCompany = {
   registrationNumber?: string;
 };
 
+type CompanySellerSettings = ActiveCompany & {
+  registrationNumber?: string;
+  iban?: string;
+  bic?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  completeForEslog?: boolean;
+};
+
 type CompanySettings = {
   iban?: string;
   bic?: string;
@@ -233,6 +243,7 @@ export default function NewInvoicePage() {
     bank: {},
   }));
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
+  const [companySellerSettings, setCompanySellerSettings] = useState<CompanySellerSettings | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerVat, setSelectedCustomerVat] = useState("");
   const [buyer, setBuyer] = useState<BuyerForm>(emptyBuyer);
@@ -305,15 +316,28 @@ export default function NewInvoicePage() {
     queueMicrotask(async () => {
       const company = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
       const nextPart = nextInvoiceNumberPart();
+      let dbCompanySettings: CompanySellerSettings | null = null;
+
+      try {
+        const response = await fetch("/api/settings/company", { cache: "no-store" });
+        const data = await response.json();
+        if (response.ok && data.success && data.company) {
+          dbCompanySettings = data.company as CompanySellerSettings;
+        }
+      } catch {}
 
       setActiveCompany(company);
+      setCompanySellerSettings(dbCompanySettings);
       setCustomers(savedCustomers);
       setInvoiceNumberNumericPart(nextPart);
       setReference(`SI00-${nextPart}PP0101`);
-      setBankAccount(settings.iban || "");
-      setBankBic(settings.bic || "");
+      setBankAccount(dbCompanySettings?.iban || settings.iban || "");
+      setBankBic(dbCompanySettings?.bic || settings.bic || "");
       setSellerRegistrationNumber(
-        company?.registrationNumber || settings.registrationNumber || ""
+        dbCompanySettings?.registrationNumber ||
+          company?.registrationNumber ||
+          settings.registrationNumber ||
+          ""
       );
 
       if (company?.taxId || company?.vatNumber) {
@@ -403,22 +427,28 @@ export default function NewInvoicePage() {
   }, [lines]);
 
   function buildInvoice(): Invoice {
-    const sellerVat = activeCompany?.vatNumber || activeCompany?.taxId || "";
+    const sellerSource = {
+      ...(activeCompany || {}),
+      ...(companySellerSettings || {}),
+    };
+    const sellerVat = sellerSource.vatNumber || sellerSource.taxId || "";
     const sellerAddress = normalizePartyAddress({
-      name: activeCompany?.name || "",
+      name: sellerSource.name || "",
       vat: sellerVat,
       taxId: sellerVat,
       oib: sellerVat.replace(/\D/g, "").slice(0, 11),
-      address: activeCompany?.address || "",
-      street: activeCompany?.street,
-      postCode: activeCompany?.postCode,
-      city: activeCompany?.city,
-      country: activeCompany?.country || taxCountry(sellerVat),
-      eLocation: activeCompany?.eLocation || "",
-      eAddress: activeCompany?.eAddress || "",
+      address: sellerSource.address || "",
+      street: sellerSource.street,
+      postCode: sellerSource.postCode,
+      city: sellerSource.city,
+      country: sellerSource.country || taxCountry(sellerVat),
+      eLocation: sellerSource.eLocation || "",
+      eAddress: sellerSource.eAddress || "",
       endpointId: sellerVat.replace(/\D/g, "").slice(0, 11) || sellerVat,
       endpointSchemeId: "9934",
-      registrationNumber: sellerRegistrationNumber,
+      registrationNumber: sellerRegistrationNumber || sellerSource.registrationNumber,
+      contactName: sellerSource.contactName,
+      contactEmail: sellerSource.contactEmail,
     });
     const hrData = profileData.hr;
     const ujpData = profileData.ujp;

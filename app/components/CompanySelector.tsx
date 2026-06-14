@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   activeCompanyKey,
@@ -27,7 +28,18 @@ export type ActiveCompany = ClientActiveCompany & {
 export default function CompanySelector() {
   const [companies, setCompanies] = useState<ActiveCompany[]>([]);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
+  const [companyComplete, setCompanyComplete] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  async function refreshCompanyCompleteness() {
+    try {
+      const response = await fetch("/api/settings/company", { cache: "no-store" });
+      const data = await response.json();
+      setCompanyComplete(Boolean(data.company?.completeForEslog));
+    } catch {
+      setCompanyComplete(true);
+    }
+  }
 
   async function loadCompanies() {
     setLoading(true);
@@ -70,6 +82,7 @@ export default function CompanySelector() {
         syncDbActiveCompany(firstSender).catch(() => {});
       }
     } finally {
+      refreshCompanyCompleteness();
       setLoading(false);
     }
   }
@@ -84,6 +97,10 @@ export default function CompanySelector() {
 
       loadCompanies();
     });
+
+    const listener = () => refreshCompanyCompleteness();
+    window.addEventListener("active-company-changed", listener);
+    return () => window.removeEventListener("active-company-changed", listener);
   }, []);
 
   async function selectCompany(value: string) {
@@ -97,6 +114,7 @@ export default function CompanySelector() {
     window.dispatchEvent(new CustomEvent("active-company-changed"));
     setActiveCompany(selected);
     syncDbActiveCompany(selected).catch(() => {});
+    refreshCompanyCompleteness();
   }
 
   return (
@@ -139,6 +157,17 @@ export default function CompanySelector() {
           </option>
         ))}
       </select>
+
+      {activeCompany && !companyComplete && (
+        <div className="mt-4 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-300">
+          <div className="font-semibold">
+            Podatki podjetja niso popolni za pošiljanje e-računov.
+          </div>
+          <Link href="/settings" className="mt-2 inline-flex font-semibold underline-offset-4 hover:underline">
+            Dopolni podatke podjetja
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

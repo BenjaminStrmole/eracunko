@@ -25,9 +25,22 @@ function sanitizeActiveCompany(value: unknown): StoredActiveCompany | null {
     eLocation: typeof value.eLocation === "string" ? value.eLocation : "",
     eAddress: typeof value.eAddress === "string" ? value.eAddress : "",
     address: typeof value.address === "string" ? value.address : "",
+    street: typeof value.street === "string" ? value.street : "",
     postCode: typeof value.postCode === "string" ? value.postCode : "",
     city: typeof value.city === "string" ? value.city : "",
     country: typeof value.country === "string" ? value.country : "",
+    registrationNumber:
+      typeof value.registrationNumber === "string"
+        ? value.registrationNumber
+        : "",
+    iban: typeof value.iban === "string" ? value.iban : "",
+    bic: typeof value.bic === "string" ? value.bic : "",
+    contactName:
+      typeof value.contactName === "string" ? value.contactName : "",
+    contactEmail:
+      typeof value.contactEmail === "string" ? value.contactEmail : "",
+    contactPhone:
+      typeof value.contactPhone === "string" ? value.contactPhone : "",
     canSendInvoices:
       typeof value.canSendInvoices === "boolean"
         ? value.canSendInvoices

@@ -9,12 +9,18 @@ type CompanySettings = {
   name: string;
   vatNumber: string;
   registrationNumber: string;
+  street: string;
   iban: string;
   bic: string;
   address: string;
   postCode: string;
   city: string;
   country: string;
+  eLocation: string;
+  eAddress: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
   email: string;
   phone: string;
   defaultDueDays: string;
@@ -26,12 +32,18 @@ const defaultSettings: CompanySettings = {
   name: "",
   vatNumber: "",
   registrationNumber: "",
+  street: "",
   iban: "",
   bic: "",
   address: "",
   postCode: "",
   city: "",
   country: "SI",
+  eLocation: "",
+  eAddress: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
   email: "",
   phone: "",
   defaultDueDays: "15",
@@ -41,7 +53,7 @@ const defaultSettings: CompanySettings = {
 
 function buildAddress(settings: CompanySettings) {
   return [
-    settings.address,
+    settings.street || settings.address,
     [settings.postCode, settings.city].filter(Boolean).join(" "),
     settings.country,
   ]
@@ -52,30 +64,61 @@ function buildAddress(settings: CompanySettings) {
 export default function SettingsPage() {
   const toast = useToast();
   const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem("companySettings");
-    const activeCompany = localStorage.getItem("activeCompany");
+    queueMicrotask(async () => {
+      const savedSettings = localStorage.getItem("companySettings");
+      const activeCompany = localStorage.getItem("activeCompany");
+      const localSettings = savedSettings
+        ? { ...defaultSettings, ...JSON.parse(savedSettings) }
+        : defaultSettings;
+      const localCompany = activeCompany ? JSON.parse(activeCompany) : null;
 
-    if (savedSettings) {
-      queueMicrotask(() => {
-        setSettings({ ...defaultSettings, ...JSON.parse(savedSettings) });
+      setSettings({
+        ...localSettings,
+        name: localSettings.name || localCompany?.name || "",
+        vatNumber: localSettings.vatNumber || localCompany?.vatNumber || localCompany?.taxId || "",
+        registrationNumber: localSettings.registrationNumber || localCompany?.registrationNumber || "",
+        address: localSettings.address || localCompany?.address || "",
+        street: localSettings.street || localCompany?.street || "",
+        postCode: localSettings.postCode || localCompany?.postCode || "",
+        city: localSettings.city || localCompany?.city || "",
+        country: localSettings.country || localCompany?.country || "SI",
+        eLocation: localSettings.eLocation || localCompany?.eLocation || "",
+        eAddress: localSettings.eAddress || localCompany?.eAddress || "",
+        iban: localSettings.iban || localCompany?.iban || "",
+        bic: localSettings.bic || localCompany?.bic || "",
+        contactName: localSettings.contactName || localCompany?.contactName || "",
+        contactEmail: localSettings.contactEmail || localCompany?.contactEmail || localSettings.email || "",
+        contactPhone: localSettings.contactPhone || localCompany?.contactPhone || localSettings.phone || "",
       });
-      return;
-    }
 
-    if (activeCompany) {
-      const company = JSON.parse(activeCompany);
+      try {
+        const response = await fetch("/api/settings/company", { cache: "no-store" });
+        const data = await response.json();
 
-      queueMicrotask(() => {
-        setSettings({
-          ...defaultSettings,
-          name: company.name || "",
-          vatNumber: company.vatNumber || company.taxId || "",
-          address: company.address || "",
-        });
-      });
-    }
+        if (response.ok && data.success && data.company) {
+          setSettings((current) => ({
+            ...current,
+            ...data.company,
+            vatNumber: data.company.vatNumber || data.company.taxId || current.vatNumber,
+            street: data.company.street || current.street,
+            address: data.company.address || current.address,
+            email: data.company.contactEmail || current.email,
+            phone: data.company.contactPhone || current.phone,
+          }));
+        }
+      } catch {
+        toast.warning(
+          "Podatki podjetja so naloženi lokalno",
+          "Baze trenutno ni bilo mogoče prebrati, zato uporabljamo lokalni fallback."
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
   }, []);
 
   function updateField<K extends keyof CompanySettings>(
@@ -85,7 +128,7 @@ export default function SettingsPage() {
     setSettings((current) => ({ ...current, [field]: value }));
   }
 
-  function saveSettings() {
+  async function saveSettings() {
     if (!settings.name.trim()) {
       toast.warning("Manjka naziv podjetja", "Vnesi naziv podjetja.");
       return;
@@ -96,6 +139,7 @@ export default function SettingsPage() {
       return;
     }
 
+    setSaving(true);
     localStorage.setItem("companySettings", JSON.stringify(settings));
 
     const activeCompany = JSON.parse(localStorage.getItem("activeCompany") || "null");
@@ -106,7 +150,19 @@ export default function SettingsPage() {
         name: settings.name,
         vatNumber: settings.vatNumber,
         taxId: activeCompany.taxId || settings.vatNumber,
+        registrationNumber: settings.registrationNumber,
         address: buildAddress(settings),
+        street: settings.street || settings.address,
+        postCode: settings.postCode,
+        city: settings.city,
+        country: settings.country,
+        eLocation: settings.eLocation || activeCompany.eLocation,
+        eAddress: settings.eAddress || activeCompany.eAddress,
+        iban: settings.iban,
+        bic: settings.bic,
+        contactName: settings.contactName,
+        contactEmail: settings.contactEmail,
+        contactPhone: settings.contactPhone,
       };
 
       localStorage.setItem("activeCompany", JSON.stringify(updatedCompany));
@@ -114,7 +170,55 @@ export default function SettingsPage() {
       window.dispatchEvent(new CustomEvent("active-company-changed"));
     }
 
-    toast.success("Nastavitve so shranjene", "Podatki podjetja so posodobljeni.");
+    try {
+      const response = await fetch("/api/settings/company", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          company: {
+            name: settings.name,
+            vatNumber: settings.vatNumber,
+            taxId: settings.vatNumber,
+            registrationNumber: settings.registrationNumber,
+            address: buildAddress(settings),
+            street: settings.street || settings.address,
+            postCode: settings.postCode,
+            city: settings.city,
+            country: settings.country,
+            eLocation: settings.eLocation,
+            eAddress: settings.eAddress,
+            iban: settings.iban,
+            bic: settings.bic,
+            contactName: settings.contactName,
+            contactEmail: settings.contactEmail || settings.email,
+            contactPhone: settings.contactPhone || settings.phone,
+          },
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "SAVE_FAILED");
+      }
+
+      if (data.company) {
+        const updatedCompany = {
+          ...(activeCompany || {}),
+          ...data.company,
+        };
+        localStorage.setItem("activeCompany", JSON.stringify(updatedCompany));
+        window.dispatchEvent(new CustomEvent("active-company-changed"));
+      }
+
+      toast.success("Nastavitve so shranjene", "Podatki podjetja so posodobljeni v bazi.");
+    } catch {
+      toast.warning(
+        "Shranjeno lokalno",
+        "Podatkov ni bilo mogoče zapisati v bazo, lokalni fallback pa je posodobljen."
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -131,10 +235,16 @@ export default function SettingsPage() {
 
       <div className="grid max-w-6xl gap-6 lg:grid-cols-3">
         <div className="solid-panel rounded-[1.75rem] p-6 lg:col-span-2">
-          <h2 className="text-2xl font-semibold tracking-tight">Podjetje</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Podatki podjetja za pošiljanje e-računov
+          </h2>
+          <p className="app-muted mt-2 text-sm">
+            Polja označena kot obvezna potrebuje eSLOG za izdajatelja računa.
+            {loading ? " Nalagam shranjene podatke ..." : ""}
+          </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Field label="Naziv podjetja">
+            <Field label="Naziv podjetja *">
               <input
                 value={settings.name}
                 onChange={(event) => updateField("name", event.target.value)}
@@ -143,7 +253,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field label="Davčna številka">
+            <Field label="Davčna številka *">
               <input
                 value={settings.vatNumber}
                 onChange={(event) =>
@@ -178,16 +288,19 @@ export default function SettingsPage() {
               </select>
             </Field>
 
-            <Field label="Ulica in hišna številka">
+            <Field label="Ulica in hišna številka *">
               <input
-                value={settings.address}
-                onChange={(event) => updateField("address", event.target.value)}
+                value={settings.street || settings.address}
+                onChange={(event) => {
+                  updateField("street", event.target.value);
+                  updateField("address", event.target.value);
+                }}
                 className="field-input"
                 placeholder="Ulica 1"
               />
             </Field>
 
-            <Field label="Pošta in kraj">
+            <Field label="Pošta in kraj *">
               <div className="grid grid-cols-3 gap-3">
                 <input
                   value={settings.postCode}
@@ -204,6 +317,35 @@ export default function SettingsPage() {
               </div>
             </Field>
 
+            <Field label="Država *">
+              <input
+                value={settings.country}
+                onChange={(event) =>
+                  updateField("country", event.target.value.toUpperCase())
+                }
+                className="field-input"
+                placeholder="SI"
+              />
+            </Field>
+
+            <Field label="eLokacija *">
+              <input
+                value={settings.eLocation}
+                onChange={(event) => updateField("eLocation", event.target.value)}
+                className="field-input"
+                placeholder="C:SI12345678"
+              />
+            </Field>
+
+            <Field label="eNaslov">
+              <input
+                value={settings.eAddress}
+                onChange={(event) => updateField("eAddress", event.target.value)}
+                className="field-input"
+                placeholder="SI12345678.HQ"
+              />
+            </Field>
+
             <Field label="E-pošta">
               <input
                 type="email"
@@ -218,6 +360,34 @@ export default function SettingsPage() {
               <input
                 value={settings.phone}
                 onChange={(event) => updateField("phone", event.target.value)}
+                className="field-input"
+                placeholder="+386 40 000 000"
+              />
+            </Field>
+
+            <Field label="Kontaktna oseba">
+              <input
+                value={settings.contactName}
+                onChange={(event) => updateField("contactName", event.target.value)}
+                className="field-input"
+                placeholder="Janez Novak"
+              />
+            </Field>
+
+            <Field label="Kontaktni e-mail">
+              <input
+                type="email"
+                value={settings.contactEmail}
+                onChange={(event) => updateField("contactEmail", event.target.value)}
+                className="field-input"
+                placeholder="racuni@podjetje.si"
+              />
+            </Field>
+
+            <Field label="Kontaktni telefon">
+              <input
+                value={settings.contactPhone}
+                onChange={(event) => updateField("contactPhone", event.target.value)}
                 className="field-input"
                 placeholder="+386 40 000 000"
               />
@@ -280,9 +450,10 @@ export default function SettingsPage() {
 
           <button
             onClick={saveSettings}
-            className="primary-button mt-8 h-12 px-6"
+            disabled={saving}
+            className="primary-button mt-8 h-12 px-6 disabled:opacity-60"
           >
-            Shrani nastavitve
+            {saving ? "Shranjujem ..." : "Shrani nastavitve"}
           </button>
         </div>
 
@@ -297,6 +468,8 @@ export default function SettingsPage() {
             <Info label="Davčna" value={settings.vatNumber} />
             <Info label="Matična" value={settings.registrationNumber} />
             <Info label="Naslov" value={buildAddress(settings)} />
+            <Info label="eLokacija" value={settings.eLocation} />
+            <Info label="eNaslov" value={settings.eAddress} />
             <Info label="IBAN" value={settings.iban} />
             <Info label="BIC" value={settings.bic} />
             <Info
