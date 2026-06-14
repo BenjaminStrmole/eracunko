@@ -19,6 +19,7 @@ import AppShell from "../components/AppShell";
 import CompanySelector from "../components/CompanySelector";
 import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
 import { getInboxData, getSentData } from "../../lib/client/bizboxDataCache";
+import { fetchDbCustomers } from "../../lib/client/customers";
 
 type RawParam = {
   parameterName?: string;
@@ -337,10 +338,11 @@ export default function DashboardPage() {
       localStorage.getItem("drafts"),
       []
     );
-    const customers = safeJsonParse<unknown[]>(
+    const localCustomers = safeJsonParse<unknown[]>(
       localStorage.getItem("customers"),
       []
     );
+    const dbCustomers = await fetchDbCustomers().catch(() => []);
 
     const companySent = localSent.filter((invoice) =>
       invoiceMatchesActiveCompany(invoice, company)
@@ -352,7 +354,7 @@ export default function DashboardPage() {
     setActiveCompany(company);
     setSentInvoices(companySent);
     setDraftInvoices(companyDrafts);
-    setCustomerCount(customers.length);
+    setCustomerCount(dbCustomers.length || localCustomers.length);
     setStatsLoading(false);
 
     const cacheKey = dashboardCacheKey(company);

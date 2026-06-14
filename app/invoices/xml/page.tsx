@@ -3,6 +3,7 @@
 import { Download, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
+import { saveDbLocalSentInvoice } from "../../../lib/client/localSentInvoices";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import type { Invoice, Party } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
@@ -214,6 +215,13 @@ export default function InvoiceXmlPage() {
 
       localStorage.setItem("sent", JSON.stringify([...filteredSent, sentInvoice]));
       localStorage.setItem("eracunko_current_invoice", JSON.stringify(sentInvoice));
+
+      saveDbLocalSentInvoice(sentInvoice).catch(() => {
+        toast.warning(
+          "Račun je poslan, zapis v bazo pa ni uspel",
+          "Lokalna kopija je shranjena v brskalniku."
+        );
+      });
 
       setInvoice(sentInvoice);
       toast.success(

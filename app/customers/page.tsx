@@ -3,31 +3,36 @@
 import { FilePlus2, Star, StarOff, Trash2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  deleteDbCustomer,
+  loadCustomersWithFallback,
+  saveDbCustomer,
+  setLocalCustomers,
+  type ClientCustomer,
+} from "../../lib/client/customers";
 import AppShell from "../components/AppShell";
+import { useToast } from "../components/ToastProvider";
 
-type Customer = {
-  name: string;
-  vatNumber: string;
-  status: "READY" | "NOT_READY";
-  eLocation: string;
-  format: string;
-  isFavorite?: boolean;
-};
+type Customer = ClientCustomer;
 
 export default function CustomersPage() {
+  const toast = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("customers") || "[]");
-    queueMicrotask(() => setCustomers(saved));
+    queueMicrotask(async () => {
+      const loadedCustomers = await loadCustomersWithFallback();
+      setCustomers(loadedCustomers);
+    });
   }, []);
 
   function saveCustomers(updated: Customer[]) {
     setCustomers(updated);
-    localStorage.setItem("customers", JSON.stringify(updated));
+    setLocalCustomers(updated);
   }
 
-  function toggleFavorite(vatNumber: string) {
+  async function toggleFavorite(vatNumber: string) {
+    const original = customers;
     const updated = customers.map((customer) =>
       customer.vatNumber === vatNumber
         ? { ...customer, isFavorite: !customer.isFavorite }
@@ -35,14 +40,34 @@ export default function CustomersPage() {
     );
 
     saveCustomers(updated);
+
+    const changed = updated.find((customer) => customer.vatNumber === vatNumber);
+    if (!changed) return;
+
+    try {
+      await saveDbCustomer(changed);
+    } catch {
+      setCustomers(original);
+      setLocalCustomers(original);
+      toast.warning("Sprememba je ostala lokalna", "Baze trenutno ni bilo mogoče posodobiti.");
+    }
   }
 
-  function deleteCustomer(vatNumber: string) {
+  async function deleteCustomer(vatNumber: string) {
+    const original = customers;
     const updated = customers.filter(
       (customer) => customer.vatNumber !== vatNumber
     );
 
     saveCustomers(updated);
+
+    try {
+      await deleteDbCustomer(vatNumber);
+    } catch {
+      setCustomers(original);
+      setLocalCustomers(original);
+      toast.warning("Stranka ni bila izbrisana v bazi", "Poskusi ponovno, ko bo povezava z bazo dosegljiva.");
+    }
   }
 
   const favoriteCustomers = useMemo(

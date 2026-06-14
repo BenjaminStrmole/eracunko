@@ -3,6 +3,11 @@
 import { Search, Star, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  getLocalCustomers,
+  saveDbCustomer,
+  setLocalCustomers,
+} from "../../../lib/client/customers";
 import AppShell from "../../components/AppShell";
 import { useToast } from "../../components/ToastProvider";
 
@@ -256,10 +261,10 @@ export default function NewCustomerPage() {
     await searchCustomerByVat(vat);
   }
 
-  function saveCustomer(favorite = false) {
+  async function saveCustomer(favorite = false) {
     if (!customer || customer.status !== "READY") return;
 
-    const existing = JSON.parse(localStorage.getItem("customers") || "[]");
+    const existing = getLocalCustomers();
     const updatedCustomer = {
       ...customer,
       isFavorite: favorite,
@@ -268,10 +273,25 @@ export default function NewCustomerPage() {
       (c: Customer) => c.vatNumber !== updatedCustomer.vatNumber
     );
 
-    localStorage.setItem(
-      "customers",
-      JSON.stringify([...filtered, updatedCustomer])
-    );
+    const updated = [...filtered, updatedCustomer];
+    setLocalCustomers(updated);
+
+    try {
+      const savedCustomer = await saveDbCustomer(updatedCustomer);
+      setLocalCustomers([
+        ...filtered,
+        {
+          ...updatedCustomer,
+          ...savedCustomer,
+        },
+      ]);
+      toast.success("Stranka je shranjena", "Shranjena je v Neon bazo.");
+    } catch {
+      toast.warning(
+        "Stranka je shranjena lokalno",
+        "Baze trenutno ni bilo mogoče posodobiti, zato bo sinhronizirana kasneje."
+      );
+    }
 
     window.location.href = "/customers";
   }

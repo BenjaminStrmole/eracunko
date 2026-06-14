@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
+import { loadCustomersWithFallback } from "../../../lib/client/customers";
 import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDrafts";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
@@ -302,10 +303,7 @@ export default function NewInvoicePage() {
   );
 
   useEffect(() => {
-    const savedCustomers = safeJsonParse<Customer[]>(
-      localStorage.getItem("customers"),
-      []
-    );
+    let savedCustomers: Customer[] = [];
     const settings = safeJsonParse<CompanySettings>(
       localStorage.getItem("companySettings"),
       {}
@@ -315,6 +313,7 @@ export default function NewInvoicePage() {
 
     queueMicrotask(async () => {
       const company = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
+      savedCustomers = (await loadCustomersWithFallback()) as Customer[];
       const nextPart = nextInvoiceNumberPart();
       let dbCompanySettings: CompanySellerSettings | null = null;
 
