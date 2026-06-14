@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDrafts";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
+import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import type { ProfileFieldDefinition } from "../../../lib/eslog/profiles/types";
 import type {
@@ -52,6 +53,7 @@ type ActiveCompany = {
   eLocation?: string;
   eAddress?: string;
   address?: string;
+  street?: string;
   postCode?: string;
   city?: string;
   country?: string;
@@ -402,6 +404,22 @@ export default function NewInvoicePage() {
 
   function buildInvoice(): Invoice {
     const sellerVat = activeCompany?.vatNumber || activeCompany?.taxId || "";
+    const sellerAddress = normalizePartyAddress({
+      name: activeCompany?.name || "",
+      vat: sellerVat,
+      taxId: sellerVat,
+      oib: sellerVat.replace(/\D/g, "").slice(0, 11),
+      address: activeCompany?.address || "",
+      street: activeCompany?.street,
+      postCode: activeCompany?.postCode,
+      city: activeCompany?.city,
+      country: activeCompany?.country || taxCountry(sellerVat),
+      eLocation: activeCompany?.eLocation || "",
+      eAddress: activeCompany?.eAddress || "",
+      endpointId: sellerVat.replace(/\D/g, "").slice(0, 11) || sellerVat,
+      endpointSchemeId: "9934",
+      registrationNumber: sellerRegistrationNumber,
+    });
     const hrData = profileData.hr;
     const ujpData = profileData.ujp;
     const bankData = profileData.bank;
@@ -457,19 +475,7 @@ export default function NewInvoicePage() {
         previousInvoiceDate: profileString(hrData, "previousInvoiceDate"),
       },
       seller: {
-        name: activeCompany?.name || "",
-        vat: sellerVat,
-        taxId: sellerVat,
-        oib: sellerVat.replace(/\D/g, "").slice(0, 11),
-        address: activeCompany?.address || "",
-        postCode: activeCompany?.postCode || "",
-        city: activeCompany?.city || "",
-        country: activeCompany?.country || taxCountry(sellerVat),
-        eLocation: activeCompany?.eLocation || "",
-        eAddress: activeCompany?.eAddress || "",
-        endpointId: sellerVat.replace(/\D/g, "").slice(0, 11) || sellerVat,
-        endpointSchemeId: "9934",
-        registrationNumber: sellerRegistrationNumber,
+        ...sellerAddress,
       },
       buyer: {
         name: buyer.name,

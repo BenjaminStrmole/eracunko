@@ -1,4 +1,5 @@
 import type { Invoice, InvoiceLine, VatCategory } from "../../types/invoice";
+import { normalizePartyAddress } from "./normalizeInvoice";
 
 type ValidationResult = {
   valid: boolean;
@@ -145,6 +146,8 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   const hasStandardRatedVatLine = (invoice.lines || []).some(
     (line) => (line.vatCategory || "S") === "S"
   );
+  const seller = invoice.seller ? normalizePartyAddress(invoice.seller) : invoice.seller;
+  const buyer = normalizePartyAddress(invoice.buyer);
 
   if (isEmpty(invoice.number)) errors.push("Manjka številka računa.");
   if (invoiceHasHrContext(invoice) && !/^\S+[-_/]\S+[-_/]\S+$/.test(normalize(invoice.number))) {
@@ -168,45 +171,45 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   }
   if (invoice.currency !== "EUR") errors.push("Valuta mora biti EUR.");
 
-  if (!invoice.seller) {
+  if (!seller) {
     errors.push("Manjka izdajatelj računa.");
   } else {
-    if (isEmpty(invoice.seller.name)) errors.push("Izdajatelj: manjka naziv.");
-    if (isEmpty(invoice.seller.vat || invoice.seller.taxId)) {
+    if (isEmpty(seller.name)) errors.push("Izdajatelj: manjka naziv.");
+    if (isEmpty(seller.vat || seller.taxId)) {
       errors.push("Izdajatelj: manjka davčna številka.");
     }
-    if (isEmpty(invoice.seller.address)) errors.push("Izdajatelj: manjka naslov.");
-    if (isEmpty(invoice.seller.postCode)) errors.push("Izdajatelj: manjka poštna številka za BG-5.");
-    if (isEmpty(invoice.seller.city)) errors.push("Izdajatelj: manjka mesto za BG-5.");
-    if (isEmpty(invoice.seller.country)) errors.push("Izdajatelj: manjka država.");
-    if (isEmpty(invoice.seller.eLocation)) errors.push("Izdajatelj: manjka eLokacija.");
-    if (isEmpty(invoice.seller.eAddress)) errors.push("Izdajatelj: manjka eAddress.");
-    if (hasStandardRatedVatLine && isEmpty(invoice.seller.vat || invoice.seller.taxId)) {
+    if (isEmpty(seller.street || seller.address)) errors.push("Izdajatelj: manjka naslov.");
+    if (isEmpty(seller.postCode)) errors.push("Izdajatelj: manjka poštna številka za BG-5.");
+    if (isEmpty(seller.city)) errors.push("Izdajatelj: manjka mesto za BG-5.");
+    if (isEmpty(seller.country)) errors.push("Izdajatelj: manjka država.");
+    if (isEmpty(seller.eLocation)) errors.push("Izdajatelj: manjka eLokacija.");
+    if (isEmpty(seller.eAddress)) errors.push("Izdajatelj: manjka eAddress.");
+    if (hasStandardRatedVatLine && isEmpty(seller.vat || seller.taxId)) {
       errors.push("BR-S-2: pri standardni DDV kategoriji S manjka prodajalčev DDV ali davčni identifikator.");
     }
-    if (invoiceHasHrContext(invoice) && !isHrVat(invoice.seller.vat || invoice.seller.taxId)) {
+    if (invoiceHasHrContext(invoice) && !isHrVat(seller.vat || seller.taxId)) {
       errors.push("Izdajatelj: HR VAT ID mora biti HR + 11 številk.");
     }
-    if (invoiceHasHrContext(invoice) && !isOib(invoice.seller.oib || invoice.seller.vat || invoice.seller.taxId)) {
+    if (invoiceHasHrContext(invoice) && !isOib(seller.oib || seller.vat || seller.taxId)) {
       errors.push("Izdajatelj: manjka veljaven OIB z 11 številkami.");
     }
   }
 
-  if (!invoice.buyer) {
+  if (!buyer) {
     errors.push("Manjka kupec računa.");
   } else {
-    if (isEmpty(invoice.buyer.name)) errors.push("Kupec: manjka naziv.");
-    if (isEmpty(invoice.buyer.vat || invoice.buyer.taxId)) errors.push("Kupec: manjka davčna številka.");
-    if (isEmpty(invoice.buyer.address)) errors.push("Kupec: manjka naslov.");
-    if (isEmpty(invoice.buyer.postCode)) warnings.push("Kupec: manjka poštna številka.");
-    if (isEmpty(invoice.buyer.city)) warnings.push("Kupec: manjka mesto.");
-    if (isEmpty(invoice.buyer.country)) errors.push("Kupec: manjka država.");
-    if (isEmpty(invoice.buyer.eLocation)) errors.push("Kupec: manjka eLokacija.");
-    if (isEmpty(invoice.buyer.eAddress)) warnings.push("Kupec: manjka eAddress, uporabljen bo fallback iz davčne številke.");
-    if (invoiceHasHrContext(invoice) && !isHrVat(invoice.buyer.vat || invoice.buyer.taxId)) {
+    if (isEmpty(buyer.name)) errors.push("Kupec: manjka naziv.");
+    if (isEmpty(buyer.vat || buyer.taxId)) errors.push("Kupec: manjka davčna številka.");
+    if (isEmpty(buyer.street || buyer.address)) errors.push("Kupec: manjka naslov.");
+    if (isEmpty(buyer.postCode)) warnings.push("Kupec: manjka poštna številka.");
+    if (isEmpty(buyer.city)) warnings.push("Kupec: manjka mesto.");
+    if (isEmpty(buyer.country)) errors.push("Kupec: manjka država.");
+    if (isEmpty(buyer.eLocation)) errors.push("Kupec: manjka eLokacija.");
+    if (isEmpty(buyer.eAddress)) warnings.push("Kupec: manjka eAddress, uporabljen bo fallback iz davčne številke.");
+    if (invoiceHasHrContext(invoice) && !isHrVat(buyer.vat || buyer.taxId)) {
       errors.push("Kupec: HR VAT ID mora biti HR + 11 številk.");
     }
-    if (invoiceHasHrContext(invoice) && !isOib(invoice.buyer.oib || invoice.buyer.vat || invoice.buyer.taxId)) {
+    if (invoiceHasHrContext(invoice) && !isOib(buyer.oib || buyer.vat || buyer.taxId)) {
       errors.push("Kupec: manjka veljaven OIB z 11 številkami.");
     }
   }

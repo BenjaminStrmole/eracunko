@@ -1,6 +1,7 @@
 import type {
   Invoice,
   InvoiceLine,
+  Party,
   VatBreakdown,
   VatCategory,
 } from "../../types/invoice";
@@ -36,6 +37,40 @@ function countryFromVat(vat: string | undefined, fallback = "SI") {
   if (/^[A-Z]{2}/.test(normalized)) return normalized.slice(0, 2);
 
   return fallback;
+}
+
+function parseAddressParts(address: string | undefined) {
+  const value = clean(address);
+  const [streetPart = "", cityPart = "", countryPart = ""] = value
+    .split(",")
+    .map((part) => clean(part));
+  const cityMatch = cityPart.match(/^(\d{4,10})\s+(.+)$/);
+
+  return {
+    street: streetPart,
+    postCode: cityMatch?.[1] || "",
+    city: cityMatch?.[2] || cityPart,
+    country: /^[A-Z]{2}$/.test(countryPart.toUpperCase())
+      ? countryPart.toUpperCase()
+      : "",
+  };
+}
+
+export function normalizePartyAddress<T extends Party>(party: T): T {
+  const parsed = parseAddressParts(party.address);
+  const street = clean(party.street || parsed.street || party.address);
+  const postCode = clean(party.postCode || parsed.postCode);
+  const city = clean(party.city || parsed.city);
+  const country = clean(party.country || parsed.country || countryFromVat(party.vat || party.taxId));
+
+  return {
+    ...party,
+    address: clean(party.address),
+    street,
+    postCode,
+    city,
+    country,
+  };
 }
 
 function defaultEAddress(vat: string | undefined) {
@@ -138,6 +173,10 @@ function buildVatBreakdown(lines: InvoiceLine[]): VatBreakdown[] {
 export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
   const lines = invoice.lines.map(normalizeLine);
   const vatBreakdown = buildVatBreakdown(lines);
+  const normalizedSellerAddress = invoice.seller
+    ? normalizePartyAddress(invoice.seller)
+    : invoice.seller;
+  const normalizedBuyerAddress = normalizePartyAddress(invoice.buyer);
 
   const net = round2(lines.reduce((sum, line) => sum + (line.netAmount || 0), 0));
   const vat = round2(
@@ -145,10 +184,10 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
   );
   const gross = round2(net + vat);
 
-  const sellerVat = normalizeVat(invoice.seller?.vat || invoice.seller?.taxId);
-  const buyerVat = normalizeVat(invoice.buyer?.vat || invoice.buyer?.taxId);
-  const sellerOib = normalizeOib(invoice.seller?.oib || sellerVat);
-  const buyerOib = normalizeOib(invoice.buyer?.oib || buyerVat);
+  const sellerVat = normalizeVat(normalizedSellerAddress?.vat || normalizedSellerAddress?.taxId);
+  const buyerVat = normalizeVat(normalizedBuyerAddress.vat || normalizedBuyerAddress.taxId);
+  const sellerOib = normalizeOib(normalizedSellerAddress?.oib || sellerVat);
+  const buyerOib = normalizeOib(normalizedBuyerAddress.oib || buyerVat);
 
   const payment = invoice.payment || {};
   const hrData = invoice.hrData || {};
@@ -209,50 +248,50 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
       paymentReference: clean(paymentReference),
       purposeCode: clean(bankData.purposeCode || payment.purposeCode || invoice.purposeCode),
       paymentMeansCode: clean(bankData.paymentMeansCode || payment.paymentMeansCode || invoice.paymentMeansCode),
-      payeeName: clean(bankData.payeeName || invoice.seller?.name),
-      payerName: clean(bankData.payerName || invoice.buyer?.name),
+      payeeName: clean(bankData.payeeName || normalizedSellerAddress?.name),
+      payerName: clean(bankData.payerName || normalizedBuyerAddress.name),
     },
 
-    seller: invoice.seller
+    seller: normalizedSellerAddress
       ? {
-          ...invoice.seller,
-          name: clean(invoice.seller.name),
+          ...normalizedSellerAddress,
+          name: clean(normalizedSellerAddress.name),
           vat: sellerVat,
-          taxId: normalizeVat(invoice.seller.taxId),
+          taxId: normalizeVat(normalizedSellerAddress.taxId),
           oib: sellerOib,
-          address: clean(invoice.seller.address),
-          street: clean(invoice.seller.street),
-          postCode: clean(invoice.seller.postCode),
-          city: clean(invoice.seller.city),
-          country: clean(invoice.seller.country || countryFromVat(sellerVat)),
-          eLocation: clean(invoice.seller.eLocation || `C:${sellerVat}`),
-          eAddress: clean(invoice.seller.eAddress || defaultEAddress(sellerVat)),
-          endpointId: clean(invoice.seller.endpointId || sellerOib || sellerVat),
-          endpointSchemeId: clean(invoice.seller.endpointSchemeId || "9934"),
-          registrationNumber: clean(invoice.seller.registrationNumber),
-          contactName: clean(invoice.seller.contactName),
-          contactEmail: clean(invoice.seller.contactEmail),
+          address: clean(normalizedSellerAddress.address),
+          street: clean(normalizedSellerAddress.street),
+          postCode: clean(normalizedSellerAddress.postCode),
+          city: clean(normalizedSellerAddress.city),
+          country: clean(normalizedSellerAddress.country || countryFromVat(sellerVat)),
+          eLocation: clean(normalizedSellerAddress.eLocation || `C:${sellerVat}`),
+          eAddress: clean(normalizedSellerAddress.eAddress || defaultEAddress(sellerVat)),
+          endpointId: clean(normalizedSellerAddress.endpointId || sellerOib || sellerVat),
+          endpointSchemeId: clean(normalizedSellerAddress.endpointSchemeId || "9934"),
+          registrationNumber: clean(normalizedSellerAddress.registrationNumber),
+          contactName: clean(normalizedSellerAddress.contactName),
+          contactEmail: clean(normalizedSellerAddress.contactEmail),
         }
-      : invoice.seller,
+      : normalizedSellerAddress,
 
     buyer: {
-      ...invoice.buyer,
-      name: clean(invoice.buyer.name),
+      ...normalizedBuyerAddress,
+      name: clean(normalizedBuyerAddress.name),
       vat: buyerVat,
-      taxId: normalizeVat(invoice.buyer.taxId),
+      taxId: normalizeVat(normalizedBuyerAddress.taxId),
       oib: buyerOib,
-      address: clean(invoice.buyer.address),
-      street: clean(invoice.buyer.street),
-      postCode: clean(invoice.buyer.postCode),
-      city: clean(invoice.buyer.city),
-      country: clean(invoice.buyer.country || countryFromVat(buyerVat)),
-      eLocation: clean(invoice.buyer.eLocation || `C:${buyerVat}`),
-      eAddress: clean(invoice.buyer.eAddress || defaultEAddress(buyerVat)),
-      endpointId: clean(invoice.buyer.endpointId || buyerOib || buyerVat),
-      endpointSchemeId: clean(invoice.buyer.endpointSchemeId || "9934"),
-      registrationNumber: clean(invoice.buyer.registrationNumber),
-      contactName: clean(invoice.buyer.contactName),
-      contactEmail: clean(invoice.buyer.contactEmail),
+      address: clean(normalizedBuyerAddress.address),
+      street: clean(normalizedBuyerAddress.street),
+      postCode: clean(normalizedBuyerAddress.postCode),
+      city: clean(normalizedBuyerAddress.city),
+      country: clean(normalizedBuyerAddress.country || countryFromVat(buyerVat)),
+      eLocation: clean(normalizedBuyerAddress.eLocation || `C:${buyerVat}`),
+      eAddress: clean(normalizedBuyerAddress.eAddress || defaultEAddress(buyerVat)),
+      endpointId: clean(normalizedBuyerAddress.endpointId || buyerOib || buyerVat),
+      endpointSchemeId: clean(normalizedBuyerAddress.endpointSchemeId || "9934"),
+      registrationNumber: clean(normalizedBuyerAddress.registrationNumber),
+      contactName: clean(normalizedBuyerAddress.contactName),
+      contactEmail: clean(normalizedBuyerAddress.contactEmail),
     },
 
     lines,

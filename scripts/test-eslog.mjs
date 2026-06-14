@@ -66,6 +66,17 @@ for (const fixtureName of fixtures) {
     id: index === 0 ? 1781425490564 : line.id,
   }));
 
+  if (fixtureName === "minimal-standard-invoice") {
+    invoice.seller = {
+      ...invoice.seller,
+      address: "Slovenska cesta 1, 1000 Ljubljana, SI",
+      street: "",
+      postCode: "",
+      city: "",
+      country: "",
+    };
+  }
+
   const xml = buildEslogInvoiceXml(invoice);
   const xmlPath = join(tmpDir, `${fixtureName}.xml`);
   writeFileSync(xmlPath, xml);
@@ -74,6 +85,12 @@ for (const fixtureName of fixtures) {
   assertIncludes(xml, "<D_3251>", `${fixtureName}: postal code missing`);
   assertIncludes(xml, "<D_3164>", `${fixtureName}: city missing`);
   assertIncludes(xml, "<D_3207>", `${fixtureName}: country missing`);
+  if (fixtureName === "minimal-standard-invoice") {
+    assertIncludes(xml, "<D_3042>Slovenska cesta 1</D_3042>", `${fixtureName}: seller street was not parsed from address`);
+    assertIncludes(xml, "<D_3251>1000</D_3251>", `${fixtureName}: seller post code was not parsed from address`);
+    assertIncludes(xml, "<D_3164>Ljubljana</D_3164>", `${fixtureName}: seller city was not parsed from address`);
+    assertIncludes(xml, "<D_3207>SI</D_3207>", `${fixtureName}: seller country was not parsed from address`);
+  }
   assertIncludes(xml, "<D_1153>VA</D_1153>", `${fixtureName}: seller/buyer VAT reference missing`);
   assertIncludes(xml, "<D_1082>1</D_1082>", `${fixtureName}: first line number must be sequential`);
   assertNotIncludes(xml, "1781425490564", `${fixtureName}: timestamp leaked into D_1082`);
