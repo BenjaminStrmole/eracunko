@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "crypto";
 import { cookies } from "next/headers";
 import type { Prisma, User, UserSettings } from "@prisma/client";
 import { prisma } from "./prisma";
@@ -44,43 +45,83 @@ function settingsDataToJson(data: UserSettingsData): Prisma.InputJsonObject {
   return data as Prisma.InputJsonObject;
 }
 
-async function getCurrentBizboxUsername() {
+function devLog(message: string, meta?: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "development") return;
+  console.info(`[db:userSettings] ${message}`, meta || {});
+}
+
+async function getCurrentUserIdentity() {
   const cookieStore = await cookies();
-  return cookieStore.get("bizbox_username")?.value?.trim() || null;
+  const username = cookieStore.get("bizbox_username")?.value?.trim();
+  if (username) {
+    return {
+      bizboxUsername: username,
+      email: username.includes("@") ? username : undefined,
+      source: "bizbox_username",
+    };
+  }
+
+  const guid = cookieStore.get("bizbox_guid")?.value?.trim();
+  if (!guid) return null;
+
+  return {
+    bizboxUsername: `bizbox-session:${createHash("sha256")
+      .update(guid)
+      .digest("hex")
+      .slice(0, 32)}`,
+    email: undefined,
+    source: "bizbox_guid",
+  };
 }
 
 export async function getOrCreateCurrentUser(): Promise<User> {
-  const bizboxUsername = await getCurrentBizboxUsername();
+  const identity = await getCurrentUserIdentity();
 
-  if (!bizboxUsername) {
+  if (!identity) {
+    devLog("no auth identity found");
     throw new Error("UNAUTHENTICATED");
   }
 
   const existingUser = await prisma.user.findFirst({
-    where: { bizboxUsername },
+    where: { bizboxUsername: identity.bizboxUsername },
   });
 
-  if (existingUser) return existingUser;
+  if (existingUser) {
+    devLog("user found", { userId: existingUser.id, source: identity.source });
+    return existingUser;
+  }
 
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
-      bizboxUsername,
-      email: bizboxUsername.includes("@") ? bizboxUsername : undefined,
+      bizboxUsername: identity.bizboxUsername,
+      email: identity.email,
     },
   });
+
+  devLog("user created", { userId: user.id, source: identity.source });
+  return user;
 }
 
 export async function getUserSettings(): Promise<UserSettings> {
   const user = await getOrCreateCurrentUser();
-
-  return prisma.userSettings.upsert({
+  const existingSettings = await prisma.userSettings.findUnique({
     where: { userId: user.id },
-    update: {},
-    create: {
+  });
+
+  if (existingSettings) {
+    devLog("settings found", { userId: user.id, settingsId: existingSettings.id });
+    return existingSettings;
+  }
+
+  const settings = await prisma.userSettings.create({
+    data: {
       userId: user.id,
       data: {},
     },
   });
+
+  devLog("settings created", { userId: user.id, settingsId: settings.id });
+  return settings;
 }
 
 export async function getActiveCompany() {
@@ -98,10 +139,18 @@ export async function updateActiveCompany(activeCompany: StoredActiveCompany | n
     activeCompany,
   };
 
-  return prisma.userSettings.update({
+  const updatedSettings = await prisma.userSettings.update({
     where: { id: settings.id },
     data: {
       data: settingsDataToJson(nextData),
     },
   });
+
+  devLog("active company saved", {
+    settingsId: settings.id,
+    hasActiveCompany: Boolean(activeCompany),
+    activeCompanyTaxId: activeCompany?.taxId || activeCompany?.vatNumber || null,
+  });
+
+  return updatedSettings;
 }

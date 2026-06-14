@@ -49,13 +49,24 @@ function errorResponse() {
   );
 }
 
+function devLog(message: string, meta?: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "development") return;
+  console.info(`[api/settings/active-company] ${message}`, meta || {});
+}
+
 export async function GET(request: NextRequest) {
+  devLog("GET called");
+
   if (!request.cookies.get("bizbox_guid")?.value) {
+    devLog("GET unauthorized: missing bizbox_guid");
     return unauthorizedResponse();
   }
 
   try {
     const activeCompany = await getActiveCompany();
+    devLog("GET active company loaded", {
+      hasActiveCompany: Boolean(activeCompany),
+    });
 
     return NextResponse.json({
       success: true,
@@ -71,13 +82,20 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  devLog("PUT called");
+
   if (!request.cookies.get("bizbox_guid")?.value) {
+    devLog("PUT unauthorized: missing bizbox_guid");
     return unauthorizedResponse();
   }
 
   try {
     const body = await request.json();
     const activeCompany = sanitizeActiveCompany(body?.activeCompany ?? null);
+    devLog("PUT payload parsed", {
+      hasActiveCompany: Boolean(activeCompany),
+      activeCompanyTaxId: activeCompany?.taxId || activeCompany?.vatNumber || null,
+    });
 
     if (body?.activeCompany && !activeCompany?.name && !activeCompany?.taxId) {
       return NextResponse.json(
@@ -87,6 +105,7 @@ export async function PUT(request: NextRequest) {
     }
 
     await updateActiveCompany(activeCompany);
+    devLog("PUT active company saved");
 
     return NextResponse.json({
       success: true,
