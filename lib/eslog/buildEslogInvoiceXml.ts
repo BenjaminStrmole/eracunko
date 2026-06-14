@@ -98,6 +98,11 @@ function buildPartyReferenceGroup(qualifier: string, value?: string) {
   return segment("G_SG3", buildReferenceSegment(qualifier, value));
 }
 
+function iso6523Scheme(value?: string) {
+  const normalized = String(value || "").trim();
+  return /^\d{4}$/.test(normalized) ? normalized : "";
+}
+
 function buildMoaSegment(qualifier: string, amount: number | undefined | null) {
   return segment(
     "S_MOA",
@@ -130,13 +135,14 @@ export function buildPartySegment(
   const streetOrAddress = party.street || party.address;
   const taxId = party.vat || party.taxId || party.oib;
   const endpointId = party.endpointId || party.eLocation || taxId;
+  const endpointScheme = iso6523Scheme(party.endpointSchemeId);
   const electronicAddress = party.eAddress || party.contactEmail;
 
   const nad = segment(
     "S_NAD",
     `
       ${tag("D_3035", role)}
-      ${segment("C_C082", `${tag("D_3039", endpointId)}${tag("D_1131", party.endpointSchemeId)}`)}
+      ${segment("C_C082", `${tag("D_3039", endpointId)}${tag("D_1131", endpointScheme)}`)}
       ${segment("C_C080", tag("D_3036", party.name))}
       ${segment("C_C059", tag("D_3042", streetOrAddress))}
       ${tag("D_3164", party.city)}
@@ -148,7 +154,6 @@ export function buildPartySegment(
   const references = [
     buildPartyReferenceGroup("VA", party.vat),
     buildPartyReferenceGroup("AHP", party.taxId && party.taxId !== party.vat ? party.taxId : undefined),
-    buildPartyReferenceGroup("GN", party.registrationNumber),
     buildPartyReferenceGroup("API", party.oib),
   ]
     .filter(Boolean)
@@ -200,16 +205,26 @@ export function buildLineSegment(line: InvoiceLine, index: number) {
       )
     : "";
 
+  const sellerItemIdentifier = line.itemCode
+    ? segment(
+        "S_PIA",
+        `
+          ${tag("D_4347", "5")}
+          ${segment("C_C212", `${tag("D_7140", line.itemCode)}${tag("D_7143", "SA")}`)}
+        `
+      )
+    : "";
+
   return segment(
     "G_SG26",
     `
       ${segment(
         "S_LIN",
         `
-          ${tag("D_1082", line.id || index + 1)}
-          ${segment("C_C212", `${tag("D_7140", line.itemCode)}${tag("D_7143", line.itemCode ? "SRV" : undefined)}`)}
+          ${tag("D_1082", index + 1)}
         `
       )}
+      ${sellerItemIdentifier}
       ${classification}
       ${segment(
         "S_IMD",
@@ -217,7 +232,7 @@ export function buildLineSegment(line: InvoiceLine, index: number) {
           ${tag("D_7077", "F")}
           ${segment(
             "C_C273",
-            `${tag("D_7008", line.description)}${tag("D_7009", line.itemCode)}${tag("D_7008_2", line.itemDescription || line.note)}`
+            `${tag("D_7008", line.description)}${tag("D_7008_2", line.itemDescription || line.note)}`
           )}
         `
       )}

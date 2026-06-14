@@ -142,6 +142,9 @@ function validateLine(line: InvoiceLine, index: number, invoice: Invoice) {
 export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const hasStandardRatedVatLine = (invoice.lines || []).some(
+    (line) => (line.vatCategory || "S") === "S"
+  );
 
   if (isEmpty(invoice.number)) errors.push("Manjka številka računa.");
   if (invoiceHasHrContext(invoice) && !/^\S+[-_/]\S+[-_/]\S+$/.test(normalize(invoice.number))) {
@@ -173,11 +176,14 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
       errors.push("Izdajatelj: manjka davčna številka.");
     }
     if (isEmpty(invoice.seller.address)) errors.push("Izdajatelj: manjka naslov.");
-    if (isEmpty(invoice.seller.postCode)) warnings.push("Izdajatelj: manjka poštna številka.");
-    if (isEmpty(invoice.seller.city)) warnings.push("Izdajatelj: manjka mesto.");
+    if (isEmpty(invoice.seller.postCode)) errors.push("Izdajatelj: manjka poštna številka za BG-5.");
+    if (isEmpty(invoice.seller.city)) errors.push("Izdajatelj: manjka mesto za BG-5.");
     if (isEmpty(invoice.seller.country)) errors.push("Izdajatelj: manjka država.");
     if (isEmpty(invoice.seller.eLocation)) errors.push("Izdajatelj: manjka eLokacija.");
     if (isEmpty(invoice.seller.eAddress)) errors.push("Izdajatelj: manjka eAddress.");
+    if (hasStandardRatedVatLine && isEmpty(invoice.seller.vat || invoice.seller.taxId)) {
+      errors.push("BR-S-2: pri standardni DDV kategoriji S manjka prodajalčev DDV ali davčni identifikator.");
+    }
     if (invoiceHasHrContext(invoice) && !isHrVat(invoice.seller.vat || invoice.seller.taxId)) {
       errors.push("Izdajatelj: HR VAT ID mora biti HR + 11 številk.");
     }
