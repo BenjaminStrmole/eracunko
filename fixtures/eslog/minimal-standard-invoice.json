@@ -1,0 +1,83 @@
+{
+  "profile": "standard",
+  "number": "INV-2026-0001",
+  "issueDate": "2026-06-14",
+  "serviceDate": "2026-06-14",
+  "dueDate": "2026-06-22",
+  "currency": "EUR",
+  "documentType": "380",
+  "businessProcess": "P1",
+  "seller": {
+    "name": "eRacunko Demo d.o.o.",
+    "vat": "SI12345678",
+    "taxId": "SI12345678",
+    "registrationNumber": "1234567000",
+    "address": "Slovenska cesta 1",
+    "postCode": "1000",
+    "city": "Ljubljana",
+    "country": "SI",
+    "eLocation": "SI12345678",
+    "eAddress": "demo@eracunko.si",
+    "endpointId": "SI12345678",
+    "endpointSchemeId": "9934"
+  },
+  "buyer": {
+    "name": "Kupec Demo d.o.o.",
+    "vat": "SI87654321",
+    "taxId": "SI87654321",
+    "registrationNumber": "7654321000",
+    "address": "Trg kupcev 2",
+    "postCode": "2000",
+    "city": "Maribor",
+    "country": "SI",
+    "eLocation": "SI87654321",
+    "eAddress": "racuni@kupec.si",
+    "endpointId": "SI87654321",
+    "endpointSchemeId": "9934"
+  },
+  "lines": [
+    {
+      "id": 1,
+      "description": "Svetovalna storitev",
+      "quantity": 1,
+      "unit": "H87",
+      "price": 100,
+      "vatRate": 22,
+      "vatCategory": "S",
+      "netAmount": 100,
+      "vatAmount": 22,
+      "grossAmount": 122
+    }
+  ],
+  "vatBreakdown": [
+    {
+      "vatCategory": "S",
+      "vatRate": 22,
+      "taxableAmount": 100,
+      "vatAmount": 22
+    }
+  ],
+  "totals": {
+    "net": 100,
+    "vat": 22,
+    "gross": 122,
+    "payable": 122
+  },
+  "payment": {
+    "paymentMeansCode": "58",
+    "iban": "SI56000000000000000",
+    "bic": "LJBASI2X",
+    "reference": "SI00 INV20260001",
+    "paymentTerms": "Placilo v 8 dneh."
+  },
+  "references": {
+    "orderReference": "NAR-2026-001"
+  },
+  "eSlog": {
+    "specificationIdentifier": "urn:cen.eu:en16931:2017",
+    "documentType": "380",
+    "businessProcess": "P1",
+    "paymentMeansCode": "58"
+  },
+  "note": "Minimalni standardni eSLOG 2.0 primer."
+}

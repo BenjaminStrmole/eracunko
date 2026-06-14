@@ -160,6 +160,9 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   if (!/^P([1-9]|1[0-2])$/.test(businessProcess) && businessProcess !== "P99" && !businessProcess.startsWith("P99:")) {
     errors.push("Poslovni proces mora biti P1-P12 ali P99:oznakaKupca.");
   }
+  if (isEmpty(invoice.eSlog?.specificationIdentifier)) {
+    warnings.push("BT-24: manjka identifikator specifikacije, uporabljen bo privzeti EN16931.");
+  }
   if (invoice.currency !== "EUR") errors.push("Valuta mora biti EUR.");
 
   if (!invoice.seller) {
@@ -291,6 +294,10 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
 
   if (!payment?.iban && !invoice.bankAccount) {
     errors.push("Manjka IBAN oziroma bančni račun.");
+  }
+
+  if ((payment?.iban || invoice.bankAccount) && !(payment?.bic || payment?.bankBic || invoice.bankBic)) {
+    warnings.push("BT-86: manjka BIC/SWIFT banke prejemnika; XML ga bo izpustil, če ni na voljo.");
   }
 
   if (!payment?.reference && !invoice.reference) {

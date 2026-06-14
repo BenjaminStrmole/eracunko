@@ -1,0 +1,95 @@
+{
+  "profile": "ujp",
+  "number": "UJP-2026-0001",
+  "issueDate": "2026-06-14",
+  "serviceDate": "2026-06-14",
+  "dueDate": "2026-06-29",
+  "currency": "EUR",
+  "documentType": "380",
+  "businessProcess": "P1",
+  "seller": {
+    "name": "eRacunko Demo d.o.o.",
+    "vat": "SI12345678",
+    "taxId": "SI12345678",
+    "registrationNumber": "1234567000",
+    "address": "Slovenska cesta 1",
+    "postCode": "1000",
+    "city": "Ljubljana",
+    "country": "SI",
+    "eLocation": "SI12345678",
+    "eAddress": "demo@eracunko.si",
+    "endpointId": "SI12345678",
+    "endpointSchemeId": "9934"
+  },
+  "buyer": {
+    "name": "Javni zavod Demo",
+    "vat": "SI11223344",
+    "taxId": "SI11223344",
+    "registrationNumber": "1122334000",
+    "address": "Ulica javnih narocil 3",
+    "postCode": "1000",
+    "city": "Ljubljana",
+    "country": "SI",
+    "eLocation": "SI11223344",
+    "eAddress": "racuni@javni-zavod.si",
+    "endpointId": "SI11223344",
+    "endpointSchemeId": "9934"
+  },
+  "lines": [
+    {
+      "id": 1,
+      "description": "Vzdrzevanje programske opreme",
+      "quantity": 2,
+      "unit": "H87",
+      "price": 150,
+      "vatRate": 22,
+      "vatCategory": "S",
+      "netAmount": 300,
+      "vatAmount": 66,
+      "grossAmount": 366
+    }
+  ],
+  "vatBreakdown": [
+    {
+      "vatCategory": "S",
+      "vatRate": 22,
+      "taxableAmount": 300,
+      "vatAmount": 66
+    }
+  ],
+  "totals": {
+    "net": 300,
+    "vat": 66,
+    "gross": 366,
+    "payable": 366
+  },
+  "payment": {
+    "paymentMeansCode": "58",
+    "iban": "SI56000000000000000",
+    "bic": "LJBASI2X",
+    "reference": "SI00 UJP20260001",
+    "purposeCode": "OTHR",
+    "paymentPurpose": "Placilo racuna UJP-2026-0001",
+    "paymentTerms": "Placilo v 15 dneh."
+  },
+  "references": {
+    "contractReference": "POG-2026-001"
+  },
+  "ujpData": {
+    "contractReference": "POG-2026-001",
+    "buyerReference": "ODD-001"
+  },
+  "bankData": {
+    "payeeIban": "SI56000000000000000",
+    "payeeBic": "LJBASI2X",
+    "paymentReference": "SI00 UJP20260001",
+    "purposeCode": "OTHR"
+  },
+  "eSlog": {
+    "specificationIdentifier": "urn:cen.eu:en16931:2017",
+    "documentType": "380",
+    "businessProcess": "P1",
+    "paymentMeansCode": "58"
+  },
+  "note": "UJP/bank primer uporablja samo potrjene osnovne eSLOG reference in placilne podatke."
+}

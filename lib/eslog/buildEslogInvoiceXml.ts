@@ -27,7 +27,7 @@ function formatQuantity(value: number | undefined | null) {
 }
 
 function formatDate(value: string) {
-  return String(value || "").replaceAll("-", "");
+  return String(value || "");
 }
 
 function tag(name: string, value: string | number | undefined | null) {
@@ -69,15 +69,74 @@ function buildFreeText(subject: string, value?: string) {
   );
 }
 
-export function buildPartySegment(role: "SE" | "BY", party: Party) {
+function buildDateSegment(qualifier: string, value?: string) {
+  if (!isPresent(value)) return "";
+
+  return segment(
+    "S_DTM",
+    segment(
+      "C_C507",
+      `${tag("D_2005", qualifier)}${tag("D_2380", formatDate(value || ""))}`
+    )
+  );
+}
+
+function buildReferenceSegment(qualifier: string, value?: string) {
+  if (!isPresent(value)) return "";
+
+  return segment(
+    "S_RFF",
+    segment("C_C506", `${tag("D_1153", qualifier)}${tag("D_1154", value)}`)
+  );
+}
+
+function buildReferenceGroup(qualifier: string, value?: string) {
+  return segment("G_SG1", buildReferenceSegment(qualifier, value));
+}
+
+function buildPartyReferenceGroup(qualifier: string, value?: string) {
+  return segment("G_SG3", buildReferenceSegment(qualifier, value));
+}
+
+function buildMoaSegment(qualifier: string, amount: number | undefined | null) {
+  return segment(
+    "S_MOA",
+    segment("C_C516", `${tag("D_5025", qualifier)}${tag("D_5004", formatAmount(amount))}`)
+  );
+}
+
+function buildSummaryMoaGroup(qualifier: string, amount: number | undefined | null) {
+  return segment("G_SG50", buildMoaSegment(qualifier, amount));
+}
+
+function buildFinancialInstitutionSegment(iban?: string, bic?: string) {
+  if (!isPresent(iban) && !isPresent(bic)) return "";
+
+  return segment(
+    "S_FII",
+    `
+      ${tag("D_3035", "RB")}
+      ${segment("C_C078", tag("D_3194", iban))}
+      ${segment("C_C088", tag("D_3433", bic))}
+    `
+  );
+}
+
+export function buildPartySegment(
+  role: "SE" | "BY",
+  party: Party,
+  options: { iban?: string; bic?: string } = {}
+) {
   const streetOrAddress = party.street || party.address;
   const taxId = party.vat || party.taxId || party.oib;
+  const endpointId = party.endpointId || party.eLocation || taxId;
+  const electronicAddress = party.eAddress || party.contactEmail;
 
   const nad = segment(
     "S_NAD",
     `
       ${tag("D_3035", role)}
-      ${segment("C_C082", `${tag("D_3039", party.endpointId || taxId)}${tag("D_3055", party.endpointSchemeId)}`)}
+      ${segment("C_C082", `${tag("D_3039", endpointId)}${tag("D_1131", party.endpointSchemeId)}`)}
       ${segment("C_C080", tag("D_3036", party.name))}
       ${segment("C_C059", tag("D_3042", streetOrAddress))}
       ${tag("D_3164", party.city)}
@@ -87,25 +146,34 @@ export function buildPartySegment(role: "SE" | "BY", party: Party) {
   );
 
   const references = [
-    segment("S_RFF", segment("C_C506", `${tag("D_1153", "VA")}${tag("D_1154", party.vat || party.taxId)}`)),
-    segment("S_RFF", segment("C_C506", `${tag("D_1153", "API")}${tag("D_1154", party.oib)}`)),
-    segment("S_RFF", segment("C_C506", `${tag("D_1153", "XA")}${tag("D_1154", party.eLocation)}`)),
-    segment("S_RFF", segment("C_C506", `${tag("D_1153", "EM")}${tag("D_1154", party.eAddress)}`)),
+    buildPartyReferenceGroup("VA", party.vat),
+    buildPartyReferenceGroup("AHP", party.taxId && party.taxId !== party.vat ? party.taxId : undefined),
+    buildPartyReferenceGroup("GN", party.registrationNumber),
+    buildPartyReferenceGroup("API", party.oib),
   ]
     .filter(Boolean)
     .join("\n");
 
-  const contact = segment(
-    "S_CTA",
-    `
-      ${tag("D_3139", "IC")}
-      ${segment("C_C056", tag("D_3412", party.contactName))}
-    `
-  );
+  const contact =
+    isPresent(electronicAddress) || isPresent(party.contactName)
+      ? segment(
+          "G_SG5",
+          `
+            ${segment(
+              "S_CTA",
+              `
+                ${tag("D_3139", "IC")}
+                ${segment("C_C056", tag("D_3412", party.contactName))}
+              `
+            )}
+            ${segment("S_COM", segment("C_C076", `${tag("D_3148", electronicAddress)}${tag("D_3155", "EM")}`))}
+          `
+        )
+      : "";
 
-  const email = segment("S_COM", segment("C_C076", `${tag("D_3148", party.contactEmail)}${tag("D_3155", "EM")}`));
+  const financialInstitution = role === "SE" ? buildFinancialInstitutionSegment(options.iban, options.bic) : "";
 
-  return segment("G_SG2", `${nad}${references}${contact}${email}`);
+  return segment("G_SG2", `${nad}${financialInstitution}${references}${contact}`);
 }
 
 export function buildLineSegment(line: InvoiceLine, index: number) {
@@ -135,14 +203,21 @@ export function buildLineSegment(line: InvoiceLine, index: number) {
   return segment(
     "G_SG26",
     `
-      ${segment("S_LIN", tag("D_1082", line.id || index + 1))}
+      ${segment(
+        "S_LIN",
+        `
+          ${tag("D_1082", line.id || index + 1)}
+          ${segment("C_C212", `${tag("D_7140", line.itemCode)}${tag("D_7143", line.itemCode ? "SRV" : undefined)}`)}
+        `
+      )}
       ${classification}
       ${segment(
         "S_IMD",
         `
+          ${tag("D_7077", "F")}
           ${segment(
             "C_C273",
-            `${tag("D_7008", line.description)}${tag("D_7009", line.itemCode)}${tag("D_7008", line.itemDescription || line.note)}`
+            `${tag("D_7008", line.description)}${tag("D_7009", line.itemCode)}${tag("D_7008_2", line.itemDescription || line.note)}`
           )}
         `
       )}
@@ -153,26 +228,32 @@ export function buildLineSegment(line: InvoiceLine, index: number) {
           `${tag("D_6063", "47")}${tag("D_6060", formatQuantity(line.quantity))}${tag("D_6411", unitCode)}`
         )
       )}
+      ${segment("G_SG27", buildMoaSegment("203", netAmount))}
       ${segment(
-        "S_MOA",
-        segment("C_C516", `${tag("D_5025", "203")}${tag("D_5004", formatAmount(netAmount))}`)
+        "G_SG29",
+        segment(
+          "S_PRI",
+          segment(
+            "C_C509",
+            `${tag("D_5125", "AAA")}${tag("D_5118", formatAmount(line.price))}${tag("D_5284", "1")}${tag("D_6411", unitCode)}`
+          )
+        )
       )}
       ${segment(
-        "S_PRI",
-        segment("C_C509", `${tag("D_5125", "AAA")}${tag("D_5118", formatAmount(line.price))}`)
-      )}
-      ${segment(
-        "S_TAX",
+        "G_SG34",
         `
-          ${tag("D_5283", "7")}
-          ${segment("C_C241", `${tag("D_5153", "VAT")}${tag("D_5152", line.hrVatCategoryCode)}`)}
-          ${segment("C_C243", tag("D_5278", formatAmount(line.vatRate)))}
-          ${tag("D_5305", vatCategory)}
+          ${segment(
+            "S_TAX",
+            `
+              ${tag("D_5283", "7")}
+              ${segment("C_C241", `${tag("D_5153", "VAT")}${tag("D_5152", line.hrVatCategoryCode)}`)}
+              ${segment("C_C243", tag("D_5278", formatAmount(line.vatRate)))}
+              ${tag("D_5305", vatCategory)}
+            `
+          )}
+          ${buildMoaSegment("125", netAmount)}
+          ${buildMoaSegment("124", vatAmount)}
         `
-      )}
-      ${segment(
-        "S_MOA",
-        segment("C_C516", `${tag("D_5025", "124")}${tag("D_5004", formatAmount(vatAmount))}`)
       )}
       ${taxExemption}
     `
@@ -183,7 +264,7 @@ export function buildTaxSegments(vatBreakdown: VatBreakdown[]) {
   return vatBreakdown
     .map((breakdown) =>
       segment(
-        "G_SG50",
+        "G_SG52",
         `
           ${segment(
             "S_TAX",
@@ -232,6 +313,12 @@ export function buildBaseEslogInvoice(input: Invoice) {
 
   const linesXml = invoice.lines.map(buildLineSegment).join("\n");
   const taxXml = buildTaxSegments(invoice.vatBreakdown || []);
+  const documentLevelTaxExemptions = (invoice.vatBreakdown || [])
+    .map((breakdown) => breakdown.taxExemptionReason)
+    .filter((reason): reason is string => isPresent(reason))
+    .filter((reason, index, list) => list.indexOf(reason) === index)
+    .map((reason) => buildFreeText("AGM", reason))
+    .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:eslog:2.00" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -256,6 +343,12 @@ export function buildBaseEslogInvoice(input: Invoice) {
       `
     )}
 
+    ${buildDateSegment("137", invoice.issueDate)}
+    ${buildDateSegment("35", invoice.serviceDate)}
+    ${invoice.cashAccounting ? buildDateSegment("432", invoice.issueDate) : ""}
+
+    ${buildFreeText("AAB", payment.paymentTerms)}
+    ${buildFreeText("GEN", invoice.note)}
     ${segment(
       "S_FTX",
       `
@@ -272,36 +365,16 @@ export function buildBaseEslogInvoice(input: Invoice) {
         ? `${invoice.operator.oib}:${invoice.operator.code || invoice.operator.name}#Oznaka operatera`
         : undefined
     )}
-    ${buildFreeText("AAI", invoice.note)}
-    ${buildFreeText("PMT", payment.paymentTerms)}
+    ${documentLevelTaxExemptions}
 
-    ${segment(
-      "S_DTM",
-      segment("C_C507", `${tag("D_2005", "137")}${tag("D_2380", formatDate(invoice.issueDate))}${tag("D_2379", "102")}`)
-    )}
-    ${segment(
-      "S_DTM",
-      segment("C_C507", `${tag("D_2005", "35")}${tag("D_2380", formatDate(invoice.serviceDate))}${tag("D_2379", "102")}`)
-    )}
-    ${segment(
-      "S_DTM",
-      segment("C_C507", `${tag("D_2005", "13")}${tag("D_2380", formatDate(invoice.dueDate))}${tag("D_2379", "102")}`)
-    )}
-    ${invoice.cashAccounting ? segment("S_DTM", segment("C_C507", `${tag("D_2005", "432")}${tag("D_2380", formatDate(invoice.issueDate))}${tag("D_2379", "102")}`)) : ""}
+    ${buildReferenceGroup("ON", references.orderReference)}
+    ${buildReferenceGroup("CT", references.contractReference)}
+    ${buildReferenceGroup("AAK", references.deliveryNoteReference)}
+    ${buildReferenceGroup("CR", references.buyerReference)}
+    ${buildReferenceGroup("PQ", reference)}
 
-    ${invoice.seller ? buildPartySegment("SE", invoice.seller) : ""}
+    ${invoice.seller ? buildPartySegment("SE", invoice.seller, { iban, bic }) : ""}
     ${buildPartySegment("BY", invoice.buyer)}
-
-    ${segment(
-      "G_SG1",
-      `
-        ${segment("S_RFF", segment("C_C506", `${tag("D_1153", "ON")}${tag("D_1154", references.orderReference)}`))}
-        ${segment("S_RFF", segment("C_C506", `${tag("D_1153", "CT")}${tag("D_1154", references.contractReference)}`))}
-        ${segment("S_RFF", segment("C_C506", `${tag("D_1153", "DQ")}${tag("D_1154", references.deliveryNoteReference)}`))}
-        ${segment("S_RFF", segment("C_C506", `${tag("D_1153", "CR")}${tag("D_1154", references.buyerReference)}`))}
-        ${segment("S_RFF", segment("C_C506", `${tag("D_1153", "AEP")}${tag("D_1154", reference)}`))}
-      `
-    )}
 
     ${segment(
       "G_SG7",
@@ -311,16 +384,9 @@ export function buildBaseEslogInvoice(input: Invoice) {
     ${segment(
       "G_SG8",
       `
-        ${segment("S_PAT", tag("D_4279", "3"))}
+        ${segment("S_PAT", tag("D_4279", "1"))}
+        ${buildDateSegment("13", invoice.dueDate)}
         ${segment("S_PAI", segment("C_C534", tag("D_4461", paymentMeansCode)))}
-      `
-    )}
-
-    ${segment(
-      "G_SG12",
-      `
-        ${segment("S_FII", `${tag("D_3035", "RB")}${segment("C_C078", tag("D_3194", iban))}${segment("C_C088", tag("D_3433", bic))}`)}
-        ${segment("S_MOA", segment("C_C516", `${tag("D_5025", "9")}${tag("D_5004", formatAmount(invoice.totals.payable || invoice.totals.gross))}`))}
       `
     )}
 
@@ -328,12 +394,13 @@ export function buildBaseEslogInvoice(input: Invoice) {
 
     ${segment("S_UNS", tag("D_0081", "S"))}
 
-    ${taxXml}
+    ${buildSummaryMoaGroup("79", invoice.totals.net)}
+    ${buildSummaryMoaGroup("389", invoice.totals.net)}
+    ${buildSummaryMoaGroup("176", invoice.totals.vat)}
+    ${buildSummaryMoaGroup("388", invoice.totals.gross)}
+    ${buildSummaryMoaGroup("9", invoice.totals.payable || invoice.totals.gross)}
 
-    ${segment("S_MOA", segment("C_C516", `${tag("D_5025", "79")}${tag("D_5004", formatAmount(invoice.totals.net))}`))}
-    ${segment("S_MOA", segment("C_C516", `${tag("D_5025", "176")}${tag("D_5004", formatAmount(invoice.totals.vat))}`))}
-    ${segment("S_MOA", segment("C_C516", `${tag("D_5025", "77")}${tag("D_5004", formatAmount(invoice.totals.gross))}`))}
-    ${segment("S_MOA", segment("C_C516", `${tag("D_5025", "9")}${tag("D_5004", formatAmount(invoice.totals.payable || invoice.totals.gross))}`))}
+    ${taxXml}
   </M_INVOIC>
 </Invoice>`;
 }
