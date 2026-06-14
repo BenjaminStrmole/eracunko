@@ -32,7 +32,6 @@ model Company {
   eLocation         String?
   eAddress          String?
   address           String?
-  street            String?
   postCode          String?
   city              String?
   country           String?           @default("SI")
