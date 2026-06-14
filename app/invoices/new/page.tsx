@@ -248,6 +248,7 @@ export default function NewInvoicePage() {
 
   const [documentType, setDocumentType] = useState("380");
   const [businessProcess, setBusinessProcess] = useState("P1");
+  const [specificationIdentifier, setSpecificationIdentifier] = useState("urn:cen.eu:en16931:2017");
   const [note, setNote] = useState("");
 
   const [paymentMeansCode, setPaymentMeansCode] = useState("58");
@@ -529,7 +530,7 @@ export default function NewInvoicePage() {
       lines,
       totals,
       eSlog: {
-        specificationIdentifier: "urn:cen.eu:en16931:2017",
+        specificationIdentifier,
         documentType,
         businessProcess: hrBusinessProcess,
         paymentMeansCode: bankPaymentMeansCode,
@@ -677,6 +678,8 @@ export default function NewInvoicePage() {
         "Račun ima validacijske napake",
         prepared.validation.errors.slice(0, 2).join(" ")
       );
+      setStep(3);
+      return;
     } else if (prepared.validation.warnings.length > 0) {
       toast.warning(
         "Račun ima opozorila",
@@ -740,8 +743,8 @@ export default function NewInvoicePage() {
           </div>
 
           {step === 0 && (
-            <div className="space-y-7">
-              <div>
+            <div className="space-y-7" id="section-buyer-seller">
+              <div id="section-profile">
                 <SectionHeader
                   title="Vrsta racuna"
                   description="Izberi najblizji nacin posiljanja. Podatki, ki so posebni za profil, se prikazejo kasneje."
@@ -764,7 +767,7 @@ export default function NewInvoicePage() {
                 </div>
               </div>
 
-              <div>
+              <div id="section-buyer">
                 <SectionHeader
                   title="Kupec"
                   description="Izberi shranjeno stranko ali vnesi osnovne podatke rocno."
@@ -793,19 +796,46 @@ export default function NewInvoicePage() {
                   <BuyerField label="Postna stevilka" field="postCode" buyer={buyer} setBuyer={setBuyer} />
                   <BuyerField label="Mesto" field="city" buyer={buyer} setBuyer={setBuyer} />
                   <BuyerField label="Drzava" field="country" buyer={buyer} setBuyer={setBuyer} />
-                  <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} />
-                  <BuyerField label="e-naslov za prejem" field="eAddress" buyer={buyer} setBuyer={setBuyer} />
-                  {isReferenceProfile && (
-                    <BuyerField label="Maticna stevilka kupca" field="registrationNumber" buyer={buyer} setBuyer={setBuyer} />
-                  )}
+                  <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} helper="Identifikator prejemnika v eSLOG/bizBox omrezju. Ce ga ne poznas, ga navadno vrne iskanje stranke." />
                 </div>
+                <details className="mt-5 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                  <summary className="cursor-pointer font-semibold">Dodatna polja kupca</summary>
+                  <p className="app-muted mt-2 text-sm">
+                    Ta polja se uporabijo za elektronski naslov prejemnika, identifikatorje in registrske podatke, kadar jih prejemnik zahteva.
+                  </p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <BuyerField label="e-naslov za prejem" field="eAddress" buyer={buyer} setBuyer={setBuyer} helper="BT-49; v XML se zapise kot elektronski naslov kupca, kadar je vnesen." />
+                    <BuyerField label="Maticna stevilka kupca" field="registrationNumber" buyer={buyer} setBuyer={setBuyer} helper="BT-47; opcijski registrski identifikator kupca." />
+                  </div>
+                </details>
+              </div>
+
+              <div id="section-seller">
+                <SectionHeader
+                  title="Prodajalec"
+                  description="Prodajalec se vzame iz aktivnega podjetja. Tukaj preveris podatke, ki gredo v eSLOG XML."
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Info label="Naziv" value={activeCompany?.name || "-"} />
+                  <Info label="Davcna stevilka" value={activeCompany?.vatNumber || activeCompany?.taxId || "-"} />
+                  <Info label="Naslov" value={activeCompany?.address || "-"} />
+                  <Info label="eLokacija" value={activeCompany?.eLocation || "-"} />
+                </div>
+                <details className="mt-5 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                  <summary className="cursor-pointer font-semibold">Dodatna polja prodajalca</summary>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <Field label="Maticna stevilka prodajalca" helper="BT-30; opcijski registrski identifikator prodajalca. Ne spremeni aktivnega podjetja, shrani se na racun.">
+                      <input value={sellerRegistrationNumber} onChange={(event) => setSellerRegistrationNumber(event.target.value)} className="field-input" />
+                    </Field>
+                  </div>
+                </details>
               </div>
             </div>
           )}
 
           {step === 1 && (
             <div className="space-y-7">
-              <div>
+              <div id="section-invoice-details">
                 <SectionHeader title="Osnovni podatki" />
                 <div className="grid gap-4 md:grid-cols-3">
                   <Field label="Zaporedna stevilka">
@@ -825,6 +855,25 @@ export default function NewInvoicePage() {
                       <option value="383">Breme</option>
                     </select>
                   </Field>
+                  <Field
+                    label="Poslovni proces"
+                    helper="BT-23; pove prejemniku, v katerem poslovnem procesu obdeluje racun. Za osnovni e-racun pusti P1."
+                  >
+                    <select value={businessProcess} onChange={(event) => setBusinessProcess(event.target.value)} className="field-input">
+                      <option value="P1">P1 - Osnovni racun</option>
+                      <option value="P2">P2</option>
+                      <option value="P3">P3</option>
+                      <option value="P4">P4</option>
+                      <option value="P5">P5</option>
+                      <option value="P6">P6</option>
+                      <option value="P7">P7</option>
+                      <option value="P8">P8</option>
+                      <option value="P9">P9</option>
+                      <option value="P10">P10</option>
+                      <option value="P11">P11</option>
+                      <option value="P12">P12</option>
+                    </select>
+                  </Field>
                   <Field label="Datum izdaje">
                     <input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className="field-input" />
                   </Field>
@@ -835,22 +884,33 @@ export default function NewInvoicePage() {
                     <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field-input" />
                   </Field>
                 </div>
+                <details className="mt-5 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                  <summary className="cursor-pointer font-semibold">Dodatna polja eSLOG</summary>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Identifikator specifikacije"
+                      helper="BT-24; pove, po katerih pravilih je pripravljen XML. Privzeto je EN16931 in ga spremeni samo, ce prejemnik to izrecno zahteva."
+                    >
+                      <input value={specificationIdentifier} onChange={(event) => setSpecificationIdentifier(event.target.value)} className="field-input" />
+                    </Field>
+                  </div>
+                </details>
               </div>
 
-              <div>
+              <div id="section-payment">
                 <SectionHeader
                   title="Placilo"
                   description="Uporabniku prijazna polja za sklic, namen in placilni racun."
                 />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Nacin placila">
+                  <Field label="Nacin placila" helper="BT-81; za obicajno placilo na TRR uporabi SEPA kreditni transfer.">
                     <select value={paymentMeansCode} onChange={(event) => setPaymentMeansCode(event.target.value)} className="field-input">
                       <option value="58">SEPA kreditni transfer</option>
                       <option value="30">Kreditno nakazilo</option>
                       <option value="10">Gotovina</option>
                     </select>
                   </Field>
-                  <Field label="Sklic placila">
+                  <Field label="Sklic placila" helper="BT-83; remittance information/sklic, ki poveze placilo z racunom. V XML se mapira kot RFF PQ.">
                     <input value={reference} onChange={(event) => setReference(event.target.value)} className="field-input" />
                   </Field>
                   <Field label="Namen placila">
@@ -859,20 +919,25 @@ export default function NewInvoicePage() {
                   <Field label="Koda namena">
                     <input value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="IBAN prejemnika placila">
+                  <Field label="IBAN prejemnika placila" helper="BT-84; bancni racun prodajalca, kamor naj kupec placa racun.">
                     <input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="BIC/SWIFT">
+                  <Field label="BIC/SWIFT" helper="BT-86; identifikator banke. Ni vedno obvezen, vendar ga dodaj, ce ga imas.">
                     <input value={bankBic} onChange={(event) => setBankBic(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="Placilni pogoji">
+                  <Field label="Placilni pogoji" helper="BT-20; kratek tekst, npr. 'Placilo v 15 dneh'. V XML se zapise kot FTX AAB.">
                     <input value={paymentTerms} onChange={(event) => setPaymentTerms(event.target.value)} className="field-input" />
                   </Field>
                 </div>
               </div>
 
-              {isReferenceProfile && (
-                <div>
+              <div id="section-references">
+                <details className="rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-5" open={isReferenceProfile}>
+                  <summary className="cursor-pointer text-xl font-semibold">Dodatna polja: reference</summary>
+                  <p className="app-muted mt-2 text-sm">
+                    Reference so opcijske pri standardnem racunu, pri UJP ali bancnem profilu pa prejemnik pogosto zahteva vsaj eno od njih.
+                  </p>
+                  <div className="mt-5">
                   <SectionHeader
                     title="Reference dokumentov"
                     description="Za UJP ali bancno posiljanje dodaj vsaj eno referenco, ce jo zahteva prejemnik."
@@ -890,12 +955,10 @@ export default function NewInvoicePage() {
                     <Field label="Referenca kupca">
                       <input value={buyerReference} onChange={(event) => setBuyerReference(event.target.value)} className="field-input" />
                     </Field>
-                    <Field label="Maticna stevilka prodajalca">
-                      <input value={sellerRegistrationNumber} onChange={(event) => setSellerRegistrationNumber(event.target.value)} className="field-input" />
-                    </Field>
                   </div>
-                </div>
-              )}
+                  </div>
+                </details>
+              </div>
 
               <ProfileFieldsSection
                 profile={selectedProfile}
@@ -903,14 +966,14 @@ export default function NewInvoicePage() {
                 onChange={updateProfileField}
               />
 
-              <Field label="Opomba za racun">
+              <Field label="Opomba za racun" helper="BT-22; splosna opomba racuna. V XML se zapise kot FTX GEN.">
                 <textarea value={note} onChange={(event) => setNote(event.target.value)} className="field-input min-h-24 resize-none" />
               </Field>
             </div>
           )}
 
           {step === 2 && (
-            <div>
+            <div id="section-lines">
               <SectionHeader
                 title="Postavke racuna"
                 description="Za prvo posiljanje je dovolj naziv, kolicina, cena in DDV. Dodatna polja se prikazejo samo za izbrani profil."
@@ -969,15 +1032,20 @@ export default function NewInvoicePage() {
                       ))}
                       {line.vatCategory !== "S" && (
                         <div className="md:col-span-2">
-                          <Field label="Razlog oprostitve ali posebne DDV obravnave">
+                          <Field label="Razlog oprostitve ali posebne DDV obravnave" helper="BT-120; obvezno pri Z, E, AE in drugih nicelnih kategorijah.">
                             <input value={line.taxExemptionReason || ""} onChange={(event) => updateLine(line.id, { taxExemptionReason: event.target.value })} className="field-input" />
                           </Field>
                         </div>
                       )}
                       <div className="md:col-span-6">
-                        <Field label="Dodatni opis">
-                          <input value={line.itemDescription || line.note || ""} onChange={(event) => updateLine(line.id, { itemDescription: event.target.value })} className="field-input" />
-                        </Field>
+                        <details className="rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                          <summary className="cursor-pointer font-semibold">Dodatna polja postavke</summary>
+                          <div className="mt-4">
+                            <Field label="Dodatni opis">
+                              <input value={line.itemDescription || line.note || ""} onChange={(event) => updateLine(line.id, { itemDescription: event.target.value })} className="field-input" />
+                            </Field>
+                          </div>
+                        </details>
                       </div>
                     </div>
                   </div>
@@ -1018,6 +1086,7 @@ export default function NewInvoicePage() {
               </ReviewBox>
 
               <ReviewBox title="DDV in skupaj">
+                <div id="section-vat-totals" />
                 <div className="grid gap-3 md:grid-cols-2">
                   {(prepared.invoice.vatBreakdown || []).map((item) => (
                     <div key={`${item.vatCategory}-${item.vatRate}`} className="rounded-2xl bg-[var(--app-soft)] p-4">
@@ -1028,7 +1097,7 @@ export default function NewInvoicePage() {
                 </div>
               </ReviewBox>
 
-              <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} />
+              <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} onJump={setStep} />
             </div>
           )}
 
@@ -1063,7 +1132,7 @@ export default function NewInvoicePage() {
                 <SummaryRow label="Za placilo" value={`${(prepared.invoice.totals.payable || prepared.invoice.totals.gross).toFixed(2)} EUR`} strong />
               </ReviewBox>
 
-              <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} />
+              <ValidationPanel errors={prepared.validation.errors} warnings={prepared.validation.warnings} onJump={setStep} />
             </div>
           )}
 
@@ -1217,14 +1286,16 @@ function BuyerField({
   field,
   buyer,
   setBuyer,
+  helper,
 }: {
   label: string;
   field: keyof BuyerForm;
   buyer: BuyerForm;
   setBuyer: React.Dispatch<React.SetStateAction<BuyerForm>>;
+  helper?: string;
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} helper={helper}>
       <input
         value={buyer[field]}
         onChange={(event) =>
@@ -1380,14 +1451,17 @@ function SectionHeader({
 function Field({
   label,
   children,
+  helper,
 }: {
   label: string;
   children: React.ReactNode;
+  helper?: string;
 }) {
   return (
     <label className="block">
       <span className="app-muted mb-2 block text-sm font-medium">{label}</span>
       {children}
+      {helper && <span className="app-muted mt-2 block text-xs leading-relaxed">{helper}</span>}
     </label>
   );
 }
@@ -1422,10 +1496,101 @@ function SummaryRow({
 function ValidationPanel({
   errors,
   warnings,
+  onJump,
 }: {
   errors: string[];
   warnings: string[];
+  onJump?: (step: number) => void;
 }) {
+  function targetForMessage(message: string) {
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("izdajatelj") || normalized.includes("prodajalec") || normalized.includes("aktivno podjetje")) {
+      return { step: 0, sectionId: "section-seller", label: "Prodajalec" };
+    }
+
+    if (normalized.includes("kupec") || normalized.includes("prejemnik")) {
+      return { step: 0, sectionId: "section-buyer", label: "Kupec" };
+    }
+
+    if (
+      normalized.includes("iban") ||
+      normalized.includes("bic") ||
+      normalized.includes("sklic") ||
+      normalized.includes("plačil") ||
+      normalized.includes("placil") ||
+      normalized.includes("bt-81") ||
+      normalized.includes("bt-83") ||
+      normalized.includes("bt-84") ||
+      normalized.includes("bt-86")
+    ) {
+      return { step: 1, sectionId: "section-payment", label: "Placilo" };
+    }
+
+    if (
+      normalized.includes("referen") ||
+      normalized.includes("pogod") ||
+      normalized.includes("naročil") ||
+      normalized.includes("narocil") ||
+      normalized.includes("dobavn")
+    ) {
+      return { step: 1, sectionId: "section-references", label: "Reference" };
+    }
+
+    if (
+      normalized.includes("datum") ||
+      normalized.includes("številka") ||
+      normalized.includes("stevilka") ||
+      normalized.includes("tip dokumenta") ||
+      normalized.includes("poslovni proces") ||
+      normalized.includes("bt-23") ||
+      normalized.includes("bt-24")
+    ) {
+      return { step: 1, sectionId: "section-invoice-details", label: "Racun" };
+    }
+
+    if (normalized.includes("postavka") || normalized.includes("ddv kategorija")) {
+      return { step: 2, sectionId: "section-lines", label: "Postavke" };
+    }
+
+    if (normalized.includes("znes") || normalized.includes("breakdown") || normalized.includes("bt-110")) {
+      return { step: 3, sectionId: "section-vat-totals", label: "DDV in skupaj" };
+    }
+
+    return { step: 3, sectionId: "", label: "Pregled" };
+  }
+
+  function jumpTo(message: string) {
+    const target = targetForMessage(message);
+    onJump?.(target.step);
+
+    if (target.sectionId) {
+      window.setTimeout(() => {
+        document.getElementById(target.sectionId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
+    }
+  }
+
+  function ValidationItem({ message }: { message: string }) {
+    const target = targetForMessage(message);
+
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => jumpTo(message)}
+          className="inline-flex text-left underline-offset-4 hover:underline"
+        >
+          {message}
+          {onJump && <span className="ml-2 font-semibold">({target.label})</span>}
+        </button>
+      </li>
+    );
+  }
+
   if (errors.length === 0 && warnings.length === 0) {
     return (
       <section className="rounded-[1.75rem] border border-emerald-500/20 bg-emerald-500/10 p-6 text-emerald-500">
@@ -1442,7 +1607,7 @@ function ValidationPanel({
           <strong>Napake</strong>
           <ul className="mt-2 list-disc pl-5">
             {errors.map((error) => (
-              <li key={error}>{error}</li>
+              <ValidationItem key={error} message={error} />
             ))}
           </ul>
         </div>
@@ -1452,7 +1617,7 @@ function ValidationPanel({
           <strong>Opozorila</strong>
           <ul className="mt-2 list-disc pl-5">
             {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <ValidationItem key={warning} message={warning} />
             ))}
           </ul>
         </div>
