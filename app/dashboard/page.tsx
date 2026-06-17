@@ -19,7 +19,7 @@ import AppShell from "../components/AppShell";
 import CompanySelector from "../components/CompanySelector";
 import { loadActiveCompanyWithFallback } from "../../lib/client/activeCompany";
 import { getInboxData, getSentData } from "../../lib/client/bizboxDataCache";
-import { fetchDbCustomers } from "../../lib/client/customers";
+import { fetchDbCustomers, type ClientCustomer } from "../../lib/client/customers";
 
 type RawParam = {
   parameterName?: string;
@@ -321,6 +321,7 @@ export default function DashboardPage() {
   const [sentInvoices, setSentInvoices] = useState<LocalInvoice[]>([]);
   const [draftInvoices, setDraftInvoices] = useState<LocalInvoice[]>([]);
   const [customerCount, setCustomerCount] = useState(0);
+  const [favoriteCustomers, setFavoriteCustomers] = useState<ClientCustomer[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [sentLoading, setSentLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -354,7 +355,9 @@ export default function DashboardPage() {
     setActiveCompany(company);
     setSentInvoices(companySent);
     setDraftInvoices(companyDrafts);
-    setCustomerCount(dbCustomers.length || localCustomers.length);
+    const allCustomers = dbCustomers.length > 0 ? dbCustomers : (localCustomers as ClientCustomer[]);
+    setCustomerCount(allCustomers.length);
+    setFavoriteCustomers(allCustomers.filter((customer) => customer.isFavorite).slice(0, 6));
     setStatsLoading(false);
 
     const cacheKey = dashboardCacheKey(company);
@@ -821,6 +824,43 @@ export default function DashboardPage() {
             </Link>
           </section>
 
+
+          <section className="solid-panel rounded-[1.5rem] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Hitri račun</h2>
+                <p className="app-muted mt-1 text-sm">
+                  Začni račun direktno iz priljubljene stranke.
+                </p>
+              </div>
+              <StatusBadge tone="amber">{favoriteCustomers.length}</StatusBadge>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {favoriteCustomers.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-soft)] p-4 text-sm">
+                  <div className="font-semibold">Ni še priljubljenih strank</div>
+                  <p className="app-muted mt-1">
+                    V šifrantu označi stranko z zvezdico, potem bo tukaj na voljo gumb za hiter račun.
+                  </p>
+                  <Link href="/customers" className="secondary-button mt-4 h-10 w-full px-4 text-sm">
+                    Odpri stranke
+                  </Link>
+                </div>
+              )}
+
+              {favoriteCustomers.map((customer) => (
+                <FavoriteCustomerCard key={customer.vatNumber} customer={customer} />
+              ))}
+            </div>
+
+            {favoriteCustomers.length > 0 && (
+              <Link href="/customers" className="secondary-button mt-4 h-10 w-full px-4 text-sm">
+                Uredi priljubljene
+              </Link>
+            )}
+          </section>
+
           <section className="solid-panel rounded-[1.5rem] p-5">
             <h2 className="text-lg font-semibold">Hitre bližnjice</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -835,6 +875,33 @@ export default function DashboardPage() {
         </aside>
       </div>
     </AppShell>
+  );
+}
+
+
+function FavoriteCustomerCard({ customer }: { customer: ClientCustomer }) {
+  const vat = customer.vatNumber || "";
+
+  return (
+    <Link
+      href={`/invoices/new?vat=${encodeURIComponent(vat)}`}
+      className="group block rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--app-primary)] hover:bg-[var(--app-soft)]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-semibold">{customer.name || "Brez naziva"}</div>
+          <div className="app-muted mt-1 truncate text-xs">{vat || "Davčna ni vpisana"}</div>
+          <div className="app-muted mt-1 truncate text-xs">{customer.eLocation || customer.eAddress || "eLokacija ni vpisana"}</div>
+        </div>
+        <div className="rounded-xl bg-[var(--app-soft)] p-2 text-[var(--app-primary-strong)] transition group-hover:bg-[var(--app-primary)] group-hover:text-white">
+          <PlusCircle className="h-4 w-4" aria-hidden="true" />
+        </div>
+      </div>
+      <div className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--app-primary-strong)]">
+        Nov račun
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </div>
+    </Link>
   );
 }
 

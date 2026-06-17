@@ -309,7 +309,7 @@ export default function NewInvoicePage() {
       {}
     );
     const params = new URLSearchParams(window.location.search);
-    const vat = params.get("vat");
+    const vat = params.get("vat") || params.get("customer");
 
     queueMicrotask(async () => {
       const company = (await loadActiveCompanyWithFallback()) as ActiveCompany | null;
