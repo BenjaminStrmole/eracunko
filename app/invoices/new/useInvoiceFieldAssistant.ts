@@ -372,6 +372,10 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   return {
     state,
     next,
+    onLineAdded: () => {
+      if (currentIssueRef.current?.code !== "invoice.lines.required") return;
+      window.setTimeout(() => nextRef.current(), 0);
+    },
     close: () => {
       dismissSession();
       stop(false);

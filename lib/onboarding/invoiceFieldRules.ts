@@ -23,12 +23,14 @@ function rule(
   definition: Omit<FieldRule, "validate"> & {
     check: (invoice: Invoice) => boolean;
     message: string;
+    lineId?: number;
   }
 ): FieldRule {
-  const { check, message, ...fieldRule } = definition;
+  const { check, message, lineId, ...fieldRule } = definition;
   return {
     ...fieldRule,
-    validate: (invoice) => (check(invoice) ? null : issue(fieldRule, message)),
+    validate: (invoice) =>
+      check(invoice) ? null : issue(fieldRule, message, lineId),
   };
 }
 
@@ -362,38 +364,44 @@ function lineRules(line: InvoiceLine, profile: InvoiceProfile): FieldRule[] {
       id: `${prefix}.description`, profiles: ["all"],
       target: { fieldId: `${prefix}.description`, wizardStep: 2 },
       label: "Opis postavke", instruction: "Vnesi naziv ali opis postavke.", scope: "base",
-      check: () => Boolean(text(line.description)), message: "Postavka potrebuje opis.",
+      check: () => Boolean(text(line.description)) && text(line.description).length <= 1024,
+      message: "Postavka potrebuje opis z največ 1024 znaki.", lineId: line.id,
     }),
     rule({
       id: `${prefix}.quantity`, profiles: ["all"],
       target: { fieldId: `${prefix}.quantity`, wizardStep: 2 },
       label: "Količina", instruction: "Vnesi količino, večjo od 0.", scope: "base",
-      check: () => Number.isFinite(line.quantity) && line.quantity > 0, message: "Količina mora biti večja od 0.",
+      check: () => Number.isFinite(line.quantity) && line.quantity > 0,
+      message: "Količina mora biti večja od 0.", lineId: line.id,
     }),
     rule({
       id: `${prefix}.unit`, profiles: ["all"],
       target: { fieldId: `${prefix}.unit`, wizardStep: 2 },
       label: "Enota mere", instruction: "Vnesi enoto mere, na primer H87.", scope: "base",
-      check: () => Boolean(text(line.unit)), message: "Enota mere je obvezna.",
+      check: () => Boolean(text(line.unit)), message: "Enota mere je obvezna.", lineId: line.id,
     }),
     rule({
       id: `${prefix}.price`, profiles: ["all"],
       target: { fieldId: `${prefix}.price`, wizardStep: 2 },
       label: "Neto cena", instruction: "Vnesi veljavno neto ceno.", scope: "base",
-      check: () => Number.isFinite(line.price) && line.price >= 0, message: "Cena mora biti veljavno nenegativno število.",
+      check: () => Number.isFinite(line.price) && line.price >= 0,
+      message: "Cena mora biti veljavno nenegativno število.", lineId: line.id,
     }),
     rule({
       id: `${prefix}.vatCategory`, profiles: ["all"],
       target: { fieldId: `${prefix}.vatCategory`, wizardStep: 2 },
       label: "DDV kategorija", instruction: "Izberi ustrezno DDV kategorijo.", scope: "base",
-      check: () => Boolean(line.vatCategory), message: "DDV kategorija je obvezna.",
+      check: () => ["S", "Z", "E", "AE", "K", "G", "O", "IC"].includes(String(line.vatCategory)),
+      message: "Izberi veljavno DDV kategorijo.", lineId: line.id,
     }),
     rule({
       id: `${prefix}.vatRate`, profiles: ["all"],
       target: { fieldId: `${prefix}.vatRate`, wizardStep: 2 },
       label: "DDV stopnja", instruction: "Vnesi veljavno DDV stopnjo.", scope: "base",
-      check: () => Number.isFinite(line.vatRate) && line.vatRate >= 0 && (line.vatCategory !== "S" || line.vatRate > 0),
-      message: "DDV stopnja ni veljavna za izbrano kategorijo.",
+      check: () =>
+        Number.isFinite(line.vatRate) &&
+        (line.vatCategory === "S" ? line.vatRate > 0 : line.vatRate === 0),
+      message: "DDV stopnja ni veljavna za izbrano kategorijo.", lineId: line.id,
     }),
   ];
 
@@ -403,7 +411,7 @@ function lineRules(line: InvoiceLine, profile: InvoiceProfile): FieldRule[] {
       target: { fieldId: `${prefix}.taxExemptionReason`, wizardStep: 2 },
       label: "Razlog davčne oprostitve", instruction: "Vnesi razlog posebne DDV obravnave.", scope: "base",
       check: () => Boolean(text(line.taxExemptionReason || line.taxExemptionReasonCode)),
-      message: "Pri tej DDV kategoriji je razlog oprostitve obvezen.",
+      message: "Pri tej DDV kategoriji je razlog oprostitve obvezen.", lineId: line.id,
     }));
   }
 
@@ -413,13 +421,15 @@ function lineRules(line: InvoiceLine, profile: InvoiceProfile): FieldRule[] {
         id: `${prefix}.kpdCode`, profiles: ["hr"],
         target: { fieldId: `${prefix}.kpdCode`, wizardStep: 2 },
         label: "KPD/CPA koda", instruction: "Vnesi KPD oziroma CPA klasifikacijsko kodo postavke.", scope: "profile",
-        check: () => Boolean(text(line.kpdCode)), message: "HR: KPD/CPA koda postavke je obvezna.",
+        check: () => Boolean(text(line.kpdCode)),
+        message: "HR: KPD/CPA koda postavke je obvezna.", lineId: line.id,
       }),
       rule({
         id: `${prefix}.hrVatCategoryCode`, profiles: ["hr"],
         target: { fieldId: `${prefix}.hrVatCategoryCode`, wizardStep: 2 },
         label: "HR DDV oznaka", instruction: "Vnesi HR oznako DDV kategorije postavke.", scope: "profile",
-        check: () => Boolean(text(line.hrVatCategoryCode)), message: "HR: oznaka DDV kategorije postavke je obvezna.",
+        check: () => Boolean(text(line.hrVatCategoryCode)),
+        message: "HR: oznaka DDV kategorije postavke je obvezna.", lineId: line.id,
       })
     );
   }
@@ -432,6 +442,16 @@ export function getInvoiceFieldRules(invoice: Invoice): FieldRule[] {
   return [
     ...baseRules,
     ...profileRules.filter((item) => item.profiles.includes(profile)),
+    rule({
+      id: "invoice.lines.required",
+      profiles: ["all"],
+      target: { fieldId: "invoice.lines.add", wizardStep: 2 },
+      label: "Dodaj postavko",
+      instruction: "Dodaj vsaj eno storitev ali izdelek, ki ga zaračunavaš.",
+      scope: "base",
+      check: (currentInvoice) => (currentInvoice.lines || []).length > 0,
+      message: "Račun mora imeti vsaj eno postavko.",
+    }),
     ...(invoice.lines || []).flatMap((line) => lineRules(line, profile)),
   ];
 }

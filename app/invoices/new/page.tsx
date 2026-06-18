@@ -229,7 +229,7 @@ function round2(value: number) {
 }
 
 function lineVatAmount(line: EditableLine) {
-  if (["Z", "E", "AE", "O", "G", "IC"].includes(line.vatCategory)) return 0;
+  if (["Z", "E", "AE", "K", "O", "G", "IC"].includes(line.vatCategory)) return 0;
   return round2(Number(line.quantity || 0) * Number(line.price || 0) * (Number(line.vatRate || 0) / 100));
 }
 
@@ -661,7 +661,7 @@ export default function NewInvoicePage() {
         if (line.id !== id) return line;
 
         const next = { ...line, ...patch };
-        if (["Z", "E", "AE", "O", "G", "IC"].includes(next.vatCategory)) {
+        if (["Z", "E", "AE", "K", "O", "G", "IC"].includes(next.vatCategory)) {
           next.vatRate = 0;
         }
 
@@ -687,6 +687,7 @@ export default function NewInvoicePage() {
         kpdListId: "CG",
       },
     ]);
+    fieldAssistant.onLineAdded();
   }
 
   function removeLine(id: number) {
@@ -725,7 +726,10 @@ export default function NewInvoicePage() {
       const details = element?.closest("details");
       if (details) details.open = true;
       element?.scrollIntoView({ behavior: "smooth", block: "center" });
-      element?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
+      const focusable = element?.matches("input, select, textarea, button")
+        ? element
+        : element?.querySelector<HTMLElement>("input, select, textarea, button");
+      focusable?.focus();
     }, 20);
     return false;
   }
@@ -1091,7 +1095,7 @@ export default function NewInvoicePage() {
               <SectionHeader
                 title="Postavke racuna"
                 description="Za prvo posiljanje je dovolj naziv, kolicina, cena in DDV. Dodatna polja se prikazejo samo za izbrani profil."
-                action={<button onClick={addLine} className="secondary-button h-10 px-4"><Plus className="h-4 w-4" aria-hidden="true" />Dodaj</button>}
+                action={<button onClick={addLine} className="secondary-button h-10 px-4" data-field="invoice.lines.add"><Plus className="h-4 w-4" aria-hidden="true" />Dodaj postavko</button>}
               />
 
               <div className="space-y-4">
@@ -1437,13 +1441,15 @@ function InvoiceCoachCard({
   } else if (step === 2) {
     const hasLines = lines.length > 0;
     title = "Dodaj, kar zaračunavaš";
-    description = "Vsako storitev ali izdelek vnesi kot svojo postavko. Zneski in DDV se izračunajo sproti.";
+    description = "Postavke so jedro računa: povedo, kaj in koliko zaračunavaš. Zneski in DDV se izračunajo sproti.";
     tips = [
       { text: "Dodaj prvo postavko", done: hasLines },
       { text: "Vnesi opis storitve/blaga", done: hasLines && lines.every((line) => line.description.trim().length > 0) },
       { text: "Vnesi količino", done: hasLines && lines.every((line) => Number(line.quantity) > 0) },
+      { text: "Preveri enoto mere", done: hasLines && lines.every((line) => Boolean(line.unit?.trim())) },
       { text: "Vnesi ceno", done: hasLines && lines.every((line) => Number.isFinite(Number(line.price)) && Number(line.price) >= 0) },
       { text: "Izberi DDV stopnjo", done: hasLines && lines.every((line) => Boolean(line.vatCategory) && Number.isFinite(Number(line.vatRate))) },
+      { text: "Neto znesek in DDV se izračunata samodejno.", done: hasLines },
     ];
     if (profile === "hr") {
       tips.push(

@@ -94,6 +94,65 @@ function validInvoice(profile = "standard") {
 const standard = validInvoice();
 assert(issueCodes(standard).length === 0, "Valid Standard invoice should be skipped completely");
 
+for (const profile of ["standard", "ujp", "hr", "bank"]) {
+  const emptyLinesInvoice = validInvoice(profile);
+  emptyLinesInvoice.lines = [];
+  const emptyLinesIssue = getInvoiceFieldIssues(emptyLinesInvoice).find(
+    (issue) => issue.code === "invoice.lines.required"
+  );
+  assert(emptyLinesIssue, `${profile} must require at least one line item`);
+  assert(emptyLinesIssue.wizardStep === 2, "Missing lines must block the Postavke step");
+  assert(emptyLinesIssue.fieldId === "invoice.lines.add", "Missing lines must target the add-line button");
+}
+
+const incompleteLines = validInvoice();
+incompleteLines.lines = [
+  {
+    id: 11,
+    description: "",
+    quantity: 0,
+    unit: "",
+    price: Number.NaN,
+    vatCategory: "S",
+    vatRate: 0,
+  },
+  {
+    id: 22,
+    description: "Veljavna druga postavka",
+    quantity: 1,
+    unit: "H87",
+    price: 20,
+    vatCategory: "S",
+    vatRate: 22,
+  },
+];
+const incompleteLineIssues = getInvoiceFieldIssues(incompleteLines);
+for (const field of ["description", "quantity", "unit", "price", "vatRate"]) {
+  const lineIssue = incompleteLineIssues.find((issue) => issue.code === `lines.11.${field}`);
+  assert(lineIssue, `First line must require ${field}`);
+  assert(lineIssue.lineId === 11, `${field} issue must identify its line`);
+  assert(lineIssue.wizardStep === 2, `${field} must remain on Postavke`);
+}
+assert(
+  !incompleteLineIssues.some((issue) => issue.code.startsWith("lines.22.")),
+  "Already valid lines must be skipped"
+);
+
+const zeroVatLine = validInvoice();
+zeroVatLine.lines[0].vatCategory = "E";
+zeroVatLine.lines[0].vatRate = 22;
+zeroVatLine.lines[0].taxExemptionReason = "Oproščeno po predpisu";
+assert(
+  issueCodes(zeroVatLine).includes("lines.1.vatRate"),
+  "Zero-rated VAT categories must require a zero VAT rate"
+);
+zeroVatLine.lines[0].vatRate = 0;
+zeroVatLine.lines[0].taxExemptionReason = "";
+assert(
+  issueCodes(zeroVatLine).includes("lines.1.taxExemptionReason"),
+  "Special VAT categories must require an exemption reason"
+);
+
 const ujp = validInvoice("ujp");
 assert(issueCodes(ujp).includes("ujp.documentReference"), "UJP must require one document reference");
 ujp.references.contractReference = "POG-1";
