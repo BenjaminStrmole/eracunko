@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
+import HelpWidget from "./HelpWidget";
 import ThemeToggle from "./ThemeToggle";
 
 const navItems = [
@@ -87,6 +88,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <section className="min-w-0 flex-1 p-6 lg:p-10">{children}</section>
       </div>
+      <HelpWidget />
     </main>
   );
 }

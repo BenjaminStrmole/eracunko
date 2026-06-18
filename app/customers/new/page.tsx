@@ -298,7 +298,7 @@ export default function NewCustomerPage() {
 
   return (
     <AppShell>
-      <div className="mb-8">
+      <div className="mb-8" data-tour="customer-header">
         <Link
           href="/customers"
           className="text-sm font-semibold text-[var(--app-primary-strong)]"
@@ -320,7 +320,7 @@ export default function NewCustomerPage() {
           Davčna številka ali naziv podjetja
         </label>
 
-        <div className="relative">
+        <div className="relative" data-tour="customer-search">
           <div className="flex gap-3">
             <div className="relative flex-1">
               {!query && (
@@ -363,6 +363,7 @@ export default function NewCustomerPage() {
             <button
               onClick={handleSearch}
               disabled={loading}
+              data-tour="customer-search-button"
               className="primary-button h-12 px-6 disabled:opacity-60"
             >
               {loading ? "Iščem..." : "Išči"}
@@ -453,7 +454,7 @@ export default function NewCustomerPage() {
               <Info label="Prejem" value={customer.receiverChannel || "-"} />
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row" data-tour="customer-save-actions">
               <button
                 onClick={() => saveCustomer(false)}
                 className="primary-button h-12 px-6"

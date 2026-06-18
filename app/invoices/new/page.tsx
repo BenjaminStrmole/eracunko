@@ -733,7 +733,7 @@ export default function NewInvoicePage() {
 
   return (
     <AppShell>
-      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between" data-tour="invoice-header">
         <div>
           <div className="status-pill mb-4 inline-flex">Voden vnos racuna</div>
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
@@ -779,7 +779,7 @@ export default function NewInvoicePage() {
 
           {step === 0 && (
             <div className="space-y-7" id="section-buyer-seller">
-              <div id="section-profile">
+              <div id="section-profile" data-tour="invoice-profile">
                 <SectionHeader
                   title="Vrsta racuna"
                   description="Izberi najblizji nacin posiljanja. Podatki, ki so posebni za profil, se prikazejo kasneje."
@@ -789,6 +789,7 @@ export default function NewInvoicePage() {
                     <button
                       key={invoiceProfile.id}
                       onClick={() => setProfile(invoiceProfile.id)}
+                      data-tour={`profile-${invoiceProfile.id}`}
                       className={`rounded-2xl border px-4 py-4 text-left transition ${
                         profile === invoiceProfile.id
                           ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
@@ -802,7 +803,7 @@ export default function NewInvoicePage() {
                 </div>
               </div>
 
-              <div id="section-buyer">
+              <div id="section-buyer" data-tour="invoice-buyer">
                 <SectionHeader
                   title="Kupec"
                   description="Izberi shranjeno stranko ali vnesi osnovne podatke rocno."
@@ -1177,7 +1178,7 @@ export default function NewInvoicePage() {
               Nazaj
             </button>
             {step < WIZARD_STEPS.length - 1 ? (
-              <button onClick={goNext} className="primary-button h-12 px-6">
+              <button onClick={goNext} className="primary-button h-12 px-6" data-tour="invoice-next">
                 Nadaljuj
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -1257,7 +1258,7 @@ function WizardStepper({
   onStepChange: (step: number) => void;
 }) {
   return (
-    <section className="solid-panel mb-8 rounded-[1.75rem] p-3">
+    <section className="solid-panel mb-8 rounded-[1.75rem] p-3" data-tour="invoice-stepper">
       <div className="grid gap-2 md:grid-cols-5">
         {WIZARD_STEPS.map((step, index) => {
           const Icon = step.icon;

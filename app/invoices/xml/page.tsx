@@ -266,7 +266,7 @@ export default function InvoiceXmlPage() {
 
   return (
     <AppShell>
-      <div className="mb-8">
+      <div className="mb-8" data-tour="xml-header">
         <div className="status-pill mb-4 inline-flex">eSLOG izvoz</div>
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
           eSLOG XML
@@ -287,7 +287,7 @@ export default function InvoiceXmlPage() {
         <Metric label="BT-115 plačilo" value={`${(prepared.invoice.totals.payable || prepared.invoice.totals.gross).toFixed(2)} EUR`} />
       </div>
 
-      <section className="solid-panel mt-6 rounded-[1.75rem] p-6">
+      <section className="solid-panel mt-6 rounded-[1.75rem] p-6" data-tour="xml-validation">
         <h2 className="text-xl font-semibold">Validacija</h2>
         <ValidationList errors={validation?.errors || []} warnings={validation?.warnings || []} />
       </section>
@@ -311,11 +311,11 @@ export default function InvoiceXmlPage() {
         </div>
       </section>
 
-      <pre className="mt-8 max-h-[650px] overflow-auto rounded-[1.5rem] border border-[var(--app-border)] bg-slate-950 p-6 text-sm text-blue-100 shadow-[var(--app-shadow-soft)]">
+      <pre className="mt-8 max-h-[650px] overflow-auto rounded-[1.5rem] border border-[var(--app-border)] bg-slate-950 p-6 text-sm text-blue-100 shadow-[var(--app-shadow-soft)]" data-tour="xml-preview">
         {xml || "XML bo prikazan, ko bodo odpravljene validacijske napake."}
       </pre>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap gap-3" data-tour="xml-actions">
         <button
           onClick={() => {
             if (!xml) {
