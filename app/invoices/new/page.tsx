@@ -32,6 +32,7 @@ import type {
 } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
 import { useToast } from "../../components/ToastProvider";
+import InlineFieldAssistant from "./InlineFieldAssistant";
 import { useInvoiceFieldAssistant } from "./useInvoiceFieldAssistant";
 
 type Customer = {
@@ -581,7 +582,7 @@ export default function NewInvoicePage() {
 
   const prepared = prepareInvoiceForEslog(buildInvoice());
 
-  useInvoiceFieldAssistant({
+  const fieldAssistant = useInvoiceFieldAssistant({
     profile,
     profileConfirmed,
     setProfile,
@@ -1242,6 +1243,11 @@ export default function NewInvoicePage() {
           )}
         </aside>
       </div>
+      <InlineFieldAssistant
+        state={fieldAssistant.state}
+        onNext={fieldAssistant.next}
+        onClose={fieldAssistant.close}
+      />
     </AppShell>
   );
 }

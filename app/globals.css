@@ -73,35 +73,88 @@
   border-color: var(--app-surface-strong);
 }
 
-.driver-popover.eracunko-field-wizard-popover .field-wizard-error {
-  display: inline-block;
-  margin-bottom: 0.35rem;
-  color: var(--app-danger);
-}
-
 @keyframes field-wizard-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--app-primary), transparent 70%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary), transparent 84%);
   }
   50% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--app-primary), transparent 88%);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--app-primary), transparent 91%);
   }
 }
 
 .field-wizard-pulse {
   border-radius: 1rem;
-  outline: 2px solid color-mix(in srgb, var(--app-primary), transparent 30%);
-  outline-offset: 4px;
-  animation: field-wizard-pulse 1.8s ease-in-out infinite;
+  outline: 1px solid color-mix(in srgb, var(--app-primary), transparent 38%);
+  outline-offset: 3px;
+  animation: field-wizard-pulse 2s ease-in-out infinite;
 }
 
 .field-wizard-pulse.field-wizard-invalid {
   outline-color: color-mix(in srgb, var(--app-danger), transparent 24%);
 }
 
+.inline-field-assistant {
+  position: fixed;
+  z-index: 120;
+  width: min(290px, calc(100vw - 24px));
+  border: 1px solid color-mix(in srgb, var(--app-primary), var(--app-border) 58%);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--app-surface-strong), transparent 3%);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+  padding: 0.9rem;
+  transition: opacity 120ms ease, left 160ms ease, top 160ms ease;
+  backdrop-filter: blur(16px);
+}
+
+html.dark .inline-field-assistant {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+}
+
+.inline-field-assistant-success {
+  border-color: color-mix(in srgb, var(--app-success), var(--app-border) 58%);
+}
+
+.inline-field-assistant-close {
+  position: absolute;
+  right: 0.55rem;
+  top: 0.55rem;
+  display: flex;
+  height: 1.8rem;
+  width: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+  color: var(--app-muted);
+}
+
+.inline-field-assistant-close:hover {
+  background: var(--app-soft);
+  color: var(--foreground);
+}
+
+.inline-field-assistant-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.7rem;
+  background: var(--app-primary);
+  color: white;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.inline-field-assistant-next:hover {
+  background: var(--app-primary-strong);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .field-wizard-pulse {
     animation: none;
+  }
+
+  .inline-field-assistant {
+    transition: none;
   }
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
-import { driver, type Driver } from "driver.js";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFieldWizard } from "../../components/FieldWizardProvider";
 import {
   getFieldRule,
@@ -14,6 +13,7 @@ import type {
   ValidationIssue,
 } from "../../../lib/onboarding/types";
 import type { Invoice, InvoiceProfile } from "../../../types/invoice";
+import type { InlineAssistantState } from "./InlineFieldAssistant";
 
 type AssistantOptions = {
   profile: InvoiceProfile;
@@ -24,49 +24,41 @@ type AssistantOptions = {
   getInvoice: () => Invoice;
 };
 
-const PROFILE_LABELS: Record<InvoiceProfile, string> = {
-  standard: "Standard",
-  ujp: "UJP",
-  hr: "HR",
-  bank: "Bank",
-};
-
 export function useInvoiceFieldAssistant(options: AssistantOptions) {
   const { register } = useFieldWizard();
+  const [state, setState] = useState<InlineAssistantState | null>(null);
   const optionsRef = useRef(options);
-  const driverRef = useRef<Driver | null>(null);
   const flowRef = useRef<InvoiceFieldWizardFlow | null>(null);
   const callbacksRef = useRef<FieldWizardCallbacks | null>(null);
   const currentIssueRef = useRef<ValidationIssue | null>(null);
-  const pausedRef = useRef(false);
-  const suppressDestroyRef = useRef(false);
+  const targetRef = useRef<HTMLElement | null>(null);
+  const remainingRef = useRef(0);
+  const renderTokenRef = useRef(0);
+  const successTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
   const cleanupHighlight = useCallback(() => {
-    document
-      .querySelectorAll(".field-wizard-pulse, .field-wizard-invalid")
-      .forEach((element) =>
-        element.classList.remove("field-wizard-pulse", "field-wizard-invalid")
-      );
+    targetRef.current?.classList.remove(
+      "field-wizard-pulse",
+      "field-wizard-invalid"
+    );
+    targetRef.current = null;
   }, []);
 
-  const destroyDriver = useCallback(
+  const stop = useCallback(
     (paused: boolean) => {
+      const wasRunning = Boolean(flowRef.current);
+      renderTokenRef.current += 1;
+      if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
       cleanupHighlight();
-      const instance = driverRef.current;
-      driverRef.current = null;
-      if (instance?.isActive()) {
-        suppressDestroyRef.current = true;
-        instance.destroy();
-        suppressDestroyRef.current = false;
-      }
-      if (paused && !pausedRef.current) {
-        pausedRef.current = true;
-        callbacksRef.current?.onPaused();
-      }
+      setState(null);
+      flowRef.current = null;
+      currentIssueRef.current = null;
+      if (paused && wasRunning) callbacksRef.current?.onPaused();
     },
     [cleanupHighlight]
   );
@@ -75,7 +67,9 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
     optionsRef.current.setStep(wizardStep);
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, attempt ? 60 : 100));
+      await new Promise<void>((resolve) =>
+        window.setTimeout(resolve, attempt ? 60 : 100)
+      );
       const element = document.querySelector<HTMLElement>(
         `[data-field="${CSS.escape(fieldId)}"]`
       );
@@ -93,102 +87,58 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   const showIssueRef = useRef<(
     issue: ValidationIssue,
     remaining: number,
-    validationMessage?: string
+    error?: string
   ) => Promise<void>>(async () => {});
   const advanceRef = useRef<() => Promise<void>>(async () => {});
+  const nextRef = useRef<() => void>(() => {});
 
-  const renderHighlight = useCallback(
-    async (
-      issue: ValidationIssue,
-      title: string,
-      instruction: string,
-      remaining: number,
-      validationMessage?: string
-    ) => {
-      const element = await findTarget(issue.fieldId, issue.wizardStep);
-      destroyDriver(false);
-      pausedRef.current = false;
+  const showIssue = useCallback(
+    async (issue: ValidationIssue, remaining: number, error?: string) => {
+      const renderToken = ++renderTokenRef.current;
+      const invoice = optionsRef.current.getInvoice();
+      const activeRule = getFieldRule(invoice, issue.code);
+      const target = await findTarget(issue.fieldId, issue.wizardStep);
+      if (renderToken !== renderTokenRef.current) return;
 
-      if (element) {
-        element.classList.add("field-wizard-pulse");
-        if (validationMessage) element.classList.add("field-wizard-invalid");
+      cleanupHighlight();
+      currentIssueRef.current = issue;
+      remainingRef.current = remaining;
+      targetRef.current = target;
+
+      if (target) {
+        target.classList.add("field-wizard-pulse");
+        if (error) target.classList.add("field-wizard-invalid");
       }
 
-      const actionRoute = issue.actionRoute;
-      const description = validationMessage
-        ? `<strong class="field-wizard-error">${validationMessage}</strong><br/>${instruction}`
-        : element
-          ? instruction
-          : `${instruction}<br/><strong>Polja ni bilo mogoče prikazati. Poskusi znova ali preveri trenutni korak obrazca.</strong>`;
-
-      const instance = driver({
-        animate: true,
-        allowClose: true,
-        allowKeyboardControl: true,
-        overlayClickBehavior: () => {},
-        showProgress: true,
-        showButtons: ["next", "close"],
-        nextBtnText: actionRoute ? "Odpri nastavitve" : "Naprej",
-        doneBtnText: "Končaj",
-        progressText: `Manjka še ${remaining}`,
-        popoverClass: "eracunko-driver-popover eracunko-field-wizard-popover",
-        onDestroyed: () => {
-          cleanupHighlight();
-          if (!suppressDestroyRef.current && flowRef.current && !pausedRef.current) {
-            pausedRef.current = true;
-            callbacksRef.current?.onPaused();
-          }
-        },
-        steps: [
-          {
-            element: element || undefined,
-            popover: {
-              title,
-              description,
-              side: "bottom",
-              align: "start",
-              onNextClick: () => {
-                if (actionRoute) {
-                  destroyDriver(true);
-                  window.location.assign(actionRoute);
-                  return;
-                }
-
-                const invoice = optionsRef.current.getInvoice();
-                const activeIssue = currentIssueRef.current;
-                const activeRule = activeIssue
-                  ? getFieldRule(invoice, activeIssue.code)
-                  : undefined;
-                const nextIssue = activeRule?.validate(invoice);
-                if (nextIssue) {
-                  void showIssueRef.current(nextIssue, remaining, nextIssue.message);
-                  return;
-                }
-
-                void advanceRef.current();
-              },
-              onCloseClick: () => destroyDriver(true),
-            },
-          },
-        ],
+      setState({
+        kind: "field",
+        key: `${issue.code}:${error || "ready"}`,
+        target,
+        title: activeRule?.label || "Obvezno polje",
+        instruction: target
+          ? activeRule?.instruction || issue.message
+          : `${activeRule?.instruction || issue.message} Polja trenutno ni mogoče prikazati; preveri odprti korak in poskusi znova.`,
+        error,
+        remaining,
+        actionLabel: issue.actionRoute ? "Odpri nastavitve" : "Naprej",
       });
 
-      driverRef.current = instance;
-      instance.drive();
-
-      if (element) {
+      if (target) {
         window.setTimeout(() => {
-          const focusable = element.matches("input, select, textarea, button")
-            ? element
-            : element.querySelector<HTMLElement>("input, select, textarea, button");
+          const focusable = target.matches("input, select, textarea, button")
+            ? target
+            : target.querySelector<HTMLElement>(
+                "input, select, textarea, button"
+              );
           focusable?.focus({ preventScroll: true });
-        }, 420);
+        }, 180);
       }
     },
-    [cleanupHighlight, destroyDriver, findTarget]
+    [cleanupHighlight, findTarget]
   );
 
   const showProfileChoice = useCallback(async () => {
+    const renderToken = ++renderTokenRef.current;
     const issue: ValidationIssue = {
       code: "profile.selection",
       fieldId: "profile.selection",
@@ -196,40 +146,47 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
       message: "Izberi profil računa.",
       severity: "error",
     };
+    const target = await findTarget(issue.fieldId, issue.wizardStep);
+    if (renderToken !== renderTokenRef.current) return;
+    cleanupHighlight();
     currentIssueRef.current = issue;
-    await renderHighlight(
-      issue,
-      "Izberi profil računa",
-      "Izberi Standard, UJP, HR ali Bank. Asistent bo takoj prilagodil obvezna polja.",
-      1
-    );
-  }, [renderHighlight]);
+    remainingRef.current = 1;
+    targetRef.current = target;
+    target?.classList.add("field-wizard-pulse");
+    setState({
+      kind: "field",
+      key: issue.code,
+      target,
+      title: "Izberi profil računa",
+      instruction:
+        "Izberi Standard, UJP, HR ali Bank. Asistent bo nato prikazal samo potrebna polja.",
+      remaining: 1,
+      actionLabel: "Naprej",
+    });
+  }, [cleanupHighlight, findTarget]);
 
   const showCompletion = useCallback(async () => {
-    destroyDriver(false);
+    const renderToken = ++renderTokenRef.current;
+    cleanupHighlight();
     flowRef.current = null;
-    pausedRef.current = true;
+    currentIssueRef.current = null;
     optionsRef.current.setStep(3);
     callbacksRef.current?.onCompleted();
-
-    const element = await findTarget("invoice.review", 3);
-    const instance = driver({
-      animate: true,
-      allowClose: true,
-      showButtons: ["close"],
-      popoverClass: "eracunko-driver-popover eracunko-field-wizard-popover",
-      steps: [{
-        element: element || undefined,
-        popover: {
-          title: "Vsa obvezna polja so izpolnjena",
-          description: "Račun je pripravljen za končni pregled. Opozorila lahko še vedno preveriš pred pripravo XML-ja.",
-          side: "top",
-        },
-      }],
+    const target = await findTarget("invoice.review", 3);
+    if (renderToken !== renderTokenRef.current) return;
+    setState({
+      kind: "success",
+      key: "completed",
+      target,
+      title: "Obvezna polja so izpolnjena",
+      instruction: "Račun je pripravljen za pregled in pošiljanje.",
+      remaining: 0,
     });
-    driverRef.current = instance;
-    instance.drive();
-  }, [destroyDriver, findTarget]);
+    successTimerRef.current = window.setTimeout(() => {
+      setState(null);
+      successTimerRef.current = null;
+    }, 4500);
+  }, [cleanupHighlight, findTarget]);
 
   const advance = useCallback(async () => {
     if (!flowRef.current) return;
@@ -245,45 +202,91 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
       return;
     }
 
-    const next = issues[0];
-    const activeRule = getFieldRule(invoice, next.code);
-    currentIssueRef.current = next;
-    await renderHighlight(
-      next,
-      activeRule?.label || "Obvezno polje",
-      activeRule?.instruction || next.message,
-      issues.length
-    );
-  }, [renderHighlight, showCompletion, showProfileChoice]);
+    await showIssue(issues[0], issues.length);
+  }, [showCompletion, showIssue, showProfileChoice]);
 
-  const showIssue = useCallback(
-    async (issue: ValidationIssue, remaining: number, validationMessage?: string) => {
-      const invoice = optionsRef.current.getInvoice();
-      const activeRule = getFieldRule(invoice, issue.code);
-      currentIssueRef.current = issue;
-      await renderHighlight(
-        issue,
-        activeRule?.label || "Preveri polje",
-        activeRule?.instruction || issue.message,
-        remaining,
-        validationMessage
+  const next = useCallback(() => {
+    const issue = currentIssueRef.current;
+    if (!issue) return;
+
+    if (issue.actionRoute) {
+      const route = issue.actionRoute;
+      stop(true);
+      window.location.assign(route);
+      return;
+    }
+
+    if (issue.code === "profile.selection") {
+      if (!optionsRef.current.profileConfirmed) {
+        void showProfileChoice();
+        return;
+      }
+      void advanceRef.current();
+      return;
+    }
+
+    const invoice = optionsRef.current.getInvoice();
+    const activeRule = getFieldRule(invoice, issue.code);
+    const validationIssue = activeRule?.validate(invoice);
+    if (validationIssue) {
+      void showIssueRef.current(
+        validationIssue,
+        remainingRef.current,
+        validationIssue.message
       );
-    },
-    [renderHighlight]
-  );
+      return;
+    }
+
+    void advanceRef.current();
+  }, [showProfileChoice, stop]);
 
   useEffect(() => {
     advanceRef.current = advance;
     showIssueRef.current = showIssue;
-  }, [advance, showIssue]);
+    nextRef.current = next;
+  }, [advance, next, showIssue]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!flowRef.current) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        stop(true);
+        return;
+      }
+
+      if (
+        event.key !== "Enter" ||
+        event.isComposing ||
+        currentIssueRef.current?.code === "profile.selection"
+      ) {
+        return;
+      }
+
+      const eventTarget = event.target as HTMLElement | null;
+      const activeTarget = targetRef.current;
+      if (
+        !eventTarget ||
+        !activeTarget?.contains(eventTarget) ||
+        eventTarget.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      nextRef.current();
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [stop]);
 
   const adapter = useMemo<FieldWizardAdapter>(
     () => ({
       start(flow, callbacks) {
-        destroyDriver(false);
+        stop(false);
         flowRef.current = flow;
         callbacksRef.current = callbacks;
-        pausedRef.current = false;
 
         if (flow !== "invoice") {
           optionsRef.current.setProfile(flow);
@@ -293,11 +296,10 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
         window.setTimeout(() => void advanceRef.current(), 0);
       },
       stop() {
-        flowRef.current = null;
-        destroyDriver(false);
+        stop(false);
       },
     }),
-    [destroyDriver]
+    [stop]
   );
 
   useEffect(() => register(adapter), [adapter, register]);
@@ -309,7 +311,8 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   }, [options.profile, options.profileConfirmed]);
 
   return {
-    isRunning: () => Boolean(flowRef.current),
-    selectedProfileLabel: PROFILE_LABELS[options.profile],
+    state,
+    next,
+    close: () => stop(true),
   };
 }
