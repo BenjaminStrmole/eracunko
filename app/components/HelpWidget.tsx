@@ -8,7 +8,6 @@ import { getGuide, guides, type GuideId } from "../../guides";
 import { useFieldWizard } from "./FieldWizardProvider";
 
 const SEEN_KEY = "eracunko-help-seen-guides";
-const DISMISSED_KEY = "eracunko-help-auto-dismissed";
 const PENDING_KEY = "eracunko-help-pending-guide";
 
 function readSeenGuides() {
@@ -84,11 +83,6 @@ export default function HelpWidget() {
     startGuide(guideId);
   }
 
-  function dismissAutomaticPrompt() {
-    localStorage.setItem(DISMISSED_KEY, "true");
-    setOpen(false);
-  }
-
   useEffect(() => {
     const syncTimer = window.setTimeout(() => setSeenGuides(readSeenGuides()), 0);
 
@@ -101,13 +95,6 @@ export default function HelpWidget() {
       return () => window.clearTimeout(syncTimer);
     }
 
-    if (!localStorage.getItem(DISMISSED_KEY) && readSeenGuides().size === 0) {
-      const timer = window.setTimeout(() => setOpen(true), 900);
-      return () => {
-        window.clearTimeout(syncTimer);
-        window.clearTimeout(timer);
-      };
-    }
     return () => window.clearTimeout(syncTimer);
   }, [pathname, startGuide]);
 
@@ -180,16 +167,6 @@ export default function HelpWidget() {
                 </button>
               );
             })}
-          </div>
-
-          <div className="border-t border-[var(--app-border)] px-5 py-3">
-            <button
-              type="button"
-              onClick={dismissAutomaticPrompt}
-              className="app-muted text-xs font-medium transition hover:text-[var(--foreground)]"
-            >
-              Ne prikazuj več samodejno
-            </button>
           </div>
         </section>
       )}

@@ -1321,7 +1321,7 @@ function WizardStepper({
   const connectorProgress = Math.max(0, Math.min(100, ((progress - 20) / 80) * 100));
 
   return (
-    <section className="solid-panel mb-8 rounded-[1.75rem] px-4 py-5 sm:px-6" data-tour="invoice-stepper">
+    <section className="solid-panel sticky top-4 z-40 mb-8 rounded-[1.75rem] px-4 py-5 sm:px-6" data-tour="invoice-stepper">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-[var(--app-primary)]">Od kreiranja do pošiljanja</p>
