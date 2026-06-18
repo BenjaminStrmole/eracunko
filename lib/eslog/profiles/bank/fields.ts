@@ -10,6 +10,7 @@ export const bankFields: InvoiceProfileConfig = {
     "payment.reference",
     "payment.paymentMeansCode",
     "payment.purposeCode",
+    "bankData.paymentModel",
     "references.orderReference|references.contractReference|references.deliveryNoteReference",
   ],
   optionalFields: ["bankData.payerName", "bankData.payeeName"],

@@ -1,4 +1,5 @@
 import type { Invoice } from "../../../../types/invoice";
+import { getProfileFieldIssues } from "../../../onboarding/invoiceFieldRules";
 import type { ProfileValidationOutput } from "../types";
 
 function value(valueToCheck: unknown) {
@@ -9,49 +10,10 @@ function isEmpty(valueToCheck: unknown) {
   return value(valueToCheck) === "";
 }
 
-function isIban(valueToCheck: unknown) {
-  return /^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(
-    value(valueToCheck).replace(/\s/g, "").toUpperCase()
-  );
-}
-
 export function validateBankProfile(invoice: Invoice): ProfileValidationOutput {
-  const errors: string[] = [];
+  const errors = getProfileFieldIssues(invoice, "bank").map((issue) => issue.message);
   const warnings: string[] = [];
   const bankData = invoice.bankData || {};
-  const payment = invoice.payment || {};
-  const iban = bankData.payeeIban || payment.iban || payment.bankAccount || invoice.bankAccount;
-  const bic = bankData.payeeBic || payment.bic || payment.bankBic || invoice.bankBic;
-  const reference = bankData.paymentReference || payment.reference || invoice.reference;
-  const hasReference = !isEmpty(
-    invoice.references?.orderReference ||
-      invoice.references?.contractReference ||
-      invoice.references?.deliveryNoteReference
-  );
-
-  if (!hasReference) {
-    errors.push("Banka: manjka vsaj en referenčni dokument: pogodba, naročilo ali dobavnica.");
-  }
-
-  if (!isIban(iban)) {
-    errors.push("Banka: IBAN ni v veljavnem formatu.");
-  }
-
-  if (isEmpty(bic)) {
-    errors.push("Banka: manjka BIC.");
-  }
-
-  if (isEmpty(reference)) {
-    errors.push("Banka: manjka model/sklic plačila.");
-  }
-
-  if (isEmpty(bankData.purposeCode || payment.purposeCode || invoice.purposeCode)) {
-    errors.push("Banka: manjka koda namena.");
-  }
-
-  if (isEmpty(bankData.paymentMeansCode || payment.paymentMeansCode || invoice.paymentMeansCode)) {
-    errors.push("Banka: manjka način plačila.");
-  }
 
   if (isEmpty(bankData.payerName)) {
     warnings.push("Banka: priporočljiv je naziv plačnika.");

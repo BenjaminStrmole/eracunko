@@ -5,6 +5,8 @@ export const ujpGuide: GuideDefinition = {
   title: "Pošiljanje računa na UJP",
   description: "Pravilna izbira profila, prejemnika in referenc.",
   route: "/invoices/new",
+  mode: "field-wizard",
+  flow: "ujp",
   steps: [
     {
       element: "[data-tour='profile-ujp']",

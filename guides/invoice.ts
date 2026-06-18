@@ -5,6 +5,8 @@ export const invoiceGuide: GuideDefinition = {
   title: "Kreiranje prvega računa",
   description: "Od izbire kupca do pregleda in priprave računa.",
   route: "/invoices/new",
+  mode: "field-wizard",
+  flow: "invoice",
   steps: [
     {
       element: "[data-tour='invoice-header']",

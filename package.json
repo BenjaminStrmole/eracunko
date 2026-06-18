@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "test:eslog": "node scripts/test-eslog.mjs",
+    "test:onboarding": "node scripts/test-onboarding.mjs",
     "lint": "eslint",
     "prisma:generate": "sh -c 'set -a; [ -f .env.local ] && . ./.env.local; set +a; prisma generate'",
     "prisma:migrate": "sh -c 'set -a; [ -f .env.local ] && . ./.env.local; set +a; prisma migrate dev'",

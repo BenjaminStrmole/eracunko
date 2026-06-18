@@ -3,8 +3,9 @@
 import { BookOpen, Check, CircleHelp, X } from "lucide-react";
 import { driver } from "driver.js";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getGuide, guides, type GuideId } from "../../guides";
+import { useFieldWizard } from "./FieldWizardProvider";
 
 const SEEN_KEY = "eracunko-help-seen-guides";
 const DISMISSED_KEY = "eracunko-help-auto-dismissed";
@@ -22,24 +23,33 @@ function readSeenGuides() {
 export default function HelpWidget() {
   const pathname = usePathname();
   const router = useRouter();
+  const fieldWizard = useFieldWizard();
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [seenGuides, setSeenGuides] = useState<Set<GuideId>>(new Set());
 
-  function markSeen(guideId: GuideId) {
+  const markSeen = useCallback((guideId: GuideId) => {
     setSeenGuides((current) => {
       const next = new Set(current);
       next.add(guideId);
       localStorage.setItem(SEEN_KEY, JSON.stringify([...next]));
       return next;
     });
-  }
+  }, []);
 
-  function startGuide(guideId: GuideId) {
+  const startGuide = useCallback((guideId: GuideId) => {
     const guide = getGuide(guideId);
     if (!guide) return;
 
     setOpen(false);
+    if (guide.mode === "field-wizard" && guide.flow) {
+      fieldWizard.start(guide.flow, {
+        onCompleted: () => markSeen(guideId),
+        onPaused: () => setSeenGuides(readSeenGuides()),
+      });
+      return;
+    }
+
     const driverInstance = driver({
       animate: true,
       allowClose: true,
@@ -52,11 +62,13 @@ export default function HelpWidget() {
       progressText: "{{current}} od {{total}}",
       popoverClass: "eracunko-driver-popover",
       steps: guide.steps,
-      onDestroyed: () => markSeen(guideId),
+      onDestroyed: () => {
+        if (driverInstance.isLastStep()) markSeen(guideId);
+      },
     });
 
     window.setTimeout(() => driverInstance.drive(), 120);
-  }
+  }, [fieldWizard, markSeen]);
 
   function selectGuide(guideId: GuideId) {
     const guide = getGuide(guideId);
@@ -78,7 +90,7 @@ export default function HelpWidget() {
   }
 
   useEffect(() => {
-    setSeenGuides(readSeenGuides());
+    const syncTimer = window.setTimeout(() => setSeenGuides(readSeenGuides()), 0);
 
     const pendingGuide = localStorage.getItem(PENDING_KEY) as GuideId | null;
     const pendingDefinition = pendingGuide ? getGuide(pendingGuide) : undefined;
@@ -86,14 +98,18 @@ export default function HelpWidget() {
     if (pendingGuide && pendingDefinition?.route === pathname) {
       localStorage.removeItem(PENDING_KEY);
       window.setTimeout(() => startGuide(pendingGuide), 350);
-      return;
+      return () => window.clearTimeout(syncTimer);
     }
 
     if (!localStorage.getItem(DISMISSED_KEY) && readSeenGuides().size === 0) {
       const timer = window.setTimeout(() => setOpen(true), 900);
-      return () => window.clearTimeout(timer);
+      return () => {
+        window.clearTimeout(syncTimer);
+        window.clearTimeout(timer);
+      };
     }
-  }, [pathname]);
+    return () => window.clearTimeout(syncTimer);
+  }, [pathname, startGuide]);
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {

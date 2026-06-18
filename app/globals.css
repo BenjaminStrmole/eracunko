@@ -73,6 +73,38 @@
   border-color: var(--app-surface-strong);
 }
 
+.driver-popover.eracunko-field-wizard-popover .field-wizard-error {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  color: var(--app-danger);
+}
+
+@keyframes field-wizard-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--app-primary), transparent 70%);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--app-primary), transparent 88%);
+  }
+}
+
+.field-wizard-pulse {
+  border-radius: 1rem;
+  outline: 2px solid color-mix(in srgb, var(--app-primary), transparent 30%);
+  outline-offset: 4px;
+  animation: field-wizard-pulse 1.8s ease-in-out infinite;
+}
+
+.field-wizard-pulse.field-wizard-invalid {
+  outline-color: color-mix(in srgb, var(--app-danger), transparent 24%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-wizard-pulse {
+    animation: none;
+  }
+}
+
 @media (max-width: 640px) {
   .driver-popover.eracunko-driver-popover {
     padding: 16px;

@@ -22,6 +22,7 @@ import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDraft
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
+import { getInvoiceFieldIssues } from "../../../lib/onboarding/invoiceFieldRules";
 import type { ProfileFieldDefinition } from "../../../lib/eslog/profiles/types";
 import type {
   Invoice,
@@ -31,6 +32,7 @@ import type {
 } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
 import { useToast } from "../../components/ToastProvider";
+import { useInvoiceFieldAssistant } from "./useInvoiceFieldAssistant";
 
 type Customer = {
   name: string;
@@ -230,6 +232,7 @@ function lineVatAmount(line: EditableLine) {
 export default function NewInvoicePage() {
   const toast = useToast();
   const [profile, setProfile] = useState<InvoiceProfile>("standard");
+  const [profileConfirmed, setProfileConfirmed] = useState(false);
   const [step, setStep] = useState(0);
   const [profileData, setProfileData] = useState<ProfileDataState>(() => ({
     standard: {},
@@ -578,6 +581,15 @@ export default function NewInvoicePage() {
 
   const prepared = prepareInvoiceForEslog(buildInvoice());
 
+  useInvoiceFieldAssistant({
+    profile,
+    profileConfirmed,
+    setProfile,
+    setProfileConfirmed,
+    setStep,
+    getInvoice: buildInvoice,
+  });
+
   function updateLine(id: number, patch: Partial<EditableLine>) {
     setLines((current) =>
       current.map((line) => {
@@ -635,59 +647,40 @@ export default function NewInvoicePage() {
   }
 
   function validateWizardStep(stepIndex: number) {
-    if (stepIndex === 0) {
-      if (!activeCompany) {
-        toast.warning(
-          "Manjka aktivno podjetje",
-          "Najprej izberi podjetje, ki bo izdalo racun."
-        );
-        return false;
-      }
+    const firstIssue = getInvoiceFieldIssues(buildInvoice()).find(
+      (issue) => issue.wizardStep === stepIndex
+    );
+    if (!firstIssue) return true;
 
-      if (!buyer.name.trim()) {
-        toast.warning("Manjka prejemnik", "Vnesi naziv kupca ali izberi stranko.");
-        return false;
-      }
-
-      if (!buyer.vat.trim() && !buyer.eLocation.trim() && !buyer.eAddress.trim()) {
-        toast.warning(
-          "Manjka identifikacija kupca",
-          "Dodaj davcno stevilko, eLokacijo ali e-naslov prejemnika."
-        );
-        return false;
-      }
-    }
-
-    if (stepIndex === 1) {
-      if (!invoiceNumberNumericPart.trim()) {
-        toast.warning("Manjka stevilka racuna", "Vnesi zaporedno stevilko racuna.");
-        return false;
-      }
-
-      if (!issueDate || !serviceDate || !dueDate) {
-        toast.warning("Manjkajo datumi", "Vnesi datum izdaje, datum storitve in rok placila.");
-        return false;
-      }
-    }
-
-    if (stepIndex === 2) {
-      const invalidLine = lines.find(
-        (line) =>
-          !line.description.trim() ||
-          Number(line.quantity || 0) <= 0 ||
-          Number(line.price || 0) < 0
+    toast.warning("Dopolni obvezno polje", firstIssue.message);
+    window.setTimeout(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-field="${CSS.escape(firstIssue.fieldId)}"]`
       );
+      const details = element?.closest("details");
+      if (details) details.open = true;
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      element?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
+    }, 20);
+    return false;
+  }
 
-      if (invalidLine) {
-        toast.warning(
-          "Preveri postavke",
-          "Vsaka postavka potrebuje opis, kolicino vecjo od 0 in veljavno ceno."
-        );
-        return false;
-      }
+  function changeWizardStep(nextStep: number) {
+    if (nextStep <= step) {
+      setStep(nextStep);
+      return;
     }
 
-    return true;
+    const blockingIssue = getInvoiceFieldIssues(buildInvoice()).find(
+      (issue) => issue.wizardStep < nextStep
+    );
+    if (blockingIssue) {
+      setStep(blockingIssue.wizardStep);
+      toast.warning("Dopolni obvezno polje", blockingIssue.message);
+      return;
+    }
+
+    setStep(nextStep);
   }
 
   function goNext() {
@@ -724,7 +717,7 @@ export default function NewInvoicePage() {
 
     const invoice = prepared.invoice;
     localStorage.setItem("eracunko_current_invoice", JSON.stringify(invoice));
-    window.location.href = "/invoices/xml";
+    window.location.assign("/invoices/xml");
   }
 
   const isReferenceProfile = profile === "ujp" || profile === "bank";
@@ -759,7 +752,7 @@ export default function NewInvoicePage() {
         </section>
       )}
 
-      <WizardStepper currentStep={step} onStepChange={setStep} />
+      <WizardStepper currentStep={step} onStepChange={changeWizardStep} />
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="solid-panel rounded-[1.75rem] p-6">
@@ -779,7 +772,7 @@ export default function NewInvoicePage() {
 
           {step === 0 && (
             <div className="space-y-7" id="section-buyer-seller">
-              <div id="section-profile" data-tour="invoice-profile">
+              <div id="section-profile" data-tour="invoice-profile" data-field="profile.selection">
                 <SectionHeader
                   title="Vrsta racuna"
                   description="Izberi najblizji nacin posiljanja. Podatki, ki so posebni za profil, se prikazejo kasneje."
@@ -788,7 +781,10 @@ export default function NewInvoicePage() {
                   {invoiceProfiles.map((invoiceProfile) => (
                     <button
                       key={invoiceProfile.id}
-                      onClick={() => setProfile(invoiceProfile.id)}
+                      onClick={() => {
+                        setProfile(invoiceProfile.id);
+                        setProfileConfirmed(true);
+                      }}
                       data-tour={`profile-${invoiceProfile.id}`}
                       className={`rounded-2xl border px-4 py-4 text-left transition ${
                         profile === invoiceProfile.id
@@ -846,7 +842,7 @@ export default function NewInvoicePage() {
                 </details>
               </div>
 
-              <div id="section-seller">
+              <div id="section-seller" data-field="seller.settings">
                 <SectionHeader
                   title="Prodajalec"
                   description="Prodajalec se vzame iz aktivnega podjetja. Tukaj preveris podatke, ki gredo v eSLOG XML."
@@ -874,7 +870,7 @@ export default function NewInvoicePage() {
               <div id="section-invoice-details">
                 <SectionHeader title="Osnovni podatki" />
                 <div className="grid gap-4 md:grid-cols-3">
-                  <Field label="Zaporedna stevilka">
+                  <Field label="Zaporedna stevilka" fieldId="invoice.number">
                     <input value={invoiceNumberNumericPart} onChange={(event) => setInvoiceNumberNumericPart(event.target.value)} className="field-input" />
                   </Field>
                   <Field label="Poslovni prostor">
@@ -910,13 +906,13 @@ export default function NewInvoicePage() {
                       <option value="P12">P12</option>
                     </select>
                   </Field>
-                  <Field label="Datum izdaje">
+                  <Field label="Datum izdaje" fieldId="invoice.issueDate">
                     <input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="Datum storitve">
+                  <Field label="Datum storitve" fieldId="invoice.serviceDate">
                     <input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="Rok placila">
+                  <Field label="Rok placila" fieldId="invoice.dueDate">
                     <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field-input" />
                   </Field>
                 </div>
@@ -939,26 +935,26 @@ export default function NewInvoicePage() {
                   description="Uporabniku prijazna polja za sklic, namen in placilni racun."
                 />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Nacin placila" helper="BT-81; za obicajno placilo na TRR uporabi SEPA kreditni transfer.">
+                  <Field label="Nacin placila" fieldId="payment.paymentMeansCode" helper="BT-81; za obicajno placilo na TRR uporabi SEPA kreditni transfer.">
                     <select value={paymentMeansCode} onChange={(event) => setPaymentMeansCode(event.target.value)} className="field-input">
                       <option value="58">SEPA kreditni transfer</option>
                       <option value="30">Kreditno nakazilo</option>
                       <option value="10">Gotovina</option>
                     </select>
                   </Field>
-                  <Field label="Sklic placila" helper="BT-83; remittance information/sklic, ki poveze placilo z racunom. V XML se mapira kot RFF PQ.">
+                  <Field label="Sklic placila" fieldId="payment.reference" helper="BT-83; remittance information/sklic, ki poveze placilo z racunom. V XML se mapira kot RFF PQ.">
                     <input value={reference} onChange={(event) => setReference(event.target.value)} className="field-input" />
                   </Field>
                   <Field label="Namen placila">
                     <input value={paymentPurpose} onChange={(event) => setPaymentPurpose(event.target.value)} className="field-input" placeholder="Npr. placilo racuna" />
                   </Field>
-                  <Field label="Koda namena">
+                  <Field label="Koda namena" fieldId="payment.purposeCode">
                     <input value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="IBAN prejemnika placila" helper="BT-84; bancni racun prodajalca, kamor naj kupec placa racun.">
+                  <Field label="IBAN prejemnika placila" fieldId="payment.iban" helper="BT-84; bancni racun prodajalca, kamor naj kupec placa racun.">
                     <input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="BIC/SWIFT" helper="BT-86; identifikator banke. Ni vedno obvezen, vendar ga dodaj, ce ga imas.">
+                  <Field label="BIC/SWIFT" fieldId="payment.bic" helper="BT-86; identifikator banke. Ni vedno obvezen, vendar ga dodaj, ce ga imas.">
                     <input value={bankBic} onChange={(event) => setBankBic(event.target.value)} className="field-input" />
                   </Field>
                   <Field label="Placilni pogoji" helper="BT-20; kratek tekst, npr. 'Placilo v 15 dneh'. V XML se zapise kot FTX AAB.">
@@ -973,7 +969,7 @@ export default function NewInvoicePage() {
                   <p className="app-muted mt-2 text-sm">
                     Reference so opcijske pri standardnem racunu, pri UJP ali bancnem profilu pa prejemnik pogosto zahteva vsaj eno od njih.
                   </p>
-                  <div className="mt-5">
+                  <div className="mt-5" data-field="references.document">
                   <SectionHeader
                     title="Reference dokumentov"
                     description="Za UJP ali bancno posiljanje dodaj vsaj eno referenco, ce jo zahteva prejemnik."
@@ -1009,7 +1005,7 @@ export default function NewInvoicePage() {
           )}
 
           {step === 2 && (
-            <div id="section-lines">
+            <div id="section-lines" data-field="invoice.lines">
               <SectionHeader
                 title="Postavke racuna"
                 description="Za prvo posiljanje je dovolj naziv, kolicina, cena in DDV. Dodatna polja se prikazejo samo za izbrani profil."
@@ -1030,27 +1026,27 @@ export default function NewInvoicePage() {
                         <input value={line.itemCode || ""} onChange={(event) => updateLine(line.id, { itemCode: event.target.value })} className="field-input" />
                       </Field>
                       <div className="md:col-span-2">
-                        <Field label="Naziv ali opis">
+                        <Field label="Naziv ali opis" fieldId={`lines.${line.id}.description`}>
                           <input value={line.description} onChange={(event) => updateLine(line.id, { description: event.target.value })} className="field-input" />
                         </Field>
                       </div>
-                      <Field label="Kolicina">
+                      <Field label="Kolicina" fieldId={`lines.${line.id}.quantity`}>
                         <input type="number" value={line.quantity} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} className="field-input" />
                       </Field>
-                      <Field label="Enota">
+                      <Field label="Enota" fieldId={`lines.${line.id}.unit`}>
                         <input value={line.unit || ""} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input" />
                       </Field>
-                      <Field label="Neto cena">
+                      <Field label="Neto cena" fieldId={`lines.${line.id}.price`}>
                         <input type="number" value={line.price} onChange={(event) => updateLine(line.id, { price: Number(event.target.value) })} className="field-input" />
                       </Field>
-                      <Field label="DDV kategorija">
+                      <Field label="DDV kategorija" fieldId={`lines.${line.id}.vatCategory`}>
                         <select value={line.vatCategory} onChange={(event) => updateLine(line.id, { vatCategory: event.target.value as VatCategory })} className="field-input">
                           {VAT_CATEGORIES.map((category) => (
                             <option key={category.value} value={category.value}>{category.label}</option>
                           ))}
                         </select>
                       </Field>
-                      <Field label="DDV %">
+                      <Field label="DDV %" fieldId={`lines.${line.id}.vatRate`}>
                         <input type="number" value={line.vatRate} onChange={(event) => updateLine(line.id, { vatRate: Number(event.target.value) })} className="field-input" />
                       </Field>
                       {lineProfileFields.map((field) => (
@@ -1068,7 +1064,7 @@ export default function NewInvoicePage() {
                       ))}
                       {line.vatCategory !== "S" && (
                         <div className="md:col-span-2">
-                          <Field label="Razlog oprostitve ali posebne DDV obravnave" helper="BT-120; obvezno pri Z, E, AE in drugih nicelnih kategorijah.">
+                          <Field label="Razlog oprostitve ali posebne DDV obravnave" fieldId={`lines.${line.id}.taxExemptionReason`} helper="BT-120; obvezno pri Z, E, AE in drugih nicelnih kategorijah.">
                             <input value={line.taxExemptionReason || ""} onChange={(event) => updateLine(line.id, { taxExemptionReason: event.target.value })} className="field-input" />
                           </Field>
                         </div>
@@ -1091,7 +1087,7 @@ export default function NewInvoicePage() {
           )}
 
           {step === 3 && (
-            <div className="space-y-6">
+            <div className="space-y-6" data-field="invoice.review">
               <div className="grid gap-4 md:grid-cols-2">
                 <ReviewBox title="Kupec">
                   <p className="font-semibold">{buyer.name || "-"}</p>
@@ -1210,7 +1206,7 @@ export default function NewInvoicePage() {
               {WIZARD_STEPS.map((wizardStep, index) => (
                 <button
                   key={wizardStep.title}
-                  onClick={() => setStep(index)}
+                  onClick={() => changeWizardStep(index)}
                   className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
                     index === step
                       ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
@@ -1331,7 +1327,7 @@ function BuyerField({
   helper?: string;
 }) {
   return (
-    <Field label={label} helper={helper}>
+    <Field label={label} helper={helper} fieldId={`buyer.${field}`}>
       <input
         value={buyer[field]}
         onChange={(event) =>
@@ -1367,6 +1363,7 @@ function ProfileFieldsSection({
           <ProfileField
             key={field.name}
             field={field}
+            fieldId={`profile.${profile.id}.${field.name}`}
             value={values[field.name]}
             onChange={(value) => onChange(field.name, value)}
           />
@@ -1394,16 +1391,23 @@ function LineProfileField({
         : String(lineValue);
 
   return (
-    <ProfileField field={field} value={value} onChange={onChange} />
+    <ProfileField
+      field={field}
+      fieldId={`lines.${line.id}.${field.name}`}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 
 function ProfileField({
   field,
+  fieldId,
   value,
   onChange,
 }: {
   field: ProfileFieldDefinition;
+  fieldId: string;
   value: ProfileFieldValue | undefined;
   onChange: (value: ProfileFieldValue) => void;
 }) {
@@ -1412,7 +1416,7 @@ function ProfileField({
 
   if (field.type === "checkbox") {
     return (
-      <label className={`flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 ${wrapperClass}`}>
+      <label data-field={fieldId} className={`flex items-start gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 ${wrapperClass}`}>
         <input
           type="checkbox"
           checked={Boolean(value)}
@@ -1431,7 +1435,7 @@ function ProfileField({
 
   return (
     <div className={wrapperClass}>
-      <Field label={label}>
+      <Field label={label} fieldId={fieldId}>
         {field.type === "select" ? (
           <select
             value={typeof value === "string" ? value : ""}
@@ -1488,13 +1492,15 @@ function Field({
   label,
   children,
   helper,
+  fieldId,
 }: {
   label: string;
   children: React.ReactNode;
   helper?: string;
+  fieldId?: string;
 }) {
   return (
-    <label className="block">
+    <label className="block rounded-2xl" data-field={fieldId}>
       <span className="app-muted mb-2 block text-sm font-medium">{label}</span>
       {children}
       {helper && <span className="app-muted mt-2 block text-xs leading-relaxed">{helper}</span>}
