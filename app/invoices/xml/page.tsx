@@ -9,6 +9,7 @@ import type { Invoice, Party } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
 import CompanySelector from "../../components/CompanySelector";
 import { useToast } from "../../components/ToastProvider";
+import { useSendWizardAssistant } from "./useSendWizardAssistant";
 
 type SenderCompany = {
   name?: string;
@@ -164,7 +165,7 @@ export default function InvoiceXmlPage() {
         errors: prepared?.validation.errors || [],
         warnings: prepared?.validation.warnings || [],
       });
-      return;
+      return false;
     }
 
     setSending(true);
@@ -195,7 +196,7 @@ export default function InvoiceXmlPage() {
           errors: data.errors,
           warnings: data.warnings || data.validationWarnings,
         });
-        return;
+        return false;
       }
 
       const sentInvoice: SentInvoice = {
@@ -242,6 +243,7 @@ export default function InvoiceXmlPage() {
         docId: data.docId,
         warnings: data.validationWarnings || [],
       });
+      return true;
     } catch (error) {
       toast.error(
         "Pošiljanje ni uspelo",
@@ -251,10 +253,16 @@ export default function InvoiceXmlPage() {
         success: false,
         message: error instanceof Error ? error.message : "Napaka pri pošiljanju.",
       });
+      return false;
     } finally {
       setSending(false);
     }
   }
+
+  const fieldAssistant = useSendWizardAssistant({
+    ready: Boolean(invoice && prepared && validation?.valid),
+    sendInvoice: sendToBizBox,
+  });
 
   if (!invoice || !prepared) {
     return (
@@ -317,6 +325,7 @@ export default function InvoiceXmlPage() {
 
       <div className="mt-6 flex flex-wrap gap-3" data-tour="xml-actions">
         <button
+          data-field="invoice.send"
           onClick={() => {
             if (!xml) {
               toast.warning(
@@ -392,6 +401,7 @@ export default function InvoiceXmlPage() {
           )}
         </div>
       )}
+      {fieldAssistant}
     </AppShell>
   );
 }

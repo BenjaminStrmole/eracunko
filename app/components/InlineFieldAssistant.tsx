@@ -27,6 +27,7 @@ export default function InlineFieldAssistant({
 }) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<Position>({ key: "", left: 16, top: 16 });
+  const [confirmingForKey, setConfirmingForKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!state) return;
@@ -83,6 +84,17 @@ export default function InlineFieldAssistant({
     };
   }, [state]);
 
+  useEffect(() => {
+    if (!state) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setConfirmingForKey(state?.key || null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [state]);
+
   if (!state) return null;
 
   return (
@@ -101,12 +113,36 @@ export default function InlineFieldAssistant({
       <button
         type="button"
         className="inline-field-assistant-close"
-        onClick={onClose}
+        onClick={() => setConfirmingForKey(state.key)}
         aria-label="Zapri asistenta"
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>
 
+      {confirmingForKey === state.key ? (
+        <div className="pr-6">
+          <div className="text-sm font-semibold">Želite zapreti pomočnika?</div>
+          <p className="app-muted mt-1 text-xs leading-relaxed">
+            Napredek bo shranjen, vendar se pomočnik ne bo več samodejno nadaljeval.
+          </p>
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="inline-field-assistant-continue"
+              onClick={() => setConfirmingForKey(null)}
+            >
+              Nadaljuj
+            </button>
+            <button
+              type="button"
+              className="inline-field-assistant-dismiss"
+              onClick={onClose}
+            >
+              Zapri pomočnika
+            </button>
+          </div>
+        </div>
+      ) : <>
       <div className="flex items-start gap-3 pr-6">
         {state.kind === "success" && (
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden="true" />
@@ -122,15 +158,18 @@ export default function InlineFieldAssistant({
         </div>
       </div>
 
-      {state.kind === "field" && (
+      {(state.kind === "field" || state.actionLabel) && (
         <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="app-muted text-[11px]">Manjka še {state.remaining}</span>
+          <span className="app-muted text-[11px]">
+            {state.kind === "field" ? `Manjka še ${state.remaining}` : ""}
+          </span>
           <button type="button" className="inline-field-assistant-next" onClick={onNext}>
             {state.actionLabel || "Naprej"}
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
       )}
+      </>}
     </div>
   );
 }

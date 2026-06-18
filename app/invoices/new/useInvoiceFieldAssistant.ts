@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFieldWizard } from "../../components/FieldWizardProvider";
 import {
   getFieldRule,
   getInvoiceFieldIssues,
+  getMissingSellerFields,
 } from "../../../lib/onboarding/invoiceFieldRules";
 import type {
   FieldWizardAdapter,
@@ -13,7 +15,7 @@ import type {
   ValidationIssue,
 } from "../../../lib/onboarding/types";
 import type { Invoice, InvoiceProfile } from "../../../types/invoice";
-import type { InlineAssistantState } from "./InlineFieldAssistant";
+import type { InlineAssistantState } from "../../components/InlineFieldAssistant";
 
 type AssistantOptions = {
   profile: InvoiceProfile;
@@ -22,10 +24,12 @@ type AssistantOptions = {
   setProfileConfirmed: (confirmed: boolean) => void;
   setStep: (step: number) => void;
   getInvoice: () => Invoice;
+  restoreInvoice: (invoice: Invoice) => void;
 };
 
 export function useInvoiceFieldAssistant(options: AssistantOptions) {
-  const { register } = useFieldWizard();
+  const router = useRouter();
+  const { register, updateSession, dismissSession } = useFieldWizard();
   const [state, setState] = useState<InlineAssistantState | null>(null);
   const optionsRef = useRef(options);
   const flowRef = useRef<InvoiceFieldWizardFlow | null>(null);
@@ -122,6 +126,14 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
         remaining,
         actionLabel: issue.actionRoute ? "Odpri nastavitve" : "Naprej",
       });
+      updateSession({
+        profile: invoice.profile,
+        phase: "invoice",
+        route: "/invoices/new",
+        currentFieldId: issue.fieldId,
+        wizardStep: issue.wizardStep,
+        invoiceDraft: invoice,
+      });
 
       if (target) {
         window.setTimeout(() => {
@@ -134,7 +146,7 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
         }, 180);
       }
     },
-    [cleanupHighlight, findTarget]
+    [cleanupHighlight, findTarget, updateSession]
   );
 
   const showProfileChoice = useCallback(async () => {
@@ -163,7 +175,14 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
       remaining: 1,
       actionLabel: "Naprej",
     });
-  }, [cleanupHighlight, findTarget]);
+    updateSession({
+      phase: "invoice",
+      route: "/invoices/new",
+      currentFieldId: issue.fieldId,
+      wizardStep: issue.wizardStep,
+      invoiceDraft: optionsRef.current.getInvoice(),
+    });
+  }, [cleanupHighlight, findTarget, updateSession]);
 
   const showCompletion = useCallback(async () => {
     const renderToken = ++renderTokenRef.current;
@@ -171,7 +190,16 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
     flowRef.current = null;
     currentIssueRef.current = null;
     optionsRef.current.setStep(3);
-    callbacksRef.current?.onCompleted();
+    const invoice = optionsRef.current.getInvoice();
+    updateSession({
+      status: "active",
+      phase: "review",
+      route: "/invoices/new",
+      currentFieldId: "invoice.review",
+      wizardStep: 3,
+      invoiceDraft: invoice,
+      pendingSellerFields: [],
+    });
     const target = await findTarget("invoice.review", 3);
     if (renderToken !== renderTokenRef.current) return;
     setState({
@@ -186,7 +214,7 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
       setState(null);
       successTimerRef.current = null;
     }, 4500);
-  }, [cleanupHighlight, findTarget]);
+  }, [cleanupHighlight, findTarget, updateSession]);
 
   const advance = useCallback(async () => {
     if (!flowRef.current) return;
@@ -210,9 +238,20 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
     if (!issue) return;
 
     if (issue.actionRoute) {
-      const route = issue.actionRoute;
-      stop(true);
-      window.location.assign(route);
+      const invoice = optionsRef.current.getInvoice();
+      cleanupHighlight();
+      setState(null);
+      updateSession({
+        status: "active",
+        phase: "settings",
+        route: issue.actionRoute,
+        currentFieldId: issue.fieldId,
+        wizardStep: issue.wizardStep,
+        profile: invoice.profile,
+        invoiceDraft: invoice,
+        pendingSellerFields: getMissingSellerFields(invoice),
+      });
+      router.push(issue.actionRoute);
       return;
     }
 
@@ -238,7 +277,7 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
     }
 
     void advanceRef.current();
-  }, [showProfileChoice, stop]);
+  }, [cleanupHighlight, router, showProfileChoice, updateSession]);
 
   useEffect(() => {
     advanceRef.current = advance;
@@ -249,12 +288,6 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (!flowRef.current) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        stop(true);
-        return;
-      }
-
       if (
         event.key !== "Enter" ||
         event.isComposing ||
@@ -283,10 +316,23 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
 
   const adapter = useMemo<FieldWizardAdapter>(
     () => ({
-      start(flow, callbacks) {
+      start(flow, callbacks, session) {
         stop(false);
         flowRef.current = flow;
         callbacksRef.current = callbacks;
+
+        if (session?.invoiceDraft) {
+          optionsRef.current.restoreInvoice(session.invoiceDraft);
+        }
+
+        if (session?.profile) {
+          optionsRef.current.setProfile(session.profile);
+          optionsRef.current.setProfileConfirmed(true);
+        }
+
+        if (typeof session?.wizardStep === "number") {
+          optionsRef.current.setStep(session.wizardStep);
+        }
 
         if (flow !== "invoice") {
           optionsRef.current.setProfile(flow);
@@ -313,6 +359,9 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   return {
     state,
     next,
-    close: () => stop(true),
+    close: () => {
+      dismissSession();
+      stop(false);
+    },
   };
 }

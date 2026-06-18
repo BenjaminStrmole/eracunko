@@ -32,7 +32,7 @@ import type {
 } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
 import { useToast } from "../../components/ToastProvider";
-import InlineFieldAssistant from "./InlineFieldAssistant";
+import InlineFieldAssistant from "../../components/InlineFieldAssistant";
 import { useInvoiceFieldAssistant } from "./useInvoiceFieldAssistant";
 
 type Customer = {
@@ -580,6 +580,62 @@ export default function NewInvoicePage() {
     };
   }
 
+  function restoreInvoiceDraft(invoice: Invoice) {
+    const restoredProfile = invoice.profile || "standard";
+    setProfile(restoredProfile);
+    setProfileConfirmed(true);
+    setBuyer({
+      name: invoice.buyer?.name || "",
+      vat: invoice.buyer?.vat || invoice.buyer?.taxId || "",
+      address: invoice.buyer?.street || invoice.buyer?.address || "",
+      postCode: invoice.buyer?.postCode || "",
+      city: invoice.buyer?.city || "",
+      country: invoice.buyer?.country || "SI",
+      eLocation: invoice.buyer?.eLocation || "",
+      eAddress: invoice.buyer?.eAddress || "",
+      registrationNumber: invoice.buyer?.registrationNumber || "",
+    });
+    setSelectedCustomerVat(invoice.buyer?.vat || "");
+    setInvoiceNumberNumericPart(
+      invoice.invoiceNumberNumericPart || invoice.number?.split(/[-_/]/)[0] || ""
+    );
+    setBusinessPremiseCode(invoice.businessPremiseCode || "PP01");
+    setDeviceCode(invoice.deviceCode || "01");
+    setIssueDate(invoice.issueDate || today());
+    setServiceDate(invoice.serviceDate || today());
+    setDueDate(invoice.dueDate || addDays(15));
+    setDocumentType(invoice.documentType || "380");
+    setBusinessProcess(invoice.businessProcess || "P1");
+    setSpecificationIdentifier(
+      invoice.eSlog?.specificationIdentifier || "urn:cen.eu:en16931:2017"
+    );
+    setNote(invoice.note || "");
+    setPaymentMeansCode(invoice.payment?.paymentMeansCode || "58");
+    setPurposeCode(invoice.payment?.purposeCode || "OTHR");
+    setPaymentPurpose(invoice.payment?.paymentPurpose || "");
+    setBankAccount(invoice.payment?.iban || invoice.bankAccount || "");
+    setBankBic(invoice.payment?.bic || invoice.bankBic || "");
+    setReference(invoice.payment?.reference || invoice.reference || "");
+    setPaymentTerms(invoice.payment?.paymentTerms || "");
+    setSellerRegistrationNumber(invoice.seller?.registrationNumber || "");
+    setOrderReference(invoice.references?.orderReference || "");
+    setContractReference(invoice.references?.contractReference || "");
+    setDeliveryNoteReference(invoice.references?.deliveryNoteReference || "");
+    setBuyerReference(invoice.references?.buyerReference || "");
+    setLines(
+      (invoice.lines || []).map((line) => ({
+        ...line,
+        vatCategory: line.vatCategory || "S",
+      }))
+    );
+    setProfileData((current) => ({
+      ...current,
+      hr: { ...current.hr, ...(invoice.hrData || {}) },
+      ujp: { ...current.ujp, ...(invoice.ujpData || {}) },
+      bank: { ...current.bank, ...(invoice.bankData || {}) },
+    }));
+  }
+
   const prepared = prepareInvoiceForEslog(buildInvoice());
 
   const fieldAssistant = useInvoiceFieldAssistant({
@@ -589,6 +645,7 @@ export default function NewInvoicePage() {
     setProfileConfirmed,
     setStep,
     getInvoice: buildInvoice,
+    restoreInvoice: restoreInvoiceDraft,
   });
 
   function updateLine(id: number, patch: Partial<EditableLine>) {

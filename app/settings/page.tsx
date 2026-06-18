@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { syncDbActiveCompany } from "../../lib/client/activeCompany";
 import AppShell from "../components/AppShell";
 import { useToast } from "../components/ToastProvider";
+import InlineFieldAssistant from "../components/InlineFieldAssistant";
+import { useSettingsWizardAssistant } from "./useSettingsWizardAssistant";
 
 type CompanySettings = {
   name: string;
@@ -131,12 +133,12 @@ export default function SettingsPage() {
   async function saveSettings() {
     if (!settings.name.trim()) {
       toast.warning("Manjka naziv podjetja", "Vnesi naziv podjetja.");
-      return;
+      return false;
     }
 
     if (!settings.vatNumber.trim()) {
       toast.warning("Manjka davčna številka", "Vnesi davčno številko podjetja.");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -219,7 +221,14 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+    return true;
   }
+
+  const fieldAssistant = useSettingsWizardAssistant({
+    settings,
+    loading,
+    saveSettings,
+  });
 
   return (
     <AppShell>
@@ -244,7 +253,7 @@ export default function SettingsPage() {
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Field label="Naziv podjetja *">
+            <Field label="Naziv podjetja *" fieldId="settings.name">
               <input
                 value={settings.name}
                 onChange={(event) => updateField("name", event.target.value)}
@@ -253,7 +262,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field label="Davčna številka *">
+            <Field label="Davčna številka *" fieldId="settings.vatNumber">
               <input
                 value={settings.vatNumber}
                 onChange={(event) =>
@@ -288,7 +297,7 @@ export default function SettingsPage() {
               </select>
             </Field>
 
-            <Field label="Ulica in hišna številka *">
+            <Field label="Ulica in hišna številka *" fieldId="settings.street">
               <input
                 value={settings.street || settings.address}
                 onChange={(event) => {
@@ -303,12 +312,14 @@ export default function SettingsPage() {
             <Field label="Pošta in kraj *">
               <div className="grid grid-cols-3 gap-3">
                 <input
+                  data-field="settings.postCode"
                   value={settings.postCode}
                   onChange={(event) => updateField("postCode", event.target.value)}
                   className="field-input"
                   placeholder="1000"
                 />
                 <input
+                  data-field="settings.city"
                   value={settings.city}
                   onChange={(event) => updateField("city", event.target.value)}
                   className="field-input col-span-2"
@@ -317,7 +328,7 @@ export default function SettingsPage() {
               </div>
             </Field>
 
-            <Field label="Država *">
+            <Field label="Država *" fieldId="settings.country">
               <input
                 value={settings.country}
                 onChange={(event) =>
@@ -328,7 +339,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field label="eLokacija *">
+            <Field label="eLokacija *" fieldId="settings.eLocation">
               <input
                 value={settings.eLocation}
                 onChange={(event) => updateField("eLocation", event.target.value)}
@@ -337,7 +348,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field label="eNaslov">
+            <Field label="eNaslov" fieldId="settings.eAddress">
               <input
                 value={settings.eAddress}
                 onChange={(event) => updateField("eAddress", event.target.value)}
@@ -449,6 +460,7 @@ export default function SettingsPage() {
           </div>
 
           <button
+            data-field="settings.save"
             onClick={saveSettings}
             disabled={saving}
             className="primary-button mt-8 h-12 px-6 disabled:opacity-60"
@@ -479,6 +491,11 @@ export default function SettingsPage() {
           </div>
         </aside>
       </div>
+      <InlineFieldAssistant
+        state={fieldAssistant.state}
+        onNext={fieldAssistant.next}
+        onClose={fieldAssistant.close}
+      />
     </AppShell>
   );
 }
@@ -486,12 +503,14 @@ export default function SettingsPage() {
 function Field({
   label,
   children,
+  fieldId,
 }: {
   label: string;
   children: React.ReactNode;
+  fieldId?: string;
 }) {
   return (
-    <div>
+    <div data-field={fieldId} className="rounded-2xl">
       <label className="app-muted mb-2 block text-sm font-medium">{label}</label>
       {children}
     </div>

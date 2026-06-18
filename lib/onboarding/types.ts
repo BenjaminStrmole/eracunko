@@ -27,6 +27,27 @@ export type FieldRule = {
 
 export type InvoiceFieldWizardFlow = "invoice" | InvoiceProfile;
 
+export type FieldWizardSessionStatus =
+  | "active"
+  | "paused"
+  | "dismissed"
+  | "completed";
+
+export type FieldWizardSession = {
+  id: string;
+  flow: InvoiceFieldWizardFlow;
+  profile?: InvoiceProfile;
+  status: FieldWizardSessionStatus;
+  phase: "invoice" | "settings" | "review" | "send";
+  route: string;
+  currentFieldId?: string;
+  wizardStep?: number;
+  pendingSellerFields: string[];
+  invoiceDraft?: Invoice;
+  startedAt: string;
+  updatedAt: string;
+};
+
 export type FieldWizardCallbacks = {
   onCompleted: () => void;
   onPaused: () => void;
@@ -35,7 +56,8 @@ export type FieldWizardCallbacks = {
 export type FieldWizardAdapter = {
   start: (
     flow: InvoiceFieldWizardFlow,
-    callbacks: FieldWizardCallbacks
+    callbacks: FieldWizardCallbacks,
+    session?: FieldWizardSession
   ) => void;
   stop: () => void;
 };

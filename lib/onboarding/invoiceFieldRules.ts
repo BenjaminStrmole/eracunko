@@ -61,21 +61,44 @@ function hasDocumentReference(invoice: Invoice) {
   );
 }
 
-function sellerMissingFields(invoice: Invoice) {
+export type SellerFieldId =
+  | "name"
+  | "vatNumber"
+  | "street"
+  | "postCode"
+  | "city"
+  | "country"
+  | "eLocation"
+  | "eAddress";
+
+export function getMissingSellerFields(invoice: Invoice): SellerFieldId[] {
   const seller = invoice.seller;
-  if (!seller) return ["aktivno podjetje"];
+  if (!seller) {
+    return ["name", "vatNumber", "street", "postCode", "city", "country", "eLocation", "eAddress"];
+  }
 
   return [
-    !text(seller.name) && "naziv",
-    !text(seller.vat || seller.taxId) && "davčna številka",
-    !text(seller.street || seller.address) && "naslov",
-    !text(seller.postCode) && "poštna številka",
-    !text(seller.city) && "mesto",
-    !text(seller.country) && "država",
-    !text(seller.eLocation) && "eLokacija",
+    !text(seller.name) && "name",
+    !text(seller.vat || seller.taxId) && "vatNumber",
+    !text(seller.street || seller.address) && "street",
+    !text(seller.postCode) && "postCode",
+    !text(seller.city) && "city",
+    !text(seller.country) && "country",
+    !text(seller.eLocation) && "eLocation",
     !text(seller.eAddress) && "eAddress",
-  ].filter(Boolean) as string[];
+  ].filter(Boolean) as SellerFieldId[];
 }
+
+const SELLER_FIELD_LABELS: Record<SellerFieldId, string> = {
+  name: "naziv",
+  vatNumber: "davčna številka",
+  street: "naslov",
+  postCode: "poštna številka",
+  city: "mesto",
+  country: "država",
+  eLocation: "eLokacija",
+  eAddress: "eAddress",
+};
 
 const baseRules: FieldRule[] = [
   {
@@ -86,9 +109,9 @@ const baseRules: FieldRule[] = [
     instruction: "Dopolni podatke aktivnega podjetja v Nastavitvah.",
     scope: "base",
     validate(invoice) {
-      const missing = sellerMissingFields(invoice);
+      const missing = getMissingSellerFields(invoice);
       return missing.length
-        ? issue(this, `V Nastavitvah dopolni podatke prodajalca: ${missing.join(", ")}.`)
+        ? issue(this, `V Nastavitvah dopolni podatke prodajalca: ${missing.map((field) => SELLER_FIELD_LABELS[field]).join(", ")}.`)
         : null;
     },
   },

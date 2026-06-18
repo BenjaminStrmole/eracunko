@@ -148,6 +148,24 @@ html.dark .inline-field-assistant {
   background: var(--app-primary-strong);
 }
 
+.inline-field-assistant-continue,
+.inline-field-assistant-dismiss {
+  border-radius: 0.7rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.inline-field-assistant-continue {
+  background: var(--app-primary);
+  color: white;
+}
+
+.inline-field-assistant-dismiss {
+  border: 1px solid color-mix(in srgb, var(--app-danger), transparent 55%);
+  color: var(--app-danger);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .field-wizard-pulse {
     animation: none;
