@@ -22,7 +22,10 @@ import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDraft
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
-import { getInvoiceFieldIssues } from "../../../lib/onboarding/invoiceFieldRules";
+import {
+  getInvoiceFieldIssues,
+  getInvoiceFieldRules,
+} from "../../../lib/onboarding/invoiceFieldRules";
 import type { ProfileFieldDefinition } from "../../../lib/eslog/profiles/types";
 import type {
   Invoice,
@@ -785,6 +788,19 @@ export default function NewInvoicePage() {
   const isReferenceProfile = profile === "ujp" || profile === "bank";
   const currentStep = WIZARD_STEPS[step];
   const CurrentStepIcon = currentStep.icon;
+  const currentStepRules = getInvoiceFieldRules(prepared.invoice).filter(
+    (rule) => rule.target.wizardStep === step
+  );
+  const completedStepRules = currentStepRules.filter(
+    (rule) => rule.validate(prepared.invoice) === null
+  ).length;
+  const completedRuleRatio = currentStepRules.length
+    ? completedStepRules / currentStepRules.length
+    : 1;
+  const progress = Math.min(
+    100,
+    Math.round((step * 20 + completedRuleRatio * 20) / 5) * 5
+  );
 
   return (
     <AppShell>
@@ -814,7 +830,11 @@ export default function NewInvoicePage() {
         </section>
       )}
 
-      <WizardStepper currentStep={step} onStepChange={changeWizardStep} />
+      <WizardStepper
+        currentStep={step}
+        progress={progress}
+        onStepChange={changeWizardStep}
+      />
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="solid-panel rounded-[1.75rem] p-6">
@@ -1250,6 +1270,14 @@ export default function NewInvoicePage() {
         </section>
 
         <aside className="space-y-4">
+          <InvoiceCoachCard
+            step={step}
+            profile={profile}
+            profileConfirmed={profileConfirmed}
+            lines={lines}
+            validationErrorCount={prepared.validation.errors.length}
+          />
+
           <section className="glass-panel rounded-[1.75rem] p-6">
             <h2 className="text-xl font-semibold">Povzetek</h2>
             <div className="app-muted mt-1 text-sm">{selectedProfile.label}</div>
@@ -1259,28 +1287,6 @@ export default function NewInvoicePage() {
               <SummaryRow label="Neto" value={`${prepared.invoice.totals.net.toFixed(2)} EUR`} />
               <SummaryRow label="DDV" value={`${prepared.invoice.totals.vat.toFixed(2)} EUR`} />
               <SummaryRow label="Za placilo" value={`${(prepared.invoice.totals.payable || prepared.invoice.totals.gross).toFixed(2)} EUR`} strong />
-            </div>
-          </section>
-
-          <section className="solid-panel rounded-[1.75rem] p-6">
-            <h2 className="text-xl font-semibold">Napredek</h2>
-            <div className="mt-4 space-y-3">
-              {WIZARD_STEPS.map((wizardStep, index) => (
-                <button
-                  key={wizardStep.title}
-                  onClick={() => changeWizardStep(index)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
-                    index === step
-                      ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
-                      : "border-[var(--app-border)] hover:bg-[var(--app-soft)]"
-                  }`}
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[var(--app-soft)] text-sm font-semibold">
-                    {index + 1}
-                  </span>
-                  <span className="font-medium">{wizardStep.shortTitle}</span>
-                </button>
-              ))}
             </div>
           </section>
 
@@ -1315,14 +1321,36 @@ export default function NewInvoicePage() {
 
 function WizardStepper({
   currentStep,
+  progress,
   onStepChange,
 }: {
   currentStep: number;
+  progress: number;
   onStepChange: (step: number) => void;
 }) {
+  const connectorProgress = Math.max(0, Math.min(100, ((progress - 20) / 80) * 100));
+
   return (
-    <section className="solid-panel mb-8 rounded-[1.75rem] p-3" data-tour="invoice-stepper">
-      <div className="grid gap-2 md:grid-cols-5">
+    <section className="solid-panel mb-8 rounded-[1.75rem] px-4 py-5 sm:px-6" data-tour="invoice-stepper">
+      <div className="mb-5 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-[var(--app-primary)]">Od kreiranja do pošiljanja</p>
+          <p className="app-muted mt-1 text-sm">Napredek se dopolnjuje, ko so obvezni podatki pravilni.</p>
+        </div>
+        <div className="text-right">
+          <span className="text-2xl font-semibold tabular-nums">{progress}%</span>
+          <span className="app-muted block text-xs">opravljeno</span>
+        </div>
+      </div>
+
+      <div className="relative">
+        <div className="absolute left-[10%] right-[10%] top-5 h-0.5 overflow-hidden rounded-full bg-[var(--app-border)]" aria-hidden="true">
+          <div
+            className="h-full rounded-full bg-[var(--app-primary)] transition-[width] duration-300 motion-reduce:transition-none"
+            style={{ width: `${connectorProgress}%` }}
+          />
+        </div>
+        <div className="relative grid grid-cols-5 gap-1 sm:gap-2">
         {WIZARD_STEPS.map((step, index) => {
           const Icon = step.icon;
           const isActive = index === currentStep;
@@ -1332,17 +1360,16 @@ function WizardStepper({
             <button
               key={step.title}
               onClick={() => onStepChange(index)}
-              className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
-                isActive
-                  ? "border-[var(--app-primary)] bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
-                  : "border-[var(--app-border)] hover:bg-[var(--app-soft)]"
-              }`}
+              className="group flex min-w-0 flex-col items-center gap-2 rounded-xl px-1 py-0.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-primary)]"
+              aria-current={isActive ? "step" : undefined}
             >
               <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 bg-[var(--app-surface)] transition-colors ${
                   isDone
-                    ? "bg-emerald-500/10 text-emerald-500"
-                    : "bg-[var(--app-soft)] text-[var(--app-primary)]"
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : isActive
+                      ? "border-[var(--app-primary)] text-[var(--app-primary)] shadow-[0_0_0_5px_var(--app-soft)]"
+                      : "border-[var(--app-border)] text-[var(--app-muted)] group-hover:border-[var(--app-primary)]"
                 }`}
               >
                 {isDone ? (
@@ -1351,16 +1378,129 @@ function WizardStepper({
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 )}
               </span>
-              <span>
-                <span className="block text-sm font-semibold">{step.shortTitle}</span>
-                <span className="app-muted mt-0.5 hidden text-xs xl:block">
-                  Korak {index + 1}
-                </span>
+              <span className={`truncate text-xs font-semibold sm:text-sm ${isActive ? "text-[var(--app-primary-strong)]" : ""}`}>
+                {index === 0
+                  ? "Kreiranje"
+                  : index === 4
+                    ? "Pošiljanje"
+                    : step.shortTitle}
               </span>
             </button>
           );
         })}
+        </div>
       </div>
+    </section>
+  );
+}
+
+type CoachTip = {
+  text: string;
+  done?: boolean;
+};
+
+function InvoiceCoachCard({
+  step,
+  profile,
+  profileConfirmed,
+  lines,
+  validationErrorCount,
+}: {
+  step: number;
+  profile: InvoiceProfile;
+  profileConfirmed: boolean;
+  lines: EditableLine[];
+  validationErrorCount: number;
+}) {
+  let title = "Izberi pravega prejemnika";
+  let description = "Začni s kupcem in profilom računa. Profil določi, katere podatke bo treba izpolniti.";
+  let tips: CoachTip[] = [
+    { text: "Izberi profil glede na način prejemanja računa.", done: profileConfirmed },
+    { text: "Izberi shranjenega kupca ali skrbno vnesi njegove podatke." },
+    { text: "Preveri davčno številko, naslov in elektronsko lokacijo." },
+  ];
+
+  if (step === 1) {
+    title = "Uredi podatke računa";
+    description = "Preveri številko, datume in način plačila. Tako bo račun razumljiv tudi prejemniku.";
+    tips = [
+      { text: "Preveri številko računa in datum izdaje." },
+      { text: "Nastavi datum storitve in rok plačila." },
+      { text: "Preveri IBAN, namen plačila in plačilni sklic." },
+    ];
+    if (profile === "ujp" || profile === "bank") {
+      tips.push({ text: "Vnesi vsaj eno dokumentno referenco: naročilo, pogodbo ali dobavnico." });
+    }
+    if (profile === "hr") {
+      tips.push({ text: "Preveri čas izdaje, poslovni proces in OIB operaterja." });
+    }
+  } else if (step === 2) {
+    const hasLines = lines.length > 0;
+    title = "Dodaj, kar zaračunavaš";
+    description = "Vsako storitev ali izdelek vnesi kot svojo postavko. Zneski in DDV se izračunajo sproti.";
+    tips = [
+      { text: "Dodaj prvo postavko", done: hasLines },
+      { text: "Vnesi opis storitve/blaga", done: hasLines && lines.every((line) => line.description.trim().length > 0) },
+      { text: "Vnesi količino", done: hasLines && lines.every((line) => Number(line.quantity) > 0) },
+      { text: "Vnesi ceno", done: hasLines && lines.every((line) => Number.isFinite(Number(line.price)) && Number(line.price) >= 0) },
+      { text: "Izberi DDV stopnjo", done: hasLines && lines.every((line) => Boolean(line.vatCategory) && Number.isFinite(Number(line.vatRate))) },
+    ];
+    if (profile === "hr") {
+      tips.push(
+        {
+          text: "Izberi KPD/CPA klasifikacijo za vsako postavko.",
+          done: hasLines && lines.every((line) => Boolean(line.kpdCode?.trim())),
+        },
+        {
+          text: "Izberi HR DDV kategorijo, ki ustreza postavki.",
+          done: hasLines && lines.every((line) => Boolean(line.hrVatCategoryCode?.trim())),
+        }
+      );
+    }
+  } else if (step === 3) {
+    title = "Mirno preveri povzetek";
+    description = "Pred pripravo XML-ja še enkrat preglej prejemnika, postavke in končni znesek.";
+    tips = [
+      { text: "Primerjaj neto znesek, DDV in znesek za plačilo." },
+      { text: "Odpravi označene napake pred nadaljevanjem.", done: validationErrorCount === 0 },
+      { text: "Ko je vse pravilno, nadaljuj na pripravo eSLOG XML-ja." },
+    ];
+  } else if (step === 4) {
+    title = "Pripravljeno za pošiljanje";
+    description = "Račun bo poslan prek bizBox. Po oddaji boš videl potrditev in njegovo nadaljnje stanje.";
+    tips = [
+      { text: "Še zadnjič preveri prejemnika in znesek." },
+      { text: "Pripravi račun za eSLOG pregled in oddajo prek bizBox." },
+      { text: "Po uspešni oddaji bo račun označen kot poslan." },
+    ];
+  }
+
+  return (
+    <section className="rounded-[1.75rem] border border-[var(--app-primary)]/25 bg-[var(--app-soft)] p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--app-surface)] text-[var(--app-primary)] shadow-sm">
+          <ListChecks className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--app-primary)]">Pomočnik</p>
+          <h2 className="font-semibold">{title}</h2>
+        </div>
+      </div>
+      <p className="app-muted text-sm leading-6">{description}</p>
+      <ul className="mt-5 space-y-3">
+        {tips.map((tip) => (
+          <li key={tip.text} className="flex gap-3 text-sm leading-5">
+            {tip.done ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+            ) : (
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--app-primary)]" aria-hidden="true" />
+            )}
+            <span className={tip.done ? "text-[var(--app-muted)] line-through decoration-emerald-500/50" : ""}>
+              {tip.text}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
