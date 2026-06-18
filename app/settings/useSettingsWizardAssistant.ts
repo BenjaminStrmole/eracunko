@@ -155,6 +155,26 @@ export function useSettingsWizardAssistant({
     else await showSave();
   }, [session, showField, showReturn, showSave]);
 
+  const saveAndContinue = useCallback(async () => {
+    if (session?.status !== "active" || session.phase !== "settings") {
+      return saveSettings();
+    }
+
+    const pending = (session?.pendingSellerFields || []) as SellerFieldId[];
+    const missing = pending.find((field) => !valid(field, settingsRef.current));
+    if (missing) {
+      await showField(missing, "To polje je obvezno za izdajatelja računa.");
+      return false;
+    }
+
+    const saved = await saveSettings();
+    if (!saved) return false;
+    savedRef.current = true;
+    updateSession({ pendingSellerFields: [] });
+    await showReturn();
+    return true;
+  }, [saveSettings, session, showField, showReturn, updateSession]);
+
   const next = useCallback(async () => {
     const current = currentFieldRef.current;
     if (!current) return;
@@ -170,11 +190,7 @@ export function useSettingsWizardAssistant({
       return;
     }
     if (current === "save") {
-      const saved = await saveSettings();
-      if (!saved) return;
-      savedRef.current = true;
-      updateSession({ pendingSellerFields: [] });
-      await showReturn();
+      await saveAndContinue();
       return;
     }
     if (!valid(current, settingsRef.current)) {
@@ -182,7 +198,7 @@ export function useSettingsWizardAssistant({
       return;
     }
     await advanceRef.current();
-  }, [cleanup, router, saveSettings, showField, showReturn, updateSession]);
+  }, [cleanup, router, saveAndContinue, showField, updateSession]);
 
   useEffect(() => {
     advanceRef.current = advance;
@@ -221,6 +237,7 @@ export function useSettingsWizardAssistant({
   return {
     state,
     next: () => void next(),
+    saveAndContinue: () => void saveAndContinue(),
     close: () => {
       dismissSession();
       cleanup();

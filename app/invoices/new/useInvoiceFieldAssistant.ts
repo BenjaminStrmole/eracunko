@@ -25,6 +25,7 @@ type AssistantOptions = {
   setStep: (step: number) => void;
   getInvoice: () => Invoice;
   restoreInvoice: (invoice: Invoice) => void;
+  ready: boolean;
 };
 
 export function useInvoiceFieldAssistant(options: AssistantOptions) {
@@ -39,6 +40,7 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   const remainingRef = useRef(0);
   const renderTokenRef = useRef(0);
   const successTimerRef = useRef<number | null>(null);
+  const pendingRestoreRef = useRef<Invoice | null>(null);
 
   useEffect(() => {
     optionsRef.current = options;
@@ -217,7 +219,7 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   }, [cleanupHighlight, findTarget, updateSession]);
 
   const advance = useCallback(async () => {
-    if (!flowRef.current) return;
+    if (!flowRef.current || !optionsRef.current.ready) return;
     if (!optionsRef.current.profileConfirmed) {
       await showProfileChoice();
       return;
@@ -322,7 +324,11 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
         callbacksRef.current = callbacks;
 
         if (session?.invoiceDraft) {
-          optionsRef.current.restoreInvoice(session.invoiceDraft);
+          if (optionsRef.current.ready) {
+            optionsRef.current.restoreInvoice(session.invoiceDraft);
+          } else {
+            pendingRestoreRef.current = session.invoiceDraft;
+          }
         }
 
         if (session?.profile) {
@@ -339,7 +345,9 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
           optionsRef.current.setProfileConfirmed(true);
         }
 
-        window.setTimeout(() => void advanceRef.current(), 0);
+        if (optionsRef.current.ready) {
+          window.setTimeout(() => void advanceRef.current(), 0);
+        }
       },
       stop() {
         stop(false);
@@ -351,10 +359,15 @@ export function useInvoiceFieldAssistant(options: AssistantOptions) {
   useEffect(() => register(adapter), [adapter, register]);
 
   useEffect(() => {
-    if (flowRef.current && options.profileConfirmed) {
+    if (options.ready && pendingRestoreRef.current) {
+      optionsRef.current.restoreInvoice(pendingRestoreRef.current);
+      pendingRestoreRef.current = null;
+    }
+
+    if (flowRef.current && options.profileConfirmed && options.ready) {
       window.setTimeout(() => void advanceRef.current(), 0);
     }
-  }, [options.profile, options.profileConfirmed]);
+  }, [options.profile, options.profileConfirmed, options.ready]);
 
   return {
     state,

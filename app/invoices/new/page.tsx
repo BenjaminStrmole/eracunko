@@ -249,6 +249,7 @@ export default function NewInvoicePage() {
   }));
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [companySellerSettings, setCompanySellerSettings] = useState<CompanySellerSettings | null>(null);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerVat, setSelectedCustomerVat] = useState("");
   const [buyer, setBuyer] = useState<BuyerForm>(emptyBuyer);
@@ -371,6 +372,8 @@ export default function NewInvoicePage() {
           setBuyer(customerToBuyer(selected));
         }
       }
+
+      setInitialDataLoaded(true);
     });
   }, []);
 
@@ -646,6 +649,7 @@ export default function NewInvoicePage() {
     setStep,
     getInvoice: buildInvoice,
     restoreInvoice: restoreInvoiceDraft,
+    ready: initialDataLoaded,
   });
 
   function updateLine(id: number, patch: Partial<EditableLine>) {

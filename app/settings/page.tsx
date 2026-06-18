@@ -461,7 +461,7 @@ export default function SettingsPage() {
 
           <button
             data-field="settings.save"
-            onClick={saveSettings}
+            onClick={fieldAssistant.saveAndContinue}
             disabled={saving}
             className="primary-button mt-8 h-12 px-6 disabled:opacity-60"
           >

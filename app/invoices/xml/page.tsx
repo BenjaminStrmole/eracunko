@@ -354,7 +354,7 @@ export default function InvoiceXmlPage() {
         </button>
 
         <button
-          onClick={sendToBizBox}
+          onClick={fieldAssistant.sendWithCompletion}
           disabled={sending || !validation?.valid}
           className="secondary-button h-12 px-6 disabled:opacity-60"
         >
@@ -401,7 +401,7 @@ export default function InvoiceXmlPage() {
           )}
         </div>
       )}
-      {fieldAssistant}
+      {fieldAssistant.assistant}
     </AppShell>
   );
 }

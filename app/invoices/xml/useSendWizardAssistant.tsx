@@ -53,9 +53,10 @@ export function useSendWizardAssistant({
     });
   }, [cleanup, ready, session?.status, updateSession]);
 
-  const next = useCallback(async () => {
+  const sendWithCompletion = useCallback(async () => {
+    const hasActiveSession = session?.status === "active";
     const sent = await sendInvoice();
-    if (!sent) return;
+    if (!sent || !hasActiveSession) return;
     completeSession();
     targetRef.current?.classList.remove("field-wizard-pulse");
     setState({
@@ -67,7 +68,7 @@ export function useSendWizardAssistant({
       remaining: 0,
     });
     window.setTimeout(() => setState(null), 4500);
-  }, [completeSession, sendInvoice]);
+  }, [completeSession, sendInvoice, session?.status]);
 
   const adapter = useMemo<FieldWizardAdapter>(
     () => ({
@@ -88,14 +89,17 @@ export function useSendWizardAssistant({
     if (ready) window.setTimeout(() => void showSend(), 0);
   }, [ready, showSend]);
 
-  return (
-    <InlineFieldAssistant
-      state={state}
-      onNext={() => void next()}
-      onClose={() => {
-        dismissSession();
-        cleanup();
-      }}
-    />
-  );
+  return {
+    assistant: (
+      <InlineFieldAssistant
+        state={state}
+        onNext={() => void sendWithCompletion()}
+        onClose={() => {
+          dismissSession();
+          cleanup();
+        }}
+      />
+    ),
+    sendWithCompletion: () => void sendWithCompletion(),
+  };
 }
