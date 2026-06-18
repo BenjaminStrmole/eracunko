@@ -113,8 +113,8 @@ incompleteLines.lines = [
     quantity: 0,
     unit: "",
     price: Number.NaN,
-    vatCategory: "S",
-    vatRate: 0,
+    vatCategory: "",
+    vatRate: Number.NaN,
   },
   {
     id: 22,
@@ -127,12 +127,21 @@ incompleteLines.lines = [
   },
 ];
 const incompleteLineIssues = getInvoiceFieldIssues(incompleteLines);
-for (const field of ["description", "quantity", "unit", "price", "vatRate"]) {
+const expectedNewLineFields = ["description", "quantity", "unit", "price", "vatCategory", "vatRate"];
+for (const field of expectedNewLineFields) {
   const lineIssue = incompleteLineIssues.find((issue) => issue.code === `lines.11.${field}`);
   assert(lineIssue, `First line must require ${field}`);
   assert(lineIssue.lineId === 11, `${field} issue must identify its line`);
   assert(lineIssue.wizardStep === 2, `${field} must remain on Postavke`);
+  assert(lineIssue.fieldId === `lines.11.${field}`, `${field} must target its rendered input`);
 }
+assert(
+  incompleteLineIssues
+    .filter((issue) => issue.lineId === 11)
+    .map((issue) => issue.code)
+    .join(",") === expectedNewLineFields.map((field) => `lines.11.${field}`).join(","),
+  "A newly added line must be queued in field order"
+);
 assert(
   !incompleteLineIssues.some((issue) => issue.code.startsWith("lines.22.")),
   "Already valid lines must be skipped"

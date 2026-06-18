@@ -287,23 +287,7 @@ export default function NewInvoicePage() {
   const [deliveryNoteReference, setDeliveryNoteReference] = useState("");
   const [buyerReference, setBuyerReference] = useState("");
 
-  const [lines, setLines] = useState<EditableLine[]>([
-    {
-      id: 1,
-      itemCode: "SERV-001",
-      description: "Svetovanje",
-      itemDescription: "",
-      quantity: 1,
-      unit: "H87",
-      price: 100,
-      vatRate: 22,
-      vatCategory: "S",
-      hrVatCategoryCode: "",
-      taxExemptionReason: "",
-      kpdCode: "",
-      kpdListId: "CG",
-    },
-  ]);
+  const [lines, setLines] = useState<EditableLine[]>([]);
 
   const invoiceNumber = useMemo(
     () => `${invoiceNumberNumericPart}-${businessPremiseCode}-${deviceCode}`,
@@ -642,7 +626,8 @@ export default function NewInvoicePage() {
     }));
   }
 
-  const prepared = prepareInvoiceForEslog(buildInvoice());
+  const draftInvoice = buildInvoice();
+  const prepared = prepareInvoiceForEslog(draftInvoice);
 
   const fieldAssistant = useInvoiceFieldAssistant({
     profile,
@@ -676,11 +661,11 @@ export default function NewInvoicePage() {
       {
         id: Date.now(),
         description: "",
-        quantity: 1,
-        price: 0,
-        vatRate: 22,
-        unit: "H87",
-        vatCategory: "S",
+        quantity: 0,
+        price: Number.NaN,
+        vatRate: Number.NaN,
+        unit: "",
+        vatCategory: "" as VatCategory,
         hrVatCategoryCode: "",
         taxExemptionReason: "",
         kpdCode: "",
@@ -792,11 +777,11 @@ export default function NewInvoicePage() {
   const isReferenceProfile = profile === "ujp" || profile === "bank";
   const currentStep = WIZARD_STEPS[step];
   const CurrentStepIcon = currentStep.icon;
-  const currentStepRules = getInvoiceFieldRules(prepared.invoice).filter(
+  const currentStepRules = getInvoiceFieldRules(draftInvoice).filter(
     (rule) => rule.target.wizardStep === step
   );
   const completedStepRules = currentStepRules.filter(
-    (rule) => rule.validate(prepared.invoice) === null
+    (rule) => rule.validate(draftInvoice) === null
   ).length;
   const completedRuleRatio = currentStepRules.length
     ? completedStepRules / currentStepRules.length
@@ -1117,23 +1102,24 @@ export default function NewInvoicePage() {
                         </Field>
                       </div>
                       <Field label="Kolicina" fieldId={`lines.${line.id}.quantity`}>
-                        <input type="number" value={line.quantity} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} className="field-input" />
+                        <input type="number" value={line.quantity > 0 ? line.quantity : ""} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} className="field-input" />
                       </Field>
                       <Field label="Enota" fieldId={`lines.${line.id}.unit`}>
                         <input value={line.unit || ""} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input" />
                       </Field>
                       <Field label="Neto cena" fieldId={`lines.${line.id}.price`}>
-                        <input type="number" value={line.price} onChange={(event) => updateLine(line.id, { price: Number(event.target.value) })} className="field-input" />
+                        <input type="number" value={Number.isFinite(line.price) ? line.price : ""} onChange={(event) => updateLine(line.id, { price: event.target.value === "" ? Number.NaN : Number(event.target.value) })} className="field-input" />
                       </Field>
                       <Field label="DDV kategorija" fieldId={`lines.${line.id}.vatCategory`}>
                         <select value={line.vatCategory} onChange={(event) => updateLine(line.id, { vatCategory: event.target.value as VatCategory })} className="field-input">
+                          <option value="" disabled>Izberi DDV kategorijo</option>
                           {VAT_CATEGORIES.map((category) => (
                             <option key={category.value} value={category.value}>{category.label}</option>
                           ))}
                         </select>
                       </Field>
                       <Field label="DDV %" fieldId={`lines.${line.id}.vatRate`}>
-                        <input type="number" value={line.vatRate} onChange={(event) => updateLine(line.id, { vatRate: Number(event.target.value) })} className="field-input" />
+                        <input type="number" value={Number.isFinite(line.vatRate) ? line.vatRate : ""} onChange={(event) => updateLine(line.id, { vatRate: event.target.value === "" ? Number.NaN : Number(event.target.value) })} className="field-input" />
                       </Field>
                       {lineProfileFields.map((field) => (
                         <LineProfileField
