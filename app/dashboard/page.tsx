@@ -10,6 +10,8 @@ import {
   PlusCircle,
   RefreshCw,
   Send,
+  Settings,
+  Sparkles,
   Upload,
   Users,
 } from "lucide-react";
@@ -125,11 +127,19 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
   }
 }
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("sl-SI", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value || 0);
+function isInCurrentMonth(value?: string) {
+  if (!value) return false;
+  const slovenianDate = value.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/);
+  const date = slovenianDate
+    ? new Date(Number(slovenianDate[3]), Number(slovenianDate[2]) - 1, Number(slovenianDate[1]))
+    : new Date(value);
+  const today = new Date();
+
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth()
+  );
 }
 
 function getParam(item: DocumentItem, name: string) {
@@ -512,11 +522,6 @@ export default function DashboardPage() {
     [documents]
   );
 
-  const errorAcks = useMemo(
-    () => acknowledgements.filter(isErrorAck),
-    [acknowledgements]
-  );
-
   const latestAcks = acknowledgements.slice(0, 5);
   const latestReceived = receivedInvoices.slice(0, 5);
   const stats = useMemo(
@@ -530,7 +535,17 @@ export default function DashboardPage() {
     [customerCount, documents, draftInvoices, sentInvoices]
   );
   const latestSent = sentInvoices.slice(-5).reverse();
-  const latestDrafts = draftInvoices.slice(0, 5);
+  const monthlyReceivedCount = useMemo(
+    () => receivedInvoices.filter((invoice) => isInCurrentMonth(invoice.date)).length,
+    [receivedInvoices]
+  );
+  const monthlySentCount = useMemo(
+    () =>
+      sentInvoices.filter((invoice) =>
+        isInCurrentMonth(invoice.sentAt || invoice.date || invoice.createdAt)
+      ).length,
+    [sentInvoices]
+  );
   const filteredAcks = useMemo(() => {
     if (ackFilter === "error") return acknowledgements.filter(isErrorAck);
     if (ackFilter === "success") return acknowledgements.filter((doc) => !isErrorAck(doc));
@@ -548,13 +563,17 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+      <div className="mb-10 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-            Pregled poslovanja
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--app-primary-strong)] shadow-sm">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            Pošlji račun v 30 sekundah
+          </div>
+          <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.035em] md:text-5xl">
+            Kaj želiš narediti danes?
           </h1>
-          <p className="app-muted mt-2 max-w-2xl text-sm">
-            Operativni pregled e-računov, povratnic, osnutkov in strank za aktivno podjetje.
+          <p className="app-muted mt-4 max-w-2xl text-base leading-7">
+            Izberi nalogo in eRačunko te bo vodil brez tehničnega balasta.
           </p>
         </div>
 
@@ -571,77 +590,98 @@ export default function DashboardPage() {
             />
             Osveži
           </button>
-          <Link href="/invoices/xml" className="secondary-button h-12 px-5 text-sm">
-            <Upload className="h-4 w-4" aria-hidden="true" />
-            Uvozi XML
-          </Link>
-          <Link href="/invoices/new" className="primary-button h-12 px-6">
-            Nov račun
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <StatCard
-          href="/inbox"
-          label="Prejeti računi"
-          value={stats.receivedCount}
-          detail="v aktivnem podjetju"
-          icon={Inbox}
-          tone="blue"
-          loading={statsLoading && stats.receivedCount === 0}
-        />
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.7fr)]">
+        <Link
+          href="/invoices/new"
+          className="group relative min-h-[340px] overflow-hidden rounded-[2.25rem] bg-[linear-gradient(145deg,#075fb8_0%,#0a84ff_58%,#65b8ff_100%)] p-8 text-white shadow-[0_28px_80px_rgba(10,132,255,0.28)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300 md:p-10"
+        >
+          <span className="absolute -right-20 -top-24 h-64 w-64 rounded-full border border-white/20 bg-white/10" aria-hidden="true" />
+          <span className="absolute -bottom-28 right-20 h-56 w-56 rounded-full border border-white/15" aria-hidden="true" />
+          <div className="relative flex h-full flex-col justify-between gap-14">
+            <div className="flex items-start justify-between gap-4">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/16 backdrop-blur-sm">
+                <PlusCircle className="h-7 w-7" aria-hidden="true" />
+              </span>
+              <span className="rounded-full bg-white/14 px-3 py-1.5 text-xs font-semibold backdrop-blur-sm">
+                Najpogostejša naloga
+              </span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-blue-100">Voden vnos od kupca do bizBoxa</p>
+              <h2 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">Nov račun</h2>
+              <p className="mt-4 max-w-xl text-base leading-7 text-blue-50/90">
+                Dodaj prejemnika in postavke. Obvezna polja, DDV in eSLOG preverimo sproti.
+              </p>
+              <span className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#075fb8] transition group-hover:translate-x-1">
+                Začni račun
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DashboardAction href="/inbox" icon={Inbox} title="Prejeti računi" detail={documentsLoading ? "Nalagam ..." : `${stats.receivedCount} dokumentov`} />
+          <DashboardAction href="/sent" icon={Send} title="Poslani računi" detail={sentLoading ? "Nalagam ..." : `${stats.sentCount} dokumentov`} />
+          <DashboardAction href="/customers" icon={Users} title="Stranke" detail={`${stats.customerCount} v imeniku`} />
+          <DashboardAction href="/settings" icon={Settings} title="Nastavitve" detail="Podjetje in privzete vrednosti" />
+        </div>
+      </section>
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4 text-sm">
+        <div>
+          <span className="font-semibold">{activeCompany?.name || "Aktivno podjetje ni izbrano"}</span>
+          {activeCompany && <span className="app-muted ml-2">{activeCompany.vatNumber || activeCompany.taxId}</span>}
+        </div>
+        <Link href="/invoices/xml" className="inline-flex items-center gap-2 font-semibold text-[var(--app-primary-strong)] hover:underline">
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          Uvozi obstoječi XML
+        </Link>
+      </div>
+
+      <div className="mb-5 mt-16">
+        <p className="text-sm font-semibold text-[var(--app-primary-strong)]">Kratek pregled</p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight">Samo številke, ki zahtevajo pozornost</h2>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           href="/sent"
-          label="Poslani računi"
-          value={stats.sentCount}
-          detail={formatMoney(stats.sentTotal)}
+          label="Poslani ta mesec"
+          value={monthlySentCount}
+          detail="uspešno pripravljeni računi"
           icon={Send}
           tone="blue"
-          loading={statsLoading && stats.sentCount === 0}
+          loading={statsLoading && monthlySentCount === 0}
         />
         <StatCard
-          href="/sent"
-          label="Čakajo na potrditev"
-          value={stats.pendingSentCount}
-          detail="čakajo na povratnico"
-          icon={FileCheck2}
-          tone="amber"
-          loading={statsLoading && stats.pendingSentCount === 0}
+          href="/inbox"
+          label="Prejeti ta mesec"
+          value={monthlyReceivedCount}
+          detail="novi prejeti računi"
+          icon={Inbox}
+          tone="green"
+          loading={statsLoading && monthlyReceivedCount === 0}
         />
         <StatCard
           href="/acknowledgments?status=error"
-          label="Napake"
+          label="Napake za pregled"
           value={stats.failedAcknowledgementCount}
-          detail="neuspešne povratnice"
+          detail="povratnice, ki potrebujejo ukrep"
           icon={AlertCircle}
           tone="red"
           loading={statsLoading && stats.failedAcknowledgementCount === 0}
         />
-        <StatCard
-          href="/drafts"
-          label="Osnutki"
-          value={stats.draftCount}
-          detail={formatMoney(stats.draftTotal)}
-          icon={FileClock}
-          tone="violet"
-        />
-        <StatCard
-          href="/customers"
-          label="Stranke"
-          value={stats.customerCount}
-          detail="v šifrantu"
-          icon={Users}
-          tone="green"
-        />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mt-12">
         <div className="space-y-6">
-          <section className="solid-panel overflow-hidden rounded-[1.5rem]">
+          <section className="solid-panel overflow-hidden rounded-[2rem]">
             <PanelHeader
-              title="Zadnja aktivnost"
+              title="Zadnje aktivnosti"
               actionHref="/inbox"
               actionLabel="Poglej vse"
             />
@@ -699,7 +739,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="solid-panel overflow-hidden rounded-[1.5rem]">
+          <section className="hidden">
             <PanelHeader title="Povratnice in napake" actionHref="/acknowledgments" actionLabel="Vse povratnice" />
 
             <div className="border-b border-[var(--app-border)] px-5 pb-4">
@@ -764,7 +804,7 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="hidden">
           <section className="solid-panel rounded-[1.5rem] p-5">
             <h2 className="text-lg font-semibold">Naslednji korak</h2>
             <div className={`mt-4 rounded-2xl border p-4 ${
@@ -878,6 +918,36 @@ export default function DashboardPage() {
   );
 }
 
+function DashboardAction({
+  href,
+  icon: Icon,
+  title,
+  detail,
+}: {
+  href: string;
+  icon: React.ElementType;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex min-h-40 flex-col justify-between rounded-[1.75rem] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-5 shadow-[var(--app-shadow-soft)] transition hover:-translate-y-1 hover:border-[var(--app-primary)] hover:shadow-[var(--app-shadow)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--app-soft)] text-[var(--app-primary-strong)]">
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <ArrowRight className="h-4 w-4 text-[var(--app-muted)] transition group-hover:translate-x-1 group-hover:text-[var(--app-primary)]" aria-hidden="true" />
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="app-muted mt-1 text-sm">{detail}</p>
+      </div>
+    </Link>
+  );
+}
+
 
 function FavoriteCustomerCard({ customer }: { customer: ClientCustomer }) {
   const vat = customer.vatNumber || "";
@@ -950,7 +1020,7 @@ function StatCard({
   );
 
   const className =
-    "solid-panel block min-h-44 rounded-[1.25rem] p-4 hover:-translate-y-0.5 hover:border-[var(--app-primary)] sm:p-5";
+    "solid-panel block rounded-[1.75rem] p-6 hover:-translate-y-0.5 hover:border-[var(--app-primary)] sm:p-7";
 
   if (!href) return <div className={className}>{content}</div>;
 
@@ -971,8 +1041,8 @@ function PanelHeader({
   actionLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[var(--app-border)] px-5 py-4">
-      <h2 className="text-lg font-semibold">{title}</h2>
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--app-border)] px-6 py-5">
+      <h2 className="text-xl font-semibold">{title}</h2>
       <Link href={actionHref} className="text-xs font-semibold text-[var(--app-primary-strong)]">
         {actionLabel}
       </Link>
@@ -1007,7 +1077,7 @@ function ActivityRow({
   }[tone];
 
   return (
-    <Link href={href} className="grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-4 hover:bg-[var(--app-soft)]">
+    <Link href={href} className="grid grid-cols-[auto_1fr_auto] gap-4 px-6 py-5 hover:bg-[var(--app-soft)]">
       <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${iconClass}`}>
         <Icon className="h-4.5 w-4.5" aria-hidden="true" />
       </div>

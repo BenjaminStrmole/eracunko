@@ -1321,20 +1321,20 @@ function WizardStepper({
   const connectorProgress = Math.max(0, Math.min(100, ((progress - 20) / 80) * 100));
 
   return (
-    <section className="solid-panel sticky top-4 z-40 mb-8 rounded-[1.75rem] px-4 py-5 sm:px-6" data-tour="invoice-stepper">
-      <div className="mb-5 flex items-end justify-between gap-4">
+    <section className="solid-panel sticky top-[7.25rem] z-40 mb-8 rounded-[1.4rem] px-3 py-3 sm:rounded-[1.75rem] sm:px-6 sm:py-5 lg:top-4" data-tour="invoice-stepper">
+      <div className="mb-3 flex items-end justify-between gap-4 sm:mb-5">
         <div>
           <p className="text-sm font-semibold text-[var(--app-primary)]">Od kreiranja do pošiljanja</p>
-          <p className="app-muted mt-1 text-sm">Napredek se dopolnjuje, ko so obvezni podatki pravilni.</p>
+          <p className="app-muted mt-1 hidden text-sm sm:block">Napredek se dopolnjuje, ko so obvezni podatki pravilni.</p>
         </div>
         <div className="text-right">
-          <span className="text-2xl font-semibold tabular-nums">{progress}%</span>
-          <span className="app-muted block text-xs">opravljeno</span>
+          <span className="text-xl font-semibold tabular-nums sm:text-2xl">{progress}%</span>
+          <span className="app-muted hidden text-xs sm:block">opravljeno</span>
         </div>
       </div>
 
       <div className="relative">
-        <div className="absolute left-[10%] right-[10%] top-5 h-0.5 overflow-hidden rounded-full bg-[var(--app-border)]" aria-hidden="true">
+        <div className="absolute left-[10%] right-[10%] top-4 h-0.5 overflow-hidden rounded-full bg-[var(--app-border)] sm:top-5" aria-hidden="true">
           <div
             className="h-full rounded-full bg-[var(--app-primary)] transition-[width] duration-300 motion-reduce:transition-none"
             style={{ width: `${connectorProgress}%` }}
@@ -1354,7 +1354,7 @@ function WizardStepper({
               aria-current={isActive ? "step" : undefined}
             >
               <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 bg-[var(--app-surface)] transition-colors ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-[var(--app-surface)] transition-colors sm:h-10 sm:w-10 ${
                   isDone
                     ? "border-emerald-500 bg-emerald-500 text-white"
                     : isActive

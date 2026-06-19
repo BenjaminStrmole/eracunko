@@ -2,21 +2,21 @@
 
 :root {
   color-scheme: light;
-  --background: #f5f9ff;
+  --background: #f3f7fb;
   --foreground: #0f172a;
-  --app-surface: rgba(255, 255, 255, 0.82);
+  --app-surface: rgba(255, 255, 255, 0.88);
   --app-surface-strong: #ffffff;
-  --app-sidebar: rgba(255, 255, 255, 0.78);
-  --app-border: rgba(148, 163, 184, 0.28);
-  --app-muted: #64748b;
-  --app-soft: #eaf3ff;
+  --app-sidebar: rgba(250, 252, 255, 0.92);
+  --app-border: rgba(100, 116, 139, 0.24);
+  --app-muted: #5f6f85;
+  --app-soft: #e8f2ff;
   --app-soft-strong: #dbeafe;
   --app-primary: #0a84ff;
   --app-primary-strong: #0066cc;
   --app-danger: #ef4444;
   --app-success: #10b981;
   --app-shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
-  --app-shadow-soft: 0 12px 34px rgba(15, 23, 42, 0.08);
+  --app-shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.065);
 }
 
 .driver-popover.eracunko-driver-popover {
@@ -227,9 +227,15 @@ textarea {
     transform 160ms ease;
 }
 
+:where(button, a, input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary), transparent 80%);
+}
+
 .app-bg {
   background:
-    radial-gradient(circle at top left, rgba(10, 132, 255, 0.16), transparent 34rem),
+    radial-gradient(circle at 22% -8%, rgba(10, 132, 255, 0.13), transparent 32rem),
+    radial-gradient(circle at 92% 12%, rgba(52, 211, 153, 0.06), transparent 25rem),
     linear-gradient(180deg, var(--background), color-mix(in srgb, var(--background), #ffffff 12%));
 }
 
@@ -292,12 +298,14 @@ html.dark .app-bg {
 
 .field-input {
   width: 100%;
-  border-radius: 0.875rem;
-  border: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-surface-strong), transparent 10%);
-  padding: 0.8rem 0.9rem;
+  min-height: 46px;
+  border-radius: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--app-muted), transparent 56%);
+  background: var(--app-surface-strong);
+  padding: 0.75rem 0.9rem;
   color: var(--foreground);
   outline: none;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.035);
 }
 
 .field-input::placeholder {
@@ -307,7 +315,20 @@ html.dark .app-bg {
 
 .field-input:focus {
   border-color: var(--app-primary);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary), transparent 84%);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--app-primary), transparent 82%),
+    0 8px 20px color-mix(in srgb, var(--app-primary), transparent 92%);
+}
+
+label:has(.field-input) > span:first-child {
+  color: var(--foreground);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.field-input:required {
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, var(--app-primary), transparent 25%);
 }
 
 .field-input-with-left-icon {
