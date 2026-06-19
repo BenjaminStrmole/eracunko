@@ -77,8 +77,10 @@ function validateLine(line: InvoiceLine, index: number, invoice: Invoice) {
     errors.push(`${label}: količina mora biti večja od 0.`);
   }
 
-  if (typeof line.price !== "number" || !Number.isFinite(line.price) || line.price < 0) {
-    errors.push(`${label}: cena mora biti veljavno število.`);
+  if (isEmpty(line.price)) {
+    errors.push(`${label}: BT-146 manjka neto cena postavke.`);
+  } else if (typeof line.price !== "number" || !Number.isFinite(line.price) || line.price < 0) {
+    errors.push(`${label}: BT-146 neto cena mora biti veljavno nenegativno število.`);
   }
 
   if (typeof line.vatRate !== "number" || !Number.isFinite(line.vatRate) || line.vatRate < 0) {

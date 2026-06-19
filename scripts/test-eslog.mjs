@@ -29,6 +29,14 @@ function assertIncludes(xml, value, message) {
   assert(xml.includes(value), message);
 }
 
+function assertMatches(xml, pattern, message) {
+  assert(pattern.test(xml), message);
+}
+
+function countOccurrences(value, needle) {
+  return value.split(needle).length - 1;
+}
+
 rmSync(tmpDir, { recursive: true, force: true });
 mkdirSync(tmpDir, { recursive: true });
 
@@ -47,10 +55,14 @@ run("npx", [
   "--esModuleInterop",
   "--skipLibCheck",
   "lib/eslog/buildEslogInvoiceXml.ts",
+  "lib/eslog/prepareInvoiceForEslog.ts",
 ]);
 
 const requireFromTmp = createRequire(join(tmpDir, "index.js"));
 const { buildEslogInvoiceXml } = requireFromTmp(join(tmpDir, "lib/eslog/buildEslogInvoiceXml.js"));
+const { prepareInvoiceForEslog } = requireFromTmp(
+  join(tmpDir, "lib/eslog/prepareInvoiceForEslog.js")
+);
 
 const fixtures = [
   "minimal-standard-invoice",
@@ -105,5 +117,100 @@ for (const fixtureName of fixtures) {
     run("xmllint", ["--noout", "--schema", xsdPath, xmlPath]);
   }
 }
+
+const standardFixture = JSON.parse(
+  readFileSync(join(projectRoot, "fixtures/eslog/minimal-standard-invoice.json"), "utf8")
+);
+const preparedStandard = prepareInvoiceForEslog(standardFixture);
+assert(preparedStandard.validation.valid, "Valid standard SI invoice must pass validation");
+assertMatches(
+  preparedStandard.xml,
+  /<G_SG27>[\s\S]*?<D_5025>203<\/D_5025>[\s\S]*?<D_5004>100\.00<\/D_5004>[\s\S]*?<\/G_SG27>/,
+  "BT-131 line net amount must be emitted as MOA 203"
+);
+assertMatches(
+  preparedStandard.xml,
+  /<G_SG29>[\s\S]*?<D_5125>AAA<\/D_5125>[\s\S]*?<D_5118>100\.00<\/D_5118>[\s\S]*?<\/G_SG29>/,
+  "BT-146 item net price must be emitted as PRI AAA"
+);
+assertMatches(
+  preparedStandard.xml,
+  /<G_SG34>[\s\S]*?<D_5278>22\.00<\/D_5278>[\s\S]*?<D_5305>S<\/D_5305>[\s\S]*?<\/G_SG34>/,
+  "BT-151 and BT-152 must be emitted for every standard-rated line"
+);
+
+const missingPriceInvoice = structuredClone(standardFixture);
+delete missingPriceInvoice.lines[0].price;
+const missingPriceResult = prepareInvoiceForEslog(missingPriceInvoice);
+assert(!missingPriceResult.validation.valid, "Invoice line without price must fail validation");
+assert(
+  missingPriceResult.validation.errors.some(
+    (error) => error.includes("Postavka 1") && error.includes("BT-146") && error.includes("cena")
+  ),
+  "Missing item price must produce a clear BT-146 line validation error"
+);
+assert(missingPriceResult.xml === "", "Invalid invoice must not generate XML");
+
+const zeroVatInvoice = structuredClone(standardFixture);
+zeroVatInvoice.lines = [
+  {
+    ...zeroVatInvoice.lines[0],
+    quantity: 2,
+    price: 80,
+    vatCategory: "E",
+    vatRate: 0,
+    taxExemptionReason: "Oproščeno plačila DDV po veljavnem predpisu",
+  },
+];
+zeroVatInvoice.totals.payable = 160;
+const zeroVatResult = prepareInvoiceForEslog(zeroVatInvoice);
+assert(zeroVatResult.validation.valid, "Zero VAT invoice with exemption reason must be valid");
+assertMatches(
+  zeroVatResult.xml,
+  /<G_SG52>[\s\S]*?<D_5278>0\.00<\/D_5278>[\s\S]*?<D_5305>E<\/D_5305>[\s\S]*?<D_5025>125<\/D_5025>[\s\S]*?<D_5004>160\.00<\/D_5004>[\s\S]*?<D_5025>124<\/D_5025>[\s\S]*?<D_5004>0\.00<\/D_5004>[\s\S]*?<\/G_SG52>/,
+  "Zero VAT breakdown must contain category E, rate 0, taxable amount, and zero tax"
+);
+
+const multipleVatInvoice = structuredClone(standardFixture);
+multipleVatInvoice.lines = [
+  {
+    ...multipleVatInvoice.lines[0],
+    id: 1,
+    description: "Storitev po splošni stopnji",
+    quantity: 2,
+    price: 50,
+    vatCategory: "S",
+    vatRate: 22,
+  },
+  {
+    ...multipleVatInvoice.lines[0],
+    id: 2,
+    description: "Storitev po nižji stopnji",
+    quantity: 1,
+    price: 100,
+    vatCategory: "S",
+    vatRate: 9.5,
+  },
+];
+multipleVatInvoice.totals.payable = 231.5;
+const multipleVatResult = prepareInvoiceForEslog(multipleVatInvoice);
+assert(multipleVatResult.validation.valid, "Invoice with multiple VAT rates must be valid");
+const vatGroups = multipleVatResult.xml.match(/<G_SG52>[\s\S]*?<\/G_SG52>/g) || [];
+assert(
+  countOccurrences(multipleVatResult.xml, "<G_SG52>") === 2 && vatGroups.length === 2,
+  "Each VAT category/rate combination must produce one VAT breakdown group"
+);
+const standardVatGroup = vatGroups.find((group) => group.includes("<D_5278>22.00</D_5278>")) || "";
+const reducedVatGroup = vatGroups.find((group) => group.includes("<D_5278>9.50</D_5278>")) || "";
+assertMatches(
+  standardVatGroup,
+  /<D_5278>22\.00<\/D_5278>[\s\S]*?<D_5305>S<\/D_5305>[\s\S]*?<D_5004>100\.00<\/D_5004>[\s\S]*?<D_5004>22\.00<\/D_5004>/,
+  "22% VAT breakdown amounts must be correct"
+);
+assertMatches(
+  reducedVatGroup,
+  /<D_5278>9\.50<\/D_5278>[\s\S]*?<D_5305>S<\/D_5305>[\s\S]*?<D_5004>100\.00<\/D_5004>[\s\S]*?<D_5004>9\.50<\/D_5004>/,
+  "9.5% VAT breakdown amounts must be correct"
+);
 
 console.log("eSLOG XML tests passed.");

@@ -99,17 +99,24 @@ function normalizeUnit(unit: string | undefined) {
 
 function normalizeLine(line: InvoiceLine): InvoiceLine {
   const quantity = Number(line.quantity || 0);
-  const price = Number(line.price || 0);
+  const price = line.price;
   const vatCategory = normalizeVatCategory(line);
   const vatRate = ZERO_VAT_CATEGORIES.has(vatCategory)
     ? 0
     : Number(line.vatRate || 0);
 
-  const netAmount = round2(quantity * price);
-  const vatAmount = ZERO_VAT_CATEGORIES.has(vatCategory)
-    ? 0
-    : round2(netAmount * (vatRate / 100));
-  const grossAmount = round2(netAmount + vatAmount);
+  const hasValidAmounts = Number.isFinite(quantity) && Number.isFinite(price);
+  const netAmount = hasValidAmounts ? round2(quantity * price) : undefined;
+  const vatAmount =
+    netAmount === undefined
+      ? undefined
+      : ZERO_VAT_CATEGORIES.has(vatCategory)
+        ? 0
+        : round2(netAmount * (vatRate / 100));
+  const grossAmount =
+    netAmount !== undefined && vatAmount !== undefined
+      ? round2(netAmount + vatAmount)
+      : undefined;
 
   return {
     ...line,
