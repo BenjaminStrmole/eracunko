@@ -23,6 +23,15 @@ function normalizeVat(value: string | undefined) {
   return clean(value).replace(/\s/g, "").toUpperCase();
 }
 
+function normalizePartyVat(value: string | undefined, country: string | undefined) {
+  const normalized = normalizeVat(value);
+  const countryCode = clean(country).toUpperCase();
+
+  if (countryCode === "SI" && /^\d{8}$/.test(normalized)) return `SI${normalized}`;
+  if (countryCode === "HR" && /^\d{11}$/.test(normalized)) return `HR${normalized}`;
+  return normalized;
+}
+
 function normalizeOib(value: string | undefined) {
   return clean(value).replace(/\D/g, "").slice(0, 11);
 }
@@ -191,8 +200,14 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
   );
   const gross = round2(net + vat);
 
-  const sellerVat = normalizeVat(normalizedSellerAddress?.vat || normalizedSellerAddress?.taxId);
-  const buyerVat = normalizeVat(normalizedBuyerAddress.vat || normalizedBuyerAddress.taxId);
+  const sellerVat = normalizePartyVat(
+    normalizedSellerAddress?.vat,
+    normalizedSellerAddress?.country
+  );
+  const buyerVat = normalizePartyVat(
+    normalizedBuyerAddress.vat,
+    normalizedBuyerAddress.country
+  );
   const sellerOib = normalizeOib(normalizedSellerAddress?.oib || sellerVat);
   const buyerOib = normalizeOib(normalizedBuyerAddress.oib || buyerVat);
 
@@ -209,6 +224,12 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
   const paymentIban = bankData.payeeIban || payment.iban || payment.bankAccount || invoice.bankAccount;
   const paymentBic = bankData.payeeBic || payment.bic || payment.bankBic || invoice.bankBic;
   const paymentReference = bankData.paymentReference || payment.reference || invoice.reference;
+  const paymentMeansCode = clean(
+    bankData.paymentMeansCode ||
+      payment.paymentMeansCode ||
+      invoice.paymentMeansCode ||
+      invoice.eSlog?.paymentMeansCode
+  );
 
   return {
     ...invoice,
@@ -254,7 +275,7 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
       payeeBic: clean(paymentBic),
       paymentReference: clean(paymentReference),
       purposeCode: clean(bankData.purposeCode || payment.purposeCode || invoice.purposeCode),
-      paymentMeansCode: clean(bankData.paymentMeansCode || payment.paymentMeansCode || invoice.paymentMeansCode),
+      paymentMeansCode,
       payeeName: clean(bankData.payeeName || normalizedSellerAddress?.name),
       payerName: clean(bankData.payerName || normalizedBuyerAddress.name),
     },
@@ -324,8 +345,7 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
     payment: {
       ...payment,
       method: payment.method || invoice.paymentMethod || "TRR",
-      paymentMeansCode:
-        bankData.paymentMeansCode || payment.paymentMeansCode || invoice.paymentMeansCode || "58",
+      paymentMeansCode,
       purposeCode: bankData.purposeCode || payment.purposeCode || invoice.purposeCode || "OTHR",
       bankAccount: normalizeIban(
         payment.bankAccount || paymentIban
@@ -349,12 +369,7 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
       profileId: invoice.eSlog?.profileId || businessProcess,
       documentType,
       businessProcess,
-      paymentMeansCode:
-        invoice.payment?.paymentMeansCode ||
-        bankData.paymentMeansCode ||
-        invoice.paymentMeansCode ||
-        invoice.eSlog?.paymentMeansCode ||
-        "58",
+      paymentMeansCode,
       purposeCode:
         invoice.payment?.purposeCode ||
         bankData.purposeCode ||
@@ -365,8 +380,7 @@ export function normalizeInvoiceForEslog(invoice: Invoice): Invoice {
     },
 
     paymentMethod: invoice.paymentMethod || payment.method || "TRR",
-    paymentMeansCode:
-      invoice.paymentMeansCode || bankData.paymentMeansCode || payment.paymentMeansCode || "58",
+    paymentMeansCode,
     purposeCode: invoice.purposeCode || bankData.purposeCode || payment.purposeCode || "OTHR",
     bankAccount: normalizeIban(invoice.bankAccount || paymentIban),
     bankBic: clean(invoice.bankBic || paymentBic),

@@ -123,6 +123,21 @@ const standardFixture = JSON.parse(
 );
 const preparedStandard = prepareInvoiceForEslog(standardFixture);
 assert(preparedStandard.validation.valid, "Valid standard SI invoice must pass validation");
+assertIncludes(
+  preparedStandard.xml,
+  "<D_4461>58</D_4461>",
+  "BT-81 payment means code must be emitted in PAI"
+);
+assertIncludes(
+  preparedStandard.xml,
+  "<D_3194>SI56191000000123438</D_3194>",
+  "BT-84 seller IBAN must be emitted in FII"
+);
+assertMatches(
+  preparedStandard.xml,
+  /<D_1153>PQ<\/D_1153>[\s\S]*?<D_1154>SI00 INV20260001<\/D_1154>/,
+  "BT-89 payment reference must be emitted as RFF PQ"
+);
 assertMatches(
   preparedStandard.xml,
   /<G_SG27>[\s\S]*?<D_5025>203<\/D_5025>[\s\S]*?<D_5004>100\.00<\/D_5004>[\s\S]*?<\/G_SG27>/,
@@ -150,6 +165,70 @@ assert(
   "Missing item price must produce a clear BT-146 line validation error"
 );
 assert(missingPriceResult.xml === "", "Invalid invoice must not generate XML");
+
+function assertPreparationError(invoice, code, message) {
+  const result = prepareInvoiceForEslog(invoice);
+  assert(!result.validation.valid, message);
+  assert(
+    result.validation.errors.some((error) => error.includes(code)),
+    `${message}: expected ${code} validation error`
+  );
+  assert(result.xml === "", `${message}: invalid invoice must not generate XML`);
+}
+
+const canonicalPaymentInvoice = structuredClone(standardFixture);
+canonicalPaymentInvoice.payment.iban = "si56 1910 0000 0123 438";
+canonicalPaymentInvoice.seller.vat = " 1234 5678 ";
+canonicalPaymentInvoice.seller.taxId = "1234 5678";
+canonicalPaymentInvoice.buyer.vat = " 8765 4321 ";
+canonicalPaymentInvoice.buyer.taxId = "8765 4321";
+const canonicalPaymentResult = prepareInvoiceForEslog(canonicalPaymentInvoice);
+assert(canonicalPaymentResult.validation.valid, "Canonical spacing and case must remain valid");
+assertIncludes(
+  canonicalPaymentResult.xml,
+  "<D_3194>SI56191000000123438</D_3194>",
+  "IBAN must be safely canonicalized before XML output"
+);
+assertIncludes(
+  canonicalPaymentResult.xml,
+  "<D_1154>SI12345678</D_1154>",
+  "VAT ID must be safely canonicalized before XML output"
+);
+
+const missingPaymentMeans = structuredClone(standardFixture);
+delete missingPaymentMeans.payment.paymentMeansCode;
+delete missingPaymentMeans.eSlog.paymentMeansCode;
+assertPreparationError(missingPaymentMeans, "BT-81", "Missing payment means code must fail");
+
+const malformedPaymentMeans = structuredClone(standardFixture);
+malformedPaymentMeans.payment.paymentMeansCode = "SEPA";
+assertPreparationError(malformedPaymentMeans, "BT-81", "Malformed payment means code must fail");
+
+const missingIban = structuredClone(standardFixture);
+delete missingIban.payment.iban;
+assertPreparationError(missingIban, "BT-84", "Missing seller IBAN must fail");
+
+const malformedIban = structuredClone(standardFixture);
+malformedIban.payment.iban = "SI00123456789012345";
+assertPreparationError(malformedIban, "BT-84", "IBAN with invalid checksum must fail");
+
+const missingPaymentReference = structuredClone(standardFixture);
+delete missingPaymentReference.payment.reference;
+assertPreparationError(missingPaymentReference, "BT-89", "Missing payment reference must fail");
+
+const malformedPaymentReference = structuredClone(standardFixture);
+malformedPaymentReference.payment.reference = "R".repeat(141);
+assertPreparationError(malformedPaymentReference, "BT-89", "Oversized payment reference must fail");
+
+const malformedSellerVat = structuredClone(standardFixture);
+malformedSellerVat.seller.vat = "SI-123";
+malformedSellerVat.seller.taxId = "SI-123";
+assertPreparationError(malformedSellerVat, "Izdajatelj", "Malformed seller VAT/tax ID must fail");
+
+const malformedBuyerVat = structuredClone(standardFixture);
+malformedBuyerVat.buyer.vat = "SI-987";
+malformedBuyerVat.buyer.taxId = "SI-987";
+assertPreparationError(malformedBuyerVat, "Kupec", "Malformed buyer VAT/tax ID must fail");
 
 const zeroVatInvoice = structuredClone(standardFixture);
 zeroVatInvoice.lines = [

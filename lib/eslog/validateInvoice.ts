@@ -43,6 +43,55 @@ function isOib(value: unknown) {
   return /^\d{11}$/.test(normalize(value).replace(/\D/g, ""));
 }
 
+function compactIdentifier(value: unknown) {
+  return normalize(value).replace(/\s/g, "").toUpperCase();
+}
+
+function isValidVatOrTaxIdentifier(value: unknown, country: unknown) {
+  const identifier = compactIdentifier(value);
+  const countryCode = normalize(country).toUpperCase();
+
+  if (!/^[A-Z0-9]+$/.test(identifier)) return false;
+  if (countryCode === "SI" || identifier.startsWith("SI")) {
+    return /^(?:SI)?\d{8}$/.test(identifier);
+  }
+  if (countryCode === "HR" || identifier.startsWith("HR")) {
+    return /^(?:HR)?\d{11}$/.test(identifier);
+  }
+
+  const prefix = identifier.match(/^[A-Z]{2}/)?.[0];
+  if (prefix && /^[A-Z]{2}$/.test(countryCode) && prefix !== countryCode) return false;
+  return identifier.length >= 6 && identifier.length <= 20;
+}
+
+function isValidIban(value: unknown) {
+  const iban = compactIdentifier(value);
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
+
+  const rearranged = `${iban.slice(4)}${iban.slice(0, 4)}`;
+  let remainder = 0;
+
+  for (const character of rearranged) {
+    const numeric = /[A-Z]/.test(character)
+      ? String(character.charCodeAt(0) - 55)
+      : character;
+    for (const digit of numeric) {
+      remainder = (remainder * 10 + Number(digit)) % 97;
+    }
+  }
+
+  return remainder === 1;
+}
+
+function isValidPaymentReference(value: unknown) {
+  const reference = normalize(value);
+  return (
+    reference.length > 0 &&
+    reference.length <= 140 &&
+    !/[\u0000-\u001F\u007F]/.test(reference)
+  );
+}
+
 function invoiceHasHrContext(invoice: Invoice) {
   return (
     invoice.seller?.country === "HR" ||
@@ -180,6 +229,12 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
     if (isEmpty(seller.vat || seller.taxId)) {
       errors.push("Izdajatelj: manjka davčna številka.");
     }
+    if (!isEmpty(seller.vat) && !isValidVatOrTaxIdentifier(seller.vat, seller.country)) {
+      errors.push("Izdajatelj: VAT ID ni veljaven za navedeno državo.");
+    }
+    if (!isEmpty(seller.taxId) && !isValidVatOrTaxIdentifier(seller.taxId, seller.country)) {
+      errors.push("Izdajatelj: davčna številka ni veljavna za navedeno državo.");
+    }
     if (isEmpty(seller.street || seller.address)) errors.push("Izdajatelj: manjka naslov.");
     if (isEmpty(seller.postCode)) errors.push("Izdajatelj: manjka poštna številka za BG-5.");
     if (isEmpty(seller.city)) errors.push("Izdajatelj: manjka mesto za BG-5.");
@@ -202,6 +257,12 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   } else {
     if (isEmpty(buyer.name)) errors.push("Kupec: manjka naziv.");
     if (isEmpty(buyer.vat || buyer.taxId)) errors.push("Kupec: manjka davčna številka.");
+    if (!isEmpty(buyer.vat) && !isValidVatOrTaxIdentifier(buyer.vat, buyer.country)) {
+      errors.push("Kupec: VAT ID ni veljaven za navedeno državo.");
+    }
+    if (!isEmpty(buyer.taxId) && !isValidVatOrTaxIdentifier(buyer.taxId, buyer.country)) {
+      errors.push("Kupec: davčna številka ni veljavna za navedeno državo.");
+    }
     if (isEmpty(buyer.street || buyer.address)) errors.push("Kupec: manjka naslov.");
     if (isEmpty(buyer.postCode)) warnings.push("Kupec: manjka poštna številka.");
     if (isEmpty(buyer.city)) warnings.push("Kupec: manjka mesto.");
@@ -302,21 +363,31 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   }
 
   const payment = invoice.payment;
+  const iban = payment?.iban || payment?.bankAccount || invoice.bankAccount;
+  const reference = payment?.reference || invoice.reference;
+  const paymentMeansCode =
+    payment?.paymentMeansCode || invoice.paymentMeansCode || invoice.eSlog?.paymentMeansCode;
 
-  if (!payment?.iban && !invoice.bankAccount) {
-    errors.push("Manjka IBAN oziroma bančni račun.");
+  if (isEmpty(iban)) {
+    errors.push("BT-84: manjka IBAN prodajalca.");
+  } else if (!isValidIban(iban)) {
+    errors.push("BT-84: IBAN prodajalca ni v veljavnem formatu ali nima pravilne kontrolne številke.");
   }
 
-  if ((payment?.iban || invoice.bankAccount) && !(payment?.bic || payment?.bankBic || invoice.bankBic)) {
+  if (iban && !(payment?.bic || payment?.bankBic || invoice.bankBic)) {
     warnings.push("BT-86: manjka BIC/SWIFT banke prejemnika; XML ga bo izpustil, če ni na voljo.");
   }
 
-  if (!payment?.reference && !invoice.reference) {
-    errors.push("Manjka sklic plačila.");
+  if (isEmpty(reference)) {
+    errors.push("BT-89: manjka sklic oziroma referenca plačila.");
+  } else if (!isValidPaymentReference(reference)) {
+    errors.push("BT-89: sklic plačila mora vsebovati od 1 do 140 znakov brez kontrolnih znakov.");
   }
 
-  if (!payment?.paymentMeansCode && !invoice.paymentMeansCode) {
-    errors.push("Manjka koda načina plačila.");
+  if (isEmpty(paymentMeansCode)) {
+    errors.push("BT-81: manjka koda načina plačila.");
+  } else if (!/^[1-9]\d{0,2}$/.test(normalize(paymentMeansCode))) {
+    errors.push("BT-81: koda načina plačila mora biti veljavna številčna koda UNTDID 4461.");
   }
 
   if (!payment?.purposeCode && !invoice.purposeCode) {

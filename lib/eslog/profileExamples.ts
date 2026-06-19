@@ -34,7 +34,7 @@ const baseInvoice: Invoice = {
   payment: {
     paymentMeansCode: "58",
     purposeCode: "OTHR",
-    iban: "SI56000000000000000",
+    iban: "SI56191000000123438",
     bic: "TESTSI22",
     reference: "SI00-2026001",
   },
@@ -135,7 +135,7 @@ export const profileExampleInvoices: Record<InvoiceProfile, Invoice> = {
     ...baseInvoice,
     profile: "bank",
     bankData: {
-      payeeIban: "SI56000000000000000",
+      payeeIban: "SI56191000000123438",
       payeeBic: "TESTSI22",
       paymentModel: "SI00",
       paymentReference: "SI00-2026001",

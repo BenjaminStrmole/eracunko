@@ -65,7 +65,7 @@
   },
   "payment": {
     "paymentMeansCode": "58",
-    "iban": "SI56000000000000000",
+    "iban": "SI56191000000123438",
     "bic": "LJBASI2X",
     "reference": "SI00 UJP20260001",
     "purposeCode": "OTHR",
@@ -80,7 +80,7 @@
     "buyerReference": "ODD-001"
   },
   "bankData": {
-    "payeeIban": "SI56000000000000000",
+    "payeeIban": "SI56191000000123438",
     "payeeBic": "LJBASI2X",
     "paymentReference": "SI00 UJP20260001",
     "purposeCode": "OTHR"

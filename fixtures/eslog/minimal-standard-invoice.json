@@ -65,7 +65,7 @@
   },
   "payment": {
     "paymentMeansCode": "58",
-    "iban": "SI56000000000000000",
+    "iban": "SI56191000000123438",
     "bic": "LJBASI2X",
     "reference": "SI00 INV20260001",
     "paymentTerms": "Placilo v 8 dneh."
