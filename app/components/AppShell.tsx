@@ -19,11 +19,11 @@ import ThemeToggle from "./ThemeToggle";
 
 const navItems = [
   { href: "/dashboard", label: "Domov", icon: LayoutDashboard },
+  { href: "/invoices/new", label: "Nov račun", icon: FilePlus2, emphasis: true },
   { href: "/inbox", label: "Prejeti računi", icon: Inbox },
-  { href: "/acknowledgments", label: "Povratnice", icon: FileCheck2 },
   { href: "/sent", label: "Poslani računi", icon: Send },
+  { href: "/acknowledgments", label: "Povratnice", icon: FileCheck2 },
   { href: "/drafts", label: "Osnutki", icon: FileClock },
-  { href: "/invoices/new", label: "Nov račun", icon: FilePlus2 },
   { href: "/customers", label: "Moje stranke", icon: Users },
   { href: "/settings", label: "Nastavitve", icon: Settings },
 ];
@@ -43,7 +43,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-sidebar)] px-5 py-7 shadow-[var(--app-shadow-soft)] backdrop-blur-2xl lg:flex">
           <div className="mb-12 px-1">
             <Link href="/dashboard" className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-[1.1rem] bg-[var(--app-primary)] text-white shadow-lg shadow-blue-500/20">
+              <span className="flex h-11 w-11 items-center justify-center rounded-[1.1rem] bg-[var(--app-primary)] text-white shadow-lg shadow-blue-500/20">
                 <Building2 className="h-5 w-5" aria-hidden="true" />
               </span>
               <span>
@@ -51,7 +51,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   eRačunko
                 </span>
                 <span className="app-muted block text-sm">
-                  Mikro ERP za e-račune
+                  Račun v 30 sekundah
                 </span>
               </span>
             </Link>
@@ -69,10 +69,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium ${
+                  className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 text-sm font-medium ${
                     active
-                      ? "bg-[var(--app-primary)] text-white shadow-lg shadow-blue-500/20"
-                      : "app-muted hover:bg-[var(--app-soft)] hover:text-[var(--foreground)]"
+                      ? "border-[var(--app-primary)] bg-[var(--app-primary)] text-white shadow-lg shadow-blue-500/20"
+                      : item.emphasis
+                        ? "border-[var(--app-primary)]/25 bg-[var(--app-soft)] text-[var(--app-primary-strong)] hover:border-[var(--app-primary)]"
+                        : "border-transparent app-muted hover:bg-[var(--app-soft)] hover:text-[var(--foreground)]"
                   }`}
                 >
                   <Icon className="h-4.5 w-4.5" aria-hidden="true" />
@@ -112,7 +114,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
                       active
                         ? "border-[var(--app-primary)] bg-[var(--app-primary)] text-white"
-                        : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]"
+                        : item.emphasis
+                          ? "border-[var(--app-primary)]/30 bg-[var(--app-soft)] text-[var(--app-primary-strong)]"
+                          : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]"
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" aria-hidden="true" />
