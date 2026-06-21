@@ -344,6 +344,17 @@ export default function InvoicePreviewPage() {
               </p>
 
               <div className="mt-6 space-y-4 text-sm">
+                <div
+                  className={`rounded-2xl border p-4 font-semibold ${
+                    prepared.validation.valid
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+                      : "border-red-500/30 bg-red-500/10 text-red-500"
+                  }`}
+                >
+                  {prepared.validation.valid
+                    ? "XML je validen in pripravljen za izvoz."
+                    : "XML ni validen. Spodaj odpravi blokirne napake."}
+                </div>
                 <Check ok text="Podatki izdajatelja iz aktivnega podjetja" />
                 <Check ok text="Prejemnik izbran iz šifranta" />
                 <Check ok text="DDV izračun pripravljen" />
@@ -370,14 +381,20 @@ export default function InvoicePreviewPage() {
                 </div>
               </div>
 
-              {(prepared.validation.errors.length > 0 ||
-                prepared.validation.warnings.length > 0) && (
+              {prepared.validation.errors.length > 0 && (
                 <div className="mt-6 rounded-2xl bg-red-500/10 p-4 text-sm text-red-500">
-                  <div className="font-semibold">Validacija</div>
+                  <div className="font-semibold">Blokirne napake</div>
                   <ul className="mt-2 list-disc pl-5">
                     {prepared.validation.errors.map((error) => (
                       <li key={error}>{error}</li>
                     ))}
+                  </ul>
+                </div>
+              )}
+              {prepared.validation.warnings.length > 0 && (
+                <div className="mt-4 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-600">
+                  <div className="font-semibold">Opozorila</div>
+                  <ul className="mt-2 list-disc pl-5">
                     {prepared.validation.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}

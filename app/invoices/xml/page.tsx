@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Send } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { saveDbLocalSentInvoice } from "../../../lib/client/localSentInvoices";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
@@ -102,7 +102,7 @@ export default function InvoiceXmlPage() {
   const [activeCompany, setActiveCompany] = useState<SenderCompany | null>(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
-  const [xmlReadyToastKey, setXmlReadyToastKey] = useState("");
+  const xmlReadyToastKey = useRef("");
 
   useEffect(() => {
     const load = async () => {
@@ -144,14 +144,14 @@ export default function InvoiceXmlPage() {
     if (!prepared || !xml) return;
 
     const key = `${prepared.invoice.number}-${prepared.invoice.seller?.vat || ""}`;
-    if (xmlReadyToastKey === key) return;
+    if (xmlReadyToastKey.current === key) return;
 
     toast.info(
       "XML je generiran",
       `Račun ${prepared.invoice.number} je pripravljen za pregled ali prenos.`
     );
-    setXmlReadyToastKey(key);
-  }, [prepared, toast, xml, xmlReadyToastKey]);
+    xmlReadyToastKey.current = key;
+  }, [prepared, toast, xml]);
 
   async function sendToBizBox() {
     if (!prepared || !prepared.validation.valid || !xml) {
@@ -297,6 +297,17 @@ export default function InvoiceXmlPage() {
 
       <section className="solid-panel mt-6 rounded-[1.75rem] p-6" data-tour="xml-validation">
         <h2 className="text-xl font-semibold">Validacija</h2>
+        <div
+          className={`mt-4 rounded-2xl border p-4 text-sm font-semibold ${
+            validation?.valid
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+              : "border-red-500/30 bg-red-500/10 text-red-500"
+          }`}
+        >
+          {validation?.valid
+            ? "XML je validen in pripravljen za prenos ali pošiljanje."
+            : "XML ni validen. Prenos in pošiljanje sta blokirana."}
+        </div>
         <ValidationList errors={validation?.errors || []} warnings={validation?.warnings || []} />
       </section>
 
@@ -346,7 +357,7 @@ export default function InvoiceXmlPage() {
               `Datoteka racun-${prepared.invoice.number}.xml je bila ustvarjena.`
             );
           }}
-          disabled={!xml}
+          disabled={!validation?.valid || !xml}
           className="primary-button h-12 px-6 disabled:opacity-60"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
@@ -355,7 +366,7 @@ export default function InvoiceXmlPage() {
 
         <button
           onClick={fieldAssistant.sendWithCompletion}
-          disabled={sending || !validation?.valid}
+          disabled={sending || !validation?.valid || !xml}
           className="secondary-button h-12 px-6 disabled:opacity-60"
         >
           <Send className="h-4 w-4" aria-hidden="true" />

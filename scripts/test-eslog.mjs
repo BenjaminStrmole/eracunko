@@ -63,6 +63,20 @@ const { buildEslogInvoiceXml } = requireFromTmp(join(tmpDir, "lib/eslog/buildEsl
 const { prepareInvoiceForEslog } = requireFromTmp(
   join(tmpDir, "lib/eslog/prepareInvoiceForEslog.js")
 );
+const { invoiceProfileConfigs } = requireFromTmp(
+  join(tmpDir, "lib/eslog/invoiceProfiles.js")
+);
+
+const hrProfileFieldNames = invoiceProfileConfigs.hr.profileFields.map((field) => field.name);
+for (const fieldName of ["issueTime", "operatorOib", "operatorCode", "kpdCode"]) {
+  assert(hrProfileFieldNames.includes(fieldName), `HR profile must expose ${fieldName} immediately`);
+}
+for (const fieldName of ["payment.iban", "payment.reference", "payment.purposeCode"]) {
+  assert(invoiceProfileConfigs.ujp.requiredFields.includes(fieldName), `UJP profile must require ${fieldName}`);
+}
+for (const fieldName of ["payment.iban", "payment.bic", "payment.reference", "payment.paymentPurpose"]) {
+  assert(invoiceProfileConfigs.bank.requiredFields.includes(fieldName), `Bank profile must require ${fieldName}`);
+}
 
 const fixtures = [
   "minimal-standard-invoice",
@@ -164,6 +178,10 @@ assert(
   ),
   "Missing item price must produce a clear BT-146 line validation error"
 );
+assert(
+  missingPriceResult.validation.errors.some((error) => error.includes("Manjka neto cena artikla (BT-146)")),
+  "Missing item price message must be user-friendly and include BT-146"
+);
 assert(missingPriceResult.xml === "", "Invalid invoice must not generate XML");
 
 function assertPreparationError(invoice, code, message) {
@@ -207,6 +225,12 @@ assertPreparationError(malformedPaymentMeans, "BT-81", "Malformed payment means 
 const missingIban = structuredClone(standardFixture);
 delete missingIban.payment.iban;
 assertPreparationError(missingIban, "BT-84", "Missing seller IBAN must fail");
+assert(
+  prepareInvoiceForEslog(missingIban).validation.errors.some(
+    (error) => error.includes("Manjka IBAN prejemnika plačila (BT-84)")
+  ),
+  "Missing IBAN message must name the payment recipient and BT-84"
+);
 
 const malformedIban = structuredClone(standardFixture);
 malformedIban.payment.iban = "SI00123456789012345";
@@ -329,6 +353,7 @@ hrInvoice.lines[0].hrVatCategoryCode = "HR:S";
 for (const [mutate, expectedCode, message] of [
   [(invoice) => { delete invoice.issueTime; delete invoice.hrData.issueTime; }, "HR-BT-2", "HR invoice without issue time must fail"],
   [(invoice) => { delete invoice.operator.oib; delete invoice.hrData.operatorOib; }, "HR-BT-5", "HR invoice without operator OIB must fail"],
+  [(invoice) => { delete invoice.operator.code; delete invoice.hrData.operatorCode; }, "HR-BT-4", "HR invoice without operator code must fail"],
   [(invoice) => { delete invoice.lines[0].kpdCode; }, "BT-158", "HR invoice without KPD/CPA must fail"],
 ]) {
   const invalidInvoice = structuredClone(hrInvoice);
@@ -361,7 +386,30 @@ bankWithoutIban.bankData = { paymentModel: "SI00" };
 delete bankWithoutIban.payment.iban;
 assertPreparationError(bankWithoutIban, "BT-84", "Bank profile without IBAN must fail");
 
-for (const xml of [preparedStandard.xml, hrResult.xml]) {
+const validUjpInvoice = structuredClone(standardFixture);
+validUjpInvoice.profile = "ujp";
+validUjpInvoice.payment.purposeCode = "OTHR";
+const validUjpResult = prepareInvoiceForEslog(validUjpInvoice);
+assert(validUjpResult.validation.valid, "Complete UJP invoice must be valid");
+
+const validBankInvoice = structuredClone(standardFixture);
+validBankInvoice.profile = "bank";
+validBankInvoice.payment.purposeCode = "OTHR";
+validBankInvoice.payment.paymentPurpose = "Plačilo računa";
+validBankInvoice.bankData = { paymentModel: "SI00" };
+const validBankResult = prepareInvoiceForEslog(validBankInvoice);
+assert(validBankResult.validation.valid, "Complete bank invoice must be valid");
+
+for (const [name, result] of [
+  ["valid-ujp-profile", validUjpResult],
+  ["valid-bank-profile", validBankResult],
+]) {
+  const xmlPath = join(tmpDir, `${name}.xml`);
+  writeFileSync(xmlPath, result.xml);
+  if (existsSync(xsdPath)) run("xmllint", ["--noout", "--schema", xsdPath, xmlPath]);
+}
+
+for (const xml of [preparedStandard.xml, hrResult.xml, validUjpResult.xml, validBankResult.xml]) {
   assert(!/<([A-Za-z0-9_]+)>\s*<\/\1>/.test(xml), "XML must not contain empty elements");
 }
 

@@ -202,7 +202,7 @@ const baseRules: FieldRule[] = [
     instruction: "Vnesi IBAN računa, na katerega bo kupec nakazal plačilo.",
     scope: "base",
     check: (invoice) => Boolean(text(invoice.payment?.iban || invoice.bankAccount)),
-    message: "IBAN oziroma bančni račun je obvezen.",
+    message: "Manjka IBAN prejemnika plačila (BT-84).",
   }),
   rule({
     id: "payment.reference",
@@ -342,7 +342,7 @@ const profileRules: FieldRule[] = [
     instruction: "Vnesi 11-mestni OIB operaterja.",
     scope: "profile",
     check: (invoice) => validOib(invoice.hrData?.operatorOib || invoice.operator?.oib),
-    message: "Za Hrvaško manjka OIB operaterja (HR-BT-5) z 11 številkami.",
+    message: "Manjka OIB operaterja (HR-BT-5); vnesi 11 številk.",
   }),
   rule({
     id: "hr.operatorCode",
@@ -352,7 +352,7 @@ const profileRules: FieldRule[] = [
     instruction: "Vnesi oznako operaterja, ki je izdal račun.",
     scope: "profile",
     check: (invoice) => Boolean(text(invoice.hrData?.operatorCode || invoice.operator?.code)),
-    message: "HR: oznaka operaterja je obvezna.",
+    message: "Manjka oznaka operaterja (HR-BT-4).",
   }),
   rule({
     id: "hr.previousInvoiceDate",
@@ -442,7 +442,7 @@ function lineRules(line: InvoiceLine, profile: InvoiceProfile): FieldRule[] {
         target: { fieldId: `${prefix}.kpdCode`, wizardStep: 2 },
         label: "KPD/CPA koda", instruction: "Vnesi KPD oziroma CPA klasifikacijsko kodo postavke.", scope: "profile",
         check: () => Boolean(text(line.kpdCode)),
-        message: "Za Hrvaško manjka KPD/CPA klasifikacija artikla (BT-158).", lineId: line.id,
+        message: "Manjka KPD/CPA klasifikacija artikla (BT-158).", lineId: line.id,
       }),
     );
     if (["E", "AE", "O"].includes(String(line.vatCategory))) {

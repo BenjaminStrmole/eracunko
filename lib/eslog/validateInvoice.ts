@@ -127,7 +127,7 @@ function validateLine(line: InvoiceLine, index: number, invoice: Invoice) {
   }
 
   if (isEmpty(line.price)) {
-    errors.push(`${label}: BT-146 manjka neto cena postavke.`);
+    errors.push(`${label}: Manjka neto cena artikla (BT-146).`);
   } else if (typeof line.price !== "number" || !Number.isFinite(line.price) || line.price < 0) {
     errors.push(`${label}: BT-146 neto cena mora biti veljavno nenegativno število.`);
   }
@@ -282,10 +282,10 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
 
   if (hrRequirementsApply) {
     if (!isOib(invoice.operator?.oib)) {
-      errors.push("Za HR e-račun manjka OIB operaterja z 11 številkami.");
+      errors.push("Manjka OIB operaterja (HR-BT-5); vnesi 11 številk.");
     }
     if (isEmpty(invoice.operator?.code || invoice.operator?.name)) {
-      errors.push("Za HR e-račun manjka oznaka operaterja.");
+      errors.push("Manjka oznaka operaterja (HR-BT-4).");
     }
   }
 
@@ -372,7 +372,7 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
     payment?.paymentMeansCode || invoice.paymentMeansCode || invoice.eSlog?.paymentMeansCode;
 
   if (isEmpty(iban)) {
-    errors.push("BT-84: manjka IBAN prodajalca.");
+    errors.push("Manjka IBAN prejemnika plačila (BT-84).");
   } else if (!isValidIban(iban)) {
     errors.push("BT-84: IBAN prodajalca ni v veljavnem formatu ali nima pravilne kontrolne številke.");
   }
