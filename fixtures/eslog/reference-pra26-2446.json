@@ -1,0 +1,113 @@
+{
+  "profile": "standard",
+  "number": "PRA26-2446",
+  "issueDate": "2026-06-08",
+  "serviceDate": "2026-05-31",
+  "dueDate": "2026-07-08",
+  "currency": "EUR",
+  "documentType": "380",
+  "businessProcess": "P1",
+  "seller": {
+    "name": "Business Solutions d.o.o.",
+    "vat": "SI32417098",
+    "taxId": "SI32417098",
+    "registrationNumber": "1482980000",
+    "address": "Velika pot 15",
+    "postCode": "5250",
+    "city": "SOLKAN",
+    "country": "SI",
+    "eLocation": "SI32417098",
+    "eAddress": "info@b-s.si",
+    "endpointId": "SI32417098",
+    "endpointSchemeId": "9934"
+  },
+  "buyer": {
+    "name": "ADRIAPLIN d.o.o.",
+    "vat": "SI55956149",
+    "taxId": "SI55956149",
+    "registrationNumber": "5865379000",
+    "address": "Dunajska cesta 7",
+    "postCode": "1000",
+    "city": "Ljubljana",
+    "country": "SI",
+    "eLocation": "SI55956149",
+    "eAddress": "SI55956149",
+    "endpointId": "SI55956149",
+    "endpointSchemeId": "9934"
+  },
+  "lines": [
+    {
+      "id": 1,
+      "description": "Razvoj - BC Variabilen del - Uvajanje uporabnikov",
+      "itemCode": "U00100",
+      "quantity": 22,
+      "unit": "H87",
+      "price": 70,
+      "vatRate": 22,
+      "vatCategory": "S"
+    },
+    {
+      "id": 2,
+      "description": "Razvoj - BC change request - Dodatna migracija podatkov",
+      "itemCode": "U00100",
+      "quantity": 14.25,
+      "unit": "H87",
+      "price": 70,
+      "vatRate": 22,
+      "vatCategory": "S"
+    },
+    {
+      "id": 3,
+      "description": "Razvoj - BC change request - Ukinitev knjižne skupine kupca v dobavi (Nar: 250780)",
+      "itemCode": "U00100",
+      "quantity": 2.5,
+      "unit": "H87",
+      "price": 70,
+      "vatRate": 22,
+      "vatCategory": "S"
+    },
+    {
+      "id": 4,
+      "description": "Razvoj - BC Fiksen del - implementacija",
+      "itemCode": "U00100",
+      "quantity": 3.5,
+      "unit": "H87",
+      "price": 70,
+      "vatRate": 22,
+      "vatCategory": "S"
+    },
+    {
+      "id": 5,
+      "description": "Razvoj - BC Fiksen del - opcijska implementacija",
+      "itemCode": "U00100",
+      "quantity": 152,
+      "unit": "H87",
+      "price": 70,
+      "vatRate": 22,
+      "vatCategory": "S"
+    }
+  ],
+  "totals": {
+    "net": 13597.5,
+    "vat": 2991.45,
+    "gross": 16588.95,
+    "payable": 16588.95
+  },
+  "payment": {
+    "paymentMeansCode": "1",
+    "iban": "SI56040000278770181",
+    "bic": "KBMASI2XXXX",
+    "reference": "SI00262446-00001",
+    "purposeCode": "OTHR",
+    "paymentPurpose": "Plačilo računa št.: PRA26-2446"
+  },
+  "references": {
+    "orderReference": "PRA26-2446"
+  },
+  "eSlog": {
+    "specificationIdentifier": "urn:cen.eu:en16931:2017",
+    "documentType": "380",
+    "businessProcess": "P1",
+    "paymentMeansCode": "1"
+  }
+}

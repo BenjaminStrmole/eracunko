@@ -165,9 +165,10 @@ export function buildPartySegment(
   );
 
   const references = [
+    buildPartyReferenceGroup("0199", party.registrationNumber),
+    buildPartyReferenceGroup("AHP", party.taxId),
     buildPartyReferenceGroup("VA", party.vat),
-    buildPartyReferenceGroup("AHP", party.taxId && party.taxId !== party.vat ? party.taxId : undefined),
-    buildPartyReferenceGroup("API", party.oib),
+    buildPartyReferenceGroup("API", party.country === "HR" ? party.oib : undefined),
   ]
     .filter(Boolean)
     .join("\n");
@@ -376,14 +377,6 @@ export function buildBaseEslogInvoice(input: Invoice) {
     ${buildDateSegment("35", invoice.serviceDate)}
     ${invoice.cashAccounting ? buildDateSegment("432", invoice.issueDate) : ""}
 
-    ${buildFreeText("AAB", payment.paymentTerms)}
-    ${buildFreeText("GEN", invoice.note)}
-    ${buildFreeText(
-      "PMT",
-      payment.paymentPurpose
-        ? `${payment.purposeCode || invoice.purposeCode || "OTHR"}:${payment.paymentPurpose}`
-        : undefined
-    )}
     ${segment(
       "S_FTX",
       `
@@ -392,6 +385,11 @@ export function buildBaseEslogInvoice(input: Invoice) {
         ${segment("C_C108", tag("D_4440", specificationIdentifier))}
       `
     )}
+    ${buildFreeText("AAB", payment.paymentTerms)}
+    ${buildFreeText("AAT", payment.paymentPurpose)}
+    ${buildFreeText("ALQ", payment.purposeCode || invoice.purposeCode)}
+    ${buildFreeText("PMD", payment.paymentPurpose)}
+    ${buildFreeText("GEN", invoice.note)}
     ${businessProcess.startsWith("P99") ? buildFreeText("GEN", businessProcess) : ""}
     ${buildFreeText("GEN", invoice.issueTime ? `${invoice.issueTime}#Vrijeme izdavanja` : undefined)}
     ${buildFreeText(
@@ -445,7 +443,7 @@ export function buildBaseEslogInvoice(input: Invoice) {
     ${buildSummaryMoaGroup("389", invoice.totals.net)}
     ${buildSummaryMoaGroup("176", invoice.totals.vat)}
     ${buildSummaryMoaGroup("388", invoice.totals.gross)}
-    ${buildSummaryMoaGroup("9", invoice.totals.payable || invoice.totals.gross)}
+    ${buildSummaryMoaGroup("9", invoice.totals.payable ?? invoice.totals.gross)}
 
     ${taxXml}
   </M_INVOIC>

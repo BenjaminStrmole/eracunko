@@ -168,6 +168,54 @@ assertMatches(
   "BT-151 and BT-152 must be emitted for every standard-rated line"
 );
 
+const referenceFixture = JSON.parse(
+  readFileSync(join(projectRoot, "fixtures/eslog/reference-pra26-2446.json"), "utf8")
+);
+const preparedReference = prepareInvoiceForEslog(referenceFixture);
+assert(
+  preparedReference.validation.valid,
+  `Reference PRA26-2446 invoice must be valid: ${preparedReference.validation.errors.join("; ")}`
+);
+assert(preparedReference.invoice.totals.net === 13597.5, "Reference BT-106 net total must be 13597.50");
+assert(preparedReference.invoice.totals.vat === 2991.45, "Reference BT-110 VAT total must be 2991.45");
+assert(preparedReference.invoice.totals.gross === 16588.95, "Reference BT-112 gross total must be 16588.95");
+
+const referenceXml = preparedReference.xml;
+assertMatches(referenceXml, /<S_UNH>[\s\S]*?<D_0062>PRA26-2446<\/D_0062>[\s\S]*?<\/S_UNH>/, "Reference UNH must contain invoice number");
+assertMatches(referenceXml, /<S_BGM>[\s\S]*?<C_C106>[\s\S]*?<D_1004>PRA26-2446<\/D_1004>[\s\S]*?<\/S_BGM>/, "Reference BGM must contain invoice number");
+assertMatches(referenceXml, /<D_2005>137<\/D_2005>[\s\S]*?<D_2380>2026-06-08<\/D_2380>/, "Reference DTM 137 must contain issue date");
+assertMatches(referenceXml, /<D_2005>35<\/D_2005>[\s\S]*?<D_2380>2026-05-31<\/D_2380>/, "Reference DTM 35 must contain service date");
+assertMatches(referenceXml, /<D_4451>DOC<\/D_4451>[\s\S]*?<D_4441>P1<\/D_4441>[\s\S]*?<D_4440>urn:cen\.eu:en16931:2017<\/D_4440>/, "Reference FTX DOC must contain BT-23 and BT-24");
+assertMatches(referenceXml, /<D_4451>AAT<\/D_4451>[\s\S]*?Plačilo računa št\.: PRA26-2446/, "Reference payment purpose must use FTX AAT");
+assertMatches(referenceXml, /<D_4451>ALQ<\/D_4451>[\s\S]*?<D_4440>OTHR<\/D_4440>/, "Reference purpose code must use FTX ALQ");
+assertMatches(referenceXml, /<D_4451>PMD<\/D_4451>[\s\S]*?Plačilo računa št\.: PRA26-2446/, "Reference payment description must use FTX PMD");
+assertMatches(referenceXml, /<D_1153>PQ<\/D_1153>[\s\S]*?<D_1154>SI00262446-00001<\/D_1154>/, "Reference payment reference must use RFF PQ");
+assertMatches(referenceXml, /<G_SG2>[\s\S]*?<D_3035>SE<\/D_3035>[\s\S]*?<D_3036>Business Solutions d\.o\.o\.<\/D_3036>[\s\S]*?<D_1153>0199<\/D_1153>[\s\S]*?<D_1154>1482980000<\/D_1154>[\s\S]*?<\/G_SG2>/, "Reference seller must include registration number");
+assertMatches(referenceXml, /<G_SG2>[\s\S]*?<D_3035>BY<\/D_3035>[\s\S]*?<D_3036>ADRIAPLIN d\.o\.o\.<\/D_3036>[\s\S]*?<D_1153>0199<\/D_1153>[\s\S]*?<D_1154>5865379000<\/D_1154>[\s\S]*?<\/G_SG2>/, "Reference buyer must include registration number");
+assertNotIncludes(referenceXml, "<D_1153>API</D_1153>", "Standard SI parties must not emit Croatian OIB references");
+assertMatches(referenceXml, /<G_SG8>[\s\S]*?<S_PAT>[\s\S]*?<D_4279>1<\/D_4279>[\s\S]*?<D_2005>13<\/D_2005>[\s\S]*?<D_2380>2026-07-08<\/D_2380>[\s\S]*?<S_PAI>[\s\S]*?<D_4461>1<\/D_4461>[\s\S]*?<\/G_SG8>/, "Reference payment terms group must contain PAT, due date and PAI");
+assert(countOccurrences(referenceXml, "<G_SG26>") === 5, "Reference invoice must contain five line groups");
+assertMatches(referenceXml, /<G_SG26>[\s\S]*?<D_1082>2<\/D_1082>[\s\S]*?<D_6060>14\.25<\/D_6060>[\s\S]*?<D_5025>203<\/D_5025>[\s\S]*?<D_5004>997\.50<\/D_5004>[\s\S]*?<G_SG29>[\s\S]*?<D_5125>AAA<\/D_5125>[\s\S]*?<D_5118>70\.00<\/D_5118>[\s\S]*?<G_SG34>[\s\S]*?<D_5278>22\.00<\/D_5278>[\s\S]*?<D_5305>S<\/D_5305>/, "Reference second line must contain correct quantity, net, BT-146, BT-151 and BT-152");
+assertMatches(referenceXml, /<D_5025>79<\/D_5025>[\s\S]*?<D_5004>13597\.50<\/D_5004>[\s\S]*?<D_5025>389<\/D_5025>[\s\S]*?<D_5004>13597\.50<\/D_5004>[\s\S]*?<D_5025>176<\/D_5025>[\s\S]*?<D_5004>2991\.45<\/D_5004>[\s\S]*?<D_5025>388<\/D_5025>[\s\S]*?<D_5004>16588\.95<\/D_5004>[\s\S]*?<D_5025>9<\/D_5025>[\s\S]*?<D_5004>16588\.95<\/D_5004>/, "Reference SG50 totals must match the source invoice");
+assertMatches(referenceXml, /<G_SG52>[\s\S]*?<D_5278>22\.00<\/D_5278>[\s\S]*?<D_5305>S<\/D_5305>[\s\S]*?<D_5025>125<\/D_5025>[\s\S]*?<D_5004>13597\.50<\/D_5004>[\s\S]*?<D_5025>124<\/D_5025>[\s\S]*?<D_5004>2991\.45<\/D_5004>[\s\S]*?<\/G_SG52>/, "Reference SG52 VAT summary must match calculated VAT");
+assert(!/<([A-Za-z0-9_]+)>\s*<\/\1>/.test(referenceXml), "Reference-derived XML must not contain empty elements");
+
+const topLevelOrder = ["<S_UNH>", "<S_BGM>", "<S_DTM>", "<S_FTX>", "<G_SG1>", "<G_SG2>", "<G_SG7>", "<G_SG8>", "<G_SG26>", "<S_UNS>", "<G_SG50>", "<G_SG52>"];
+for (let index = 1; index < topLevelOrder.length; index += 1) {
+  assert(
+    referenceXml.indexOf(topLevelOrder[index - 1]) < referenceXml.indexOf(topLevelOrder[index]),
+    `${topLevelOrder[index - 1]} must precede ${topLevelOrder[index]}`
+  );
+}
+
+const referenceXmlPath = join(tmpDir, "reference-pra26-2446.xml");
+writeFileSync(referenceXmlPath, referenceXml);
+if (existsSync(xsdPath)) run("xmllint", ["--noout", "--schema", xsdPath, referenceXmlPath]);
+
+const invalidReference = structuredClone(referenceFixture);
+delete invalidReference.lines[0].price;
+assertPreparationError(invalidReference, "BT-146", "Reference invoice without BT-146 must not generate XML");
+
 const missingPriceInvoice = structuredClone(standardFixture);
 delete missingPriceInvoice.lines[0].price;
 const missingPriceResult = prepareInvoiceForEslog(missingPriceInvoice);
