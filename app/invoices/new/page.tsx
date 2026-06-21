@@ -16,7 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { loadCustomersWithFallback } from "../../../lib/client/customers";
 import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDrafts";
@@ -254,6 +254,7 @@ export default function NewInvoicePage() {
   const [profile, setProfile] = useState<InvoiceProfile>("standard");
   const [profileConfirmed, setProfileConfirmed] = useState(false);
   const [step, setStep] = useState(0);
+  const previousStepRef = useRef(step);
   const [profileData, setProfileData] = useState<ProfileDataState>(() => ({
     standard: {},
     hr: {
@@ -383,6 +384,16 @@ export default function NewInvoicePage() {
       setInitialDataLoaded(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (previousStepRef.current === step) return;
+
+    previousStepRef.current = step;
+    document.getElementById("invoice-wizard")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [step]);
 
   const selectedProfile = useMemo(
     () => invoiceProfiles.find((item) => item.id === profile) || invoiceProfiles[0],
@@ -887,7 +898,7 @@ export default function NewInvoicePage() {
 
   return (
     <AppShell>
-      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between" data-tour="invoice-header">
+      <div id="invoice-wizard" className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between" data-tour="invoice-header">
         <div>
           <div className="status-pill mb-4 inline-flex">Voden vnos racuna</div>
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
