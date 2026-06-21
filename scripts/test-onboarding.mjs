@@ -24,6 +24,7 @@ execFileSync(
     "lib/onboarding/invoiceFieldRules.ts",
     "lib/invoiceSmartDefaults.ts",
     "lib/client/recipientEligibility.ts",
+    "lib/invoiceCodeLists.ts",
   ],
   { cwd: root, stdio: "inherit" }
 );
@@ -43,6 +44,13 @@ const {
   recipientLookupIdentifier,
   recipientStatusMeta,
 } = requireFromTmp(join(outDir, "lib/client/recipientEligibility.js"));
+const {
+  INVOICE_UNIT_OPTIONS,
+  invoiceProfileDefaults,
+  PAYMENT_MEANS_OPTIONS,
+  PURPOSE_CODE_OPTIONS,
+  VAT_CATEGORY_OPTIONS,
+} = requireFromTmp(join(outDir, "lib/invoiceCodeLists.js"));
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -269,5 +277,19 @@ assert(invoicePageSource.includes("Preveri prejemnika"), "Invoice wizard must re
 assert(invoicePageSource.includes("RecipientStatus check={recipientCheck}"), "Invoice wizard must render the lookup status");
 const previewPageSource = readFileSync(join(root, "app/invoices/preview/page.tsx"), "utf8");
 assert(previewPageSource.includes("invoice.recipientCheck"), "Invoice preview must render the saved recipient status");
+
+assert(INVOICE_UNIT_OPTIONS.find((option) => option.label === "Kos")?.value === "H87", "Kos selection must store H87");
+assert(VAT_CATEGORY_OPTIONS.find((option) => option.label === "Standardna stopnja")?.value === "S", "Standard VAT selection must store S");
+assert(PAYMENT_MEANS_OPTIONS.find((option) => option.label === "SEPA kreditni transfer")?.value === "58", "SEPA selection must store 58");
+assert(PURPOSE_CODE_OPTIONS.find((option) => option.label === "Drugo")?.value === "OTHR", "Other purpose selection must store OTHR");
+const ujpDefaults = invoiceProfileDefaults("ujp");
+assert(ujpDefaults.paymentMeansCode === "58", "UJP must default to SEPA credit transfer");
+assert(ujpDefaults.purposeCode === "OTHR", "UJP must default to OTHR");
+assert(ujpDefaults.line.unit === "H87", "UJP line must default to H87");
+assert(ujpDefaults.line.vatCategory === "S", "UJP line must default to standard VAT");
+assert(ujpDefaults.line.vatRate === 22, "UJP line must default to 22% VAT");
+assert(invoicePageSource.includes("INVOICE_UNIT_OPTIONS.map"), "Invoice unit must render as a dropdown");
+assert(invoicePageSource.includes("PAYMENT_MEANS_OPTIONS.map"), "Payment means must render as a dropdown");
+assert(invoicePageSource.includes("PURPOSE_CODE_OPTIONS.map"), "Purpose code must render as a dropdown");
 
 console.log("Field wizard registry tests passed.");

@@ -9,6 +9,7 @@ const UNIT_ALIASES: Record<string, string> = {
 const COMMON_UNECE_UNIT_CODES = new Set([
   "C62",
   "DAY",
+  "E48",
   "GRM",
   "H87",
   "HUR",
@@ -16,11 +17,14 @@ const COMMON_UNECE_UNIT_CODES = new Set([
   "KWH",
   "LTR",
   "MIN",
+  "MON",
   "MTR",
   "MTK",
   "MTQ",
   "MWH",
+  "SET",
   "TNE",
+  "XPK",
 ]);
 
 export const INVALID_UNIT_CODE_MESSAGE =

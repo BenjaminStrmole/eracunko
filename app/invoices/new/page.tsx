@@ -26,6 +26,13 @@ import {
 } from "../../../lib/client/recipientEligibility";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
 import {
+  INVOICE_UNIT_OPTIONS,
+  invoiceProfileDefaults,
+  PAYMENT_MEANS_OPTIONS,
+  PURPOSE_CODE_OPTIONS,
+  VAT_CATEGORY_OPTIONS,
+} from "../../../lib/invoiceCodeLists";
+import {
   applyELocationSuggestion,
   suggestELocation,
   suggestVatRate,
@@ -33,7 +40,7 @@ import {
 } from "../../../lib/invoiceSmartDefaults";
 import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
-import { unitCodeWarning } from "../../../lib/eslog/unitCodes";
+import { normalizeUnitCode, unitCodeWarning } from "../../../lib/eslog/unitCodes";
 import {
   getInvoiceFieldIssues,
   getInvoiceFieldRules,
@@ -123,16 +130,6 @@ type StoredInvoice = {
 
 type ProfileFieldValue = string | boolean;
 type ProfileDataState = Record<InvoiceProfile, Record<string, ProfileFieldValue>>;
-
-const VAT_CATEGORIES: Array<{ value: VatCategory; label: string }> = [
-  { value: "S", label: "S - Standardna stopnja" },
-  { value: "Z", label: "Z - Nicelna stopnja" },
-  { value: "E", label: "E - Oprosceno" },
-  { value: "AE", label: "AE - Reverse charge" },
-  { value: "O", label: "O - Ni predmet DDV" },
-  { value: "G", label: "G - Izvoz" },
-  { value: "IC", label: "IC - Dobava znotraj EU" },
-];
 
 const WIZARD_STEPS = [
   {
@@ -655,8 +652,9 @@ export default function NewInvoicePage() {
     setLines(
       (invoice.lines || []).map((line) => ({
         ...line,
+        unit: normalizeUnitCode(line.unit),
         vatCategory: line.vatCategory || "S",
-        vatRateManuallySet: true,
+        vatRateManuallySet: Number.isFinite(line.vatRate),
       }))
     );
     setProfileData((current) => ({
@@ -700,21 +698,32 @@ export default function NewInvoicePage() {
   }
 
   function changeProfile(nextProfile: InvoiceProfile) {
+    const defaults = invoiceProfileDefaults(nextProfile);
     setProfile(nextProfile);
+    if (nextProfile === "ujp") {
+      setPaymentMeansCode((current) => current || defaults.paymentMeansCode);
+      setPurposeCode((current) => current || defaults.purposeCode);
+    }
     setLines((current) =>
-      current.map((line) => ({
-        ...line,
-        vatRate: suggestVatRate({
-          profile: nextProfile,
-          category: line.vatCategory,
-          currentRate: line.vatRate,
-          manuallyChanged: Boolean(line.vatRateManuallySet),
-        }),
-      }))
+      current.map((line) => {
+        const vatCategory = line.vatCategory || defaults.line.vatCategory;
+        return {
+          ...line,
+          unit: line.unit ? normalizeUnitCode(line.unit) : defaults.line.unit,
+          vatCategory,
+          vatRate: suggestVatRate({
+            profile: nextProfile,
+            category: vatCategory,
+            currentRate: line.vatRate,
+            manuallyChanged: Boolean(line.vatRateManuallySet),
+          }),
+        };
+      })
     );
   }
 
   function addLine() {
+    const defaults = invoiceProfileDefaults(profile);
     setLines((current) => [
       ...current,
       {
@@ -722,10 +731,10 @@ export default function NewInvoicePage() {
         description: "",
         quantity: 0,
         price: Number.NaN,
-        vatRate: Number.NaN,
+        vatRate: defaults.line.vatRate,
         vatRateManuallySet: false,
-        unit: "",
-        vatCategory: "" as VatCategory,
+        unit: defaults.line.unit,
+        vatCategory: defaults.line.vatCategory,
         hrVatCategoryCode: "",
         taxExemptionReason: "",
         kpdCode: "",
@@ -1139,11 +1148,11 @@ export default function NewInvoicePage() {
                   description="Uporabniku prijazna polja za sklic, namen in placilni racun."
                 />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Nacin placila" fieldId="payment.paymentMeansCode" helper="BT-81; za obicajno placilo na TRR uporabi SEPA kreditni transfer.">
+                  <Field label="Nacin placila" fieldId="payment.paymentMeansCode" helper={`V XML se zapiše kot ${paymentMeansCode}.`}>
                     <select value={paymentMeansCode} onChange={(event) => setPaymentMeansCode(event.target.value)} className="field-input">
-                      <option value="58">SEPA kreditni transfer</option>
-                      <option value="30">Kreditno nakazilo</option>
-                      <option value="10">Gotovina</option>
+                      {PAYMENT_MEANS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </Field>
                   <Field label="Sklic placila" fieldId="payment.reference" helper="BT-83; remittance information/sklic, ki poveze placilo z racunom. V XML se mapira kot RFF PQ.">
@@ -1152,8 +1161,12 @@ export default function NewInvoicePage() {
                   <Field label="Namen placila" fieldId="payment.paymentPurpose" helper="Opis namena plačila; pri profilu Banka je obvezen in se zapiše v FTX PMT.">
                     <input value={paymentPurpose} onChange={(event) => setPaymentPurpose(event.target.value)} className="field-input" placeholder="Npr. placilo racuna" />
                   </Field>
-                  <Field label="Koda namena" fieldId="payment.purposeCode">
-                    <input value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input" />
+                  <Field label="Koda namena" fieldId="payment.purposeCode" helper={`V XML se zapiše kot ${purposeCode}.`}>
+                    <select value={purposeCode} onChange={(event) => setPurposeCode(event.target.value)} className="field-input">
+                      {PURPOSE_CODE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.value} – {option.label}</option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="IBAN prejemnika placila" fieldId="payment.iban" helper="BT-84; bancni racun prodajalca, kamor naj kupec placa racun.">
                     <input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} className="field-input" />
@@ -1237,8 +1250,12 @@ export default function NewInvoicePage() {
                       <Field label="Kolicina" fieldId={`lines.${line.id}.quantity`}>
                         <input type="number" value={line.quantity > 0 ? line.quantity : ""} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} className="field-input" />
                       </Field>
-                      <Field label="Enota" fieldId={`lines.${line.id}.unit`}>
-                        <input value={line.unit || ""} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input" />
+                      <Field label="Enota" fieldId={`lines.${line.id}.unit`} helper={line.unit ? `V XML se zapiše kot ${normalizeUnitCode(line.unit)}.` : undefined}>
+                        <select value={normalizeUnitCode(line.unit)} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input">
+                          {INVOICE_UNIT_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
                         {unitCodeWarning(line.unit) && (
                           <span className="mt-2 block text-xs text-amber-600">{unitCodeWarning(line.unit)}</span>
                         )}
@@ -1249,10 +1266,13 @@ export default function NewInvoicePage() {
                       <Field label="DDV kategorija" fieldId={`lines.${line.id}.vatCategory`}>
                         <select value={line.vatCategory} onChange={(event) => updateLine(line.id, { vatCategory: event.target.value as VatCategory })} className="field-input">
                           <option value="" disabled>Izberi DDV kategorijo</option>
-                          {VAT_CATEGORIES.map((category) => (
-                            <option key={category.value} value={category.value}>{category.label}</option>
+                          {VAT_CATEGORY_OPTIONS.map((category) => (
+                            <option key={category.value} value={category.value}>{category.value} – {category.label}</option>
                           ))}
                         </select>
+                        {line.vatCategory && (
+                          <span className="app-muted mt-2 block text-xs">V XML se zapiše kot {line.vatCategory}.</span>
+                        )}
                       </Field>
                       <Field label="DDV %" fieldId={`lines.${line.id}.vatRate`}>
                         <input
