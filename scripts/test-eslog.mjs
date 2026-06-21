@@ -292,4 +292,77 @@ assertMatches(
   "9.5% VAT breakdown amounts must be correct"
 );
 
+const hrInvoice = structuredClone(standardFixture);
+hrInvoice.profile = "hr";
+hrInvoice.number = "222-PP01-01";
+hrInvoice.issueTime = "14:25:09";
+hrInvoice.businessProcess = "P1";
+hrInvoice.seller = {
+  ...hrInvoice.seller,
+  vat: "HR12345678901",
+  taxId: "HR12345678901",
+  oib: "12345678901",
+  country: "HR",
+  eAddress: "prodavatelj@ams.hr",
+};
+hrInvoice.buyer = {
+  ...hrInvoice.buyer,
+  vat: "HR10987654321",
+  taxId: "HR10987654321",
+  oib: "10987654321",
+  country: "HR",
+  eAddress: "kupac@ams.hr",
+};
+hrInvoice.operator = { oib: "12345678901", code: "OP01" };
+hrInvoice.hrData = {
+  issueTime: "14:25:09",
+  businessProcessType: "P1",
+  operatorOib: "12345678901",
+  operatorCode: "OP01",
+  previousInvoiceNumber: "111-PP01-01",
+  previousInvoiceDate: "2026-05-31",
+};
+hrInvoice.lines[0].kpdCode = "62.01.11";
+hrInvoice.lines[0].kpdListId = "CG";
+hrInvoice.lines[0].hrVatCategoryCode = "HR:S";
+
+for (const [mutate, expectedCode, message] of [
+  [(invoice) => { delete invoice.issueTime; delete invoice.hrData.issueTime; }, "HR-BT-2", "HR invoice without issue time must fail"],
+  [(invoice) => { delete invoice.operator.oib; delete invoice.hrData.operatorOib; }, "HR-BT-5", "HR invoice without operator OIB must fail"],
+  [(invoice) => { delete invoice.lines[0].kpdCode; }, "BT-158", "HR invoice without KPD/CPA must fail"],
+]) {
+  const invalidInvoice = structuredClone(hrInvoice);
+  mutate(invalidInvoice);
+  assertPreparationError(invalidInvoice, expectedCode, message);
+}
+
+const hrResult = prepareInvoiceForEslog(hrInvoice);
+assert(hrResult.validation.valid, `Complete HR invoice must be valid: ${hrResult.validation.errors.join("; ")}`);
+assertIncludes(hrResult.xml, "14:25:09#Vrijeme izdavanja", "HR issue time must be emitted as GEN free text");
+assertIncludes(hrResult.xml, "12345678901:OP01#Oznaka operatera", "HR operator must be emitted as GEN free text");
+assertMatches(hrResult.xml, /<D_1153>OI<\/D_1153>[\s\S]*?<D_1154>111-PP01-01<\/D_1154>[\s\S]*?<D_2005>384<\/D_2005>/, "Previous HR invoice must use RFF OI and DTM 384");
+assertIncludes(hrResult.xml, "<D_7140>62.01.11</D_7140>", "HR KPD/CPA classification must be emitted");
+
+const hrXmlPath = join(tmpDir, "hr-profile-invoice.xml");
+writeFileSync(hrXmlPath, hrResult.xml);
+if (existsSync(xsdPath)) run("xmllint", ["--noout", "--schema", xsdPath, hrXmlPath]);
+
+const ujpWithoutReference = structuredClone(standardFixture);
+ujpWithoutReference.profile = "ujp";
+ujpWithoutReference.payment.purposeCode = "OTHR";
+delete ujpWithoutReference.payment.reference;
+assertPreparationError(ujpWithoutReference, "BT-89", "UJP invoice without payment reference must fail clearly");
+
+const bankWithoutIban = structuredClone(standardFixture);
+bankWithoutIban.profile = "bank";
+bankWithoutIban.payment.purposeCode = "OTHR";
+bankWithoutIban.payment.paymentPurpose = "Plačilo računa";
+bankWithoutIban.bankData = { paymentModel: "SI00" };
+delete bankWithoutIban.payment.iban;
+assertPreparationError(bankWithoutIban, "BT-84", "Bank profile without IBAN must fail");
+
+for (const xml of [preparedStandard.xml, hrResult.xml]) {
+  assert(!/<([A-Za-z0-9_]+)>\s*<\/\1>/.test(xml), "XML must not contain empty elements");
+}
+
 console.log("eSLOG XML tests passed.");

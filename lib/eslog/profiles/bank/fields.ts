@@ -10,11 +10,14 @@ export const bankFields: InvoiceProfileConfig = {
     "payment.reference",
     "payment.paymentMeansCode",
     "payment.purposeCode",
+    "payment.paymentPurpose",
     "bankData.paymentModel",
     "references.orderReference|references.contractReference|references.deliveryNoteReference",
   ],
   optionalFields: ["bankData.payerName", "bankData.payeeName"],
   sections: ["base", "buyer", "lines", "payment", "bank"],
+  validationRules: ["BT-81", "BT-84", "BT-86", "BT-89", "Purpose code", "Payment purpose"],
+  xmlMappingHints: ["S_PAT", "S_PAI", "S_FII", "RFF PQ", "S_FTX PMT"],
   profileFields: [
     {
       name: "paymentModel",

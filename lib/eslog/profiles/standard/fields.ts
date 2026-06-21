@@ -17,5 +17,7 @@ export const standardFields: InvoiceProfileConfig = {
   ],
   optionalFields: ["note", "references", "paymentTerms"],
   sections: ["base", "buyer", "lines", "payment"],
+  validationRules: ["EN16931 minimum", "Payment data is required for bank transfer"],
+  xmlMappingHints: ["S_FTX DOC", "G_SG26", "G_SG50", "G_SG52"],
   profileFields: [],
 };

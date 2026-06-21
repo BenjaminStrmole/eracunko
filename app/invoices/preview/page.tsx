@@ -182,13 +182,17 @@ export default function InvoicePreviewPage() {
                 Natisni
               </button>
 
-              <Link
-                href="/invoices/xml"
-                className="primary-button h-12 px-6"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Generiraj eSLOG XML
-              </Link>
+              {prepared.validation.valid ? (
+                <Link href="/invoices/xml" className="primary-button h-12 px-6">
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Generiraj eSLOG XML
+                </Link>
+              ) : (
+                <button disabled className="primary-button h-12 px-6 opacity-50">
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  XML ni pripravljen
+                </button>
+              )}
             </div>
           </div>
 
@@ -348,7 +352,9 @@ export default function InvoicePreviewPage() {
                 <Check ok={Boolean(invoice.eSlog?.purposeCode || invoice.purposeCode)} text="Koda namena vpisana" />
                 <div className="rounded-2xl bg-[var(--app-soft)] p-4 text-[var(--app-primary-strong)]">
                   <ArrowRight className="mb-2 h-4 w-4" aria-hidden="true" />
-                  Naslednji korak: generiranje eSLOG XML
+                  {prepared.validation.valid
+                    ? "Račun je pripravljen za generiranje eSLOG XML."
+                    : "Račun še ni pripravljen za XML. Odpravi blokirne napake."}
                 </div>
               </div>
 

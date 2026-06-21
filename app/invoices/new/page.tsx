@@ -1016,7 +1016,7 @@ export default function NewInvoicePage() {
                   <Field label="Sklic placila" fieldId="payment.reference" helper="BT-83; remittance information/sklic, ki poveze placilo z racunom. V XML se mapira kot RFF PQ.">
                     <input value={reference} onChange={(event) => setReference(event.target.value)} className="field-input" />
                   </Field>
-                  <Field label="Namen placila">
+                  <Field label="Namen placila" fieldId="payment.paymentPurpose" helper="Opis namena plačila; pri profilu Banka je obvezen in se zapiše v FTX PMT.">
                     <input value={paymentPurpose} onChange={(event) => setPaymentPurpose(event.target.value)} className="field-input" placeholder="Npr. placilo racuna" />
                   </Field>
                   <Field label="Koda namena" fieldId="payment.purposeCode">

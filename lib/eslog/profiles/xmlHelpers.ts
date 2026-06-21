@@ -43,9 +43,15 @@ export function buildProfileFreeText(subject: string, value?: string) {
 export function insertProfileExtension(xml: string, extension: string) {
   if (!extension.trim()) return xml;
 
+  const insertionPoint = ["<G_SG1>", "<G_SG2>", "<G_SG7>"]
+    .map((tag) => ({ tag, index: xml.indexOf(tag) }))
+    .filter(({ index }) => index >= 0)
+    .sort((left, right) => left.index - right.index)[0];
+
+  if (!insertionPoint) return xml;
+
   return xml.replace(
-    "\n    <S_UNS>",
-    `\n    ${extension.trim()}\n\n    <S_UNS>`
+    `    ${insertionPoint.tag}`,
+    `    ${extension.trim()}\n\n    ${insertionPoint.tag}`
   );
 }
-

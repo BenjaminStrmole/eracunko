@@ -172,11 +172,12 @@ function validateLine(line: InvoiceLine, index: number, invoice: Invoice) {
     errors.push(`${label}: dodatni opis postavke presega 4096 znakov.`);
   }
 
-  if (invoiceHasHrContext(invoice) && isEmpty(line.kpdCode)) {
-    errors.push(`${label}: za HR e-račun manjka KPD koda.`);
+  const hrRequirementsApply = invoice.profile === "hr" || invoiceHasHrContext(invoice);
+  if (hrRequirementsApply && isEmpty(line.kpdCode)) {
+    errors.push(`${label}: za Hrvaško manjka KPD/CPA klasifikacija artikla (BT-158).`);
   }
 
-  if (invoiceHasHrContext(invoice) && ["E", "AE", "O"].includes(String(line.vatCategory)) && !line.hrVatCategoryCode) {
+  if (hrRequirementsApply && ["E", "AE", "O"].includes(String(line.vatCategory)) && !line.hrVatCategoryCode) {
     errors.push(`${label}: za HR DDV kategorijo ${line.vatCategory} manjka HR oznaka DDV kategorije.`);
   }
 
@@ -199,15 +200,17 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
   );
   const seller = invoice.seller ? normalizePartyAddress(invoice.seller) : invoice.seller;
   const buyer = normalizePartyAddress(invoice.buyer);
+  const hrRequirementsApply = invoice.profile === "hr" || invoiceHasHrContext(invoice);
 
   if (isEmpty(invoice.number)) errors.push("Manjka številka računa.");
-  if (invoiceHasHrContext(invoice) && !/^\S+[-_/]\S+[-_/]\S+$/.test(normalize(invoice.number))) {
+  if (hrRequirementsApply && !/^\S+[-_/]\S+[-_/]\S+$/.test(normalize(invoice.number))) {
     errors.push("HR številka računa mora imeti tri dele brez presledkov, npr. 1-PP01-01.");
   }
   if (!isDate(invoice.issueDate)) errors.push("Manjka datum izdaje ali format ni YYYY-MM-DD.");
   if (!isDate(invoice.serviceDate)) errors.push("Manjka datum opravljene storitve ali format ni YYYY-MM-DD.");
-  if (!isDate(invoice.dueDate)) errors.push("Manjka rok plačila ali format ni YYYY-MM-DD.");
-  if (invoiceHasHrContext(invoice) && !isTime(invoice.issueTime)) {
+  const payable = invoice.totals?.payable ?? invoice.totals?.gross ?? 0;
+  if (payable > 0 && !isDate(invoice.dueDate)) errors.push("Manjka rok plačila ali format ni YYYY-MM-DD.");
+  if (hrRequirementsApply && !isTime(invoice.issueTime)) {
     errors.push("Za HR e-račun manjka čas izdaje v formatu HH:MM:SS.");
   }
   if (isEmpty(invoice.documentType || invoice.eSlog?.documentType)) {
@@ -244,10 +247,10 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
     if (hasStandardRatedVatLine && isEmpty(seller.vat || seller.taxId)) {
       errors.push("BR-S-2: pri standardni DDV kategoriji S manjka prodajalčev DDV ali davčni identifikator.");
     }
-    if (invoiceHasHrContext(invoice) && !isHrVat(seller.vat || seller.taxId)) {
+    if (hrRequirementsApply && !isHrVat(seller.vat || seller.taxId)) {
       errors.push("Izdajatelj: HR VAT ID mora biti HR + 11 številk.");
     }
-    if (invoiceHasHrContext(invoice) && !isOib(seller.oib || seller.vat || seller.taxId)) {
+    if (hrRequirementsApply && !isOib(seller.oib || seller.vat || seller.taxId)) {
       errors.push("Izdajatelj: manjka veljaven OIB z 11 številkami.");
     }
   }
@@ -269,15 +272,15 @@ export function validateInvoiceForEslog(invoice: Invoice): ValidationResult {
     if (isEmpty(buyer.country)) errors.push("Kupec: manjka država.");
     if (isEmpty(buyer.eLocation)) errors.push("Kupec: manjka eLokacija.");
     if (isEmpty(buyer.eAddress)) warnings.push("Kupec: manjka eAddress, uporabljen bo fallback iz davčne številke.");
-    if (invoiceHasHrContext(invoice) && !isHrVat(buyer.vat || buyer.taxId)) {
+    if (hrRequirementsApply && !isHrVat(buyer.vat || buyer.taxId)) {
       errors.push("Kupec: HR VAT ID mora biti HR + 11 številk.");
     }
-    if (invoiceHasHrContext(invoice) && !isOib(buyer.oib || buyer.vat || buyer.taxId)) {
+    if (hrRequirementsApply && !isOib(buyer.oib || buyer.vat || buyer.taxId)) {
       errors.push("Kupec: manjka veljaven OIB z 11 številkami.");
     }
   }
 
-  if (invoiceHasHrContext(invoice)) {
+  if (hrRequirementsApply) {
     if (!isOib(invoice.operator?.oib)) {
       errors.push("Za HR e-račun manjka OIB operaterja z 11 številkami.");
     }

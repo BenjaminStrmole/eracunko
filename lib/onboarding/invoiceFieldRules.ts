@@ -273,6 +273,26 @@ const profileRules: FieldRule[] = [
     message: "Banka: koda namena je obvezna.",
   }),
   rule({
+    id: "bank.paymentPurpose",
+    profiles: ["bank"],
+    target: { fieldId: "payment.paymentPurpose", wizardStep: 1 },
+    label: "Namen plačila",
+    instruction: "Vnesi razumljiv namen plačila, ki bo poslan banki.",
+    scope: "profile",
+    check: (invoice) => Boolean(text(invoice.payment?.paymentPurpose)),
+    message: "Banka: namen plačila je obvezen.",
+  }),
+  rule({
+    id: "ujp.purposeCode",
+    profiles: ["ujp"],
+    target: { fieldId: "payment.purposeCode", wizardStep: 1 },
+    label: "Koda namena",
+    instruction: "Za UJP vnesi kodo namena plačila.",
+    scope: "profile",
+    check: (invoice) => Boolean(text(invoice.payment?.purposeCode || invoice.purposeCode)),
+    message: "UJP: koda namena je obvezna.",
+  }),
+  rule({
     id: "bank.paymentModel",
     profiles: ["bank"],
     target: { fieldId: "profile.bank.paymentModel", wizardStep: 1 },
@@ -312,7 +332,7 @@ const profileRules: FieldRule[] = [
     instruction: "Vnesi čas izdaje v formatu HH:MM:SS.",
     scope: "profile",
     check: (invoice) => validTime(invoice.hrData?.issueTime || invoice.issueTime),
-    message: "HR: čas izdaje mora biti v formatu HH:MM:SS.",
+    message: "Za Hrvaško manjka čas izdaje (HR-BT-2) v formatu HH:MM:SS.",
   }),
   rule({
     id: "hr.operatorOib",
@@ -322,7 +342,7 @@ const profileRules: FieldRule[] = [
     instruction: "Vnesi 11-mestni OIB operaterja.",
     scope: "profile",
     check: (invoice) => validOib(invoice.hrData?.operatorOib || invoice.operator?.oib),
-    message: "HR: OIB operaterja mora imeti 11 številk.",
+    message: "Za Hrvaško manjka OIB operaterja (HR-BT-5) z 11 številkami.",
   }),
   rule({
     id: "hr.operatorCode",
@@ -422,16 +442,18 @@ function lineRules(line: InvoiceLine, profile: InvoiceProfile): FieldRule[] {
         target: { fieldId: `${prefix}.kpdCode`, wizardStep: 2 },
         label: "KPD/CPA koda", instruction: "Vnesi KPD oziroma CPA klasifikacijsko kodo postavke.", scope: "profile",
         check: () => Boolean(text(line.kpdCode)),
-        message: "HR: KPD/CPA koda postavke je obvezna.", lineId: line.id,
+        message: "Za Hrvaško manjka KPD/CPA klasifikacija artikla (BT-158).", lineId: line.id,
       }),
-      rule({
+    );
+    if (["E", "AE", "O"].includes(String(line.vatCategory))) {
+      common.push(rule({
         id: `${prefix}.hrVatCategoryCode`, profiles: ["hr"],
         target: { fieldId: `${prefix}.hrVatCategoryCode`, wizardStep: 2 },
-        label: "HR DDV oznaka", instruction: "Vnesi HR oznako DDV kategorije postavke.", scope: "profile",
+        label: "HR DDV oznaka", instruction: "Vnesi HR oznako posebne DDV kategorije postavke.", scope: "profile",
         check: () => Boolean(text(line.hrVatCategoryCode)),
-        message: "HR: oznaka DDV kategorije postavke je obvezna.", lineId: line.id,
-      })
-    );
+        message: "HR: pri posebni DDV kategoriji je oznaka DDV kategorije postavke obvezna.", lineId: line.id,
+      }));
+    }
   }
 
   return common;

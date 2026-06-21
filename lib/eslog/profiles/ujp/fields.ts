@@ -7,6 +7,8 @@ export const ujpFields: InvoiceProfileConfig = {
   requiredFields: ["references.orderReference|references.contractReference|references.deliveryNoteReference"],
   optionalFields: ["ujpData.budgetUser", "ujpData.ujpRecipient", "ujpData.publicProcurementReference"],
   sections: ["base", "buyer", "lines", "payment", "ujp"],
+  validationRules: ["BT-81", "BT-84", "BT-89", "Purpose code", "Public-sector reference"],
+  xmlMappingHints: ["S_PAT", "S_PAI", "S_FII", "RFF PQ", "G_SG1"],
   profileFields: [
     {
       name: "budgetUser",

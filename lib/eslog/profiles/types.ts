@@ -12,6 +12,8 @@ export type InvoiceProfileConfig = {
   requiredFields: string[];
   optionalFields: string[];
   sections: string[];
+  validationRules: string[];
+  xmlMappingHints: string[];
   profileFields: ProfileFieldDefinition[];
 };
 

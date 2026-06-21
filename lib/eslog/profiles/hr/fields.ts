@@ -10,10 +10,11 @@ export const hrFields: InvoiceProfileConfig = {
     "hrData.operatorOib",
     "hrData.operatorCode",
     "line.kpdCode",
-    "line.hrVatCategoryCode",
   ],
   optionalFields: ["hrData.previousInvoiceNumber", "hrData.selfBilling"],
   sections: ["base", "buyer", "lines", "payment", "hr"],
+  validationRules: ["HR-BT-2", "HR-BT-4", "HR-BT-5", "BT-34", "BT-49", "BT-158"],
+  xmlMappingHints: ["S_FTX GEN", "S_BGM D_1225", "S_DTM 432", "G_SG1 OI/384", "G_SG26 PIA"],
   profileFields: [
     {
       name: "businessProcessType",
@@ -92,8 +93,7 @@ export const hrFields: InvoiceProfileConfig = {
       label: "HR DDV oznaka",
       type: "text",
       scope: "line",
-      required: true,
-      helper: "HR oznaka DDV kategorije za postavko.",
+      helper: "HR oznaka DDV kategorije; obvezna pri posebnih kategorijah E, AE in O.",
     },
     {
       name: "kpdCode",

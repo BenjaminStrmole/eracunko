@@ -94,6 +94,19 @@ function buildReferenceGroup(qualifier: string, value?: string) {
   return segment("G_SG1", buildReferenceSegment(qualifier, value));
 }
 
+function buildDatedReferenceGroup(
+  qualifier: string,
+  value?: string,
+  dateQualifier?: string,
+  date?: string
+) {
+  if (!isPresent(value)) return "";
+  return segment(
+    "G_SG1",
+    `${buildReferenceSegment(qualifier, value)}${buildDateSegment(dateQualifier || "171", date)}`
+  );
+}
+
 function buildPartyReferenceGroup(qualifier: string, value?: string) {
   return segment("G_SG3", buildReferenceSegment(qualifier, value));
 }
@@ -325,6 +338,7 @@ export function buildBaseEslogInvoice(input: Invoice) {
   const iban = payment.iban || payment.bankAccount || invoice.bankAccount;
   const bic = payment.bic || payment.bankBic || invoice.bankBic;
   const reference = payment.reference || invoice.reference;
+  const hrData = invoice.hrData || {};
 
   const linesXml = invoice.lines.map(buildLineSegment).join("\n");
   const taxXml = buildTaxSegments(invoice.vatBreakdown || []);
@@ -364,6 +378,12 @@ export function buildBaseEslogInvoice(input: Invoice) {
 
     ${buildFreeText("AAB", payment.paymentTerms)}
     ${buildFreeText("GEN", invoice.note)}
+    ${buildFreeText(
+      "PMT",
+      payment.paymentPurpose
+        ? `${payment.purposeCode || invoice.purposeCode || "OTHR"}:${payment.paymentPurpose}`
+        : undefined
+    )}
     ${segment(
       "S_FTX",
       `
@@ -380,6 +400,12 @@ export function buildBaseEslogInvoice(input: Invoice) {
         ? `${invoice.operator.oib}:${invoice.operator.code || invoice.operator.name}#Oznaka operatera`
         : undefined
     )}
+    ${buildFreeText(
+      "GEN",
+      hrData.previousInvoiceNumber
+        ? `${hrData.previousInvoiceNumber}#Prethodni račun`
+        : undefined
+    )}
     ${documentLevelTaxExemptions}
 
     ${buildReferenceGroup("ON", references.orderReference)}
@@ -387,6 +413,12 @@ export function buildBaseEslogInvoice(input: Invoice) {
     ${buildReferenceGroup("AAK", references.deliveryNoteReference)}
     ${buildReferenceGroup("CR", references.buyerReference)}
     ${buildReferenceGroup("PQ", reference)}
+    ${buildDatedReferenceGroup(
+      "OI",
+      hrData.previousInvoiceNumber,
+      "384",
+      hrData.previousInvoiceDate
+    )}
 
     ${invoice.seller ? buildPartySegment("SE", invoice.seller, { iban, bic }) : ""}
     ${buildPartySegment("BY", invoice.buyer)}
