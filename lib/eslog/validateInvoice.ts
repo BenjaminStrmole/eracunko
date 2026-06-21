@@ -1,5 +1,6 @@
 import type { Invoice, InvoiceLine, VatCategory } from "../../types/invoice";
 import { normalizePartyAddress } from "./normalizeInvoice";
+import { isKnownUneceUnitCode, INVALID_UNIT_CODE_MESSAGE } from "./unitCodes";
 
 type ValidationResult = {
   valid: boolean;
@@ -138,6 +139,8 @@ function validateLine(line: InvoiceLine, index: number, invoice: Invoice) {
 
   if (!line.unit) {
     errors.push(`${label}: manjka enota mere.`);
+  } else if (!isKnownUneceUnitCode(line.unit)) {
+    warnings.push(`${label}: ${INVALID_UNIT_CODE_MESSAGE}`);
   }
 
   if (!line.vatCategory) {

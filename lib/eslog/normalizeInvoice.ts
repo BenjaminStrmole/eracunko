@@ -5,6 +5,7 @@ import type {
   VatBreakdown,
   VatCategory,
 } from "../../types/invoice";
+import { normalizeUnitCode } from "./unitCodes";
 
 const DEFAULT_SPECIFICATION_IDENTIFIER = "urn:cen.eu:en16931:2017";
 const DEFAULT_CUSTOMIZATION_ID = "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0";
@@ -98,14 +99,6 @@ function normalizeVatCategory(line: InvoiceLine): VatCategory {
   return "S";
 }
 
-function normalizeUnit(unit: string | undefined) {
-  const value = clean(unit).toUpperCase();
-
-  if (!value) return "H87";
-
-  return value;
-}
-
 function normalizeLine(line: InvoiceLine): InvoiceLine {
   const quantity = Number(line.quantity || 0);
   const price = line.price;
@@ -136,7 +129,7 @@ function normalizeLine(line: InvoiceLine): InvoiceLine {
     quantity,
     price,
     vatRate,
-    unit: normalizeUnit(line.unit),
+    unit: normalizeUnitCode(line.unit),
     vatCategory,
     hrVatCategoryCode: clean(line.hrVatCategoryCode),
     taxExemptionReason: clean(line.taxExemptionReason),

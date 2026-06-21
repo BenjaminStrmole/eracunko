@@ -33,6 +33,7 @@ import {
 } from "../../../lib/invoiceSmartDefaults";
 import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
+import { unitCodeWarning } from "../../../lib/eslog/unitCodes";
 import {
   getInvoiceFieldIssues,
   getInvoiceFieldRules,
@@ -1238,6 +1239,9 @@ export default function NewInvoicePage() {
                       </Field>
                       <Field label="Enota" fieldId={`lines.${line.id}.unit`}>
                         <input value={line.unit || ""} onChange={(event) => updateLine(line.id, { unit: event.target.value })} className="field-input" />
+                        {unitCodeWarning(line.unit) && (
+                          <span className="mt-2 block text-xs text-amber-600">{unitCodeWarning(line.unit)}</span>
+                        )}
                       </Field>
                       <Field label="Neto cena" fieldId={`lines.${line.id}.price`}>
                         <input type="number" value={Number.isFinite(line.price) ? line.price : ""} onChange={(event) => updateLine(line.id, { price: event.target.value === "" ? Number.NaN : Number(event.target.value) })} className="field-input" />

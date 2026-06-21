@@ -66,6 +66,13 @@ const { prepareInvoiceForEslog } = requireFromTmp(
 const { invoiceProfileConfigs } = requireFromTmp(
   join(tmpDir, "lib/eslog/invoiceProfiles.js")
 );
+const { normalizeUnitCode } = requireFromTmp(
+  join(tmpDir, "lib/eslog/unitCodes.js")
+);
+
+for (const alias of ["KOS", "kos", "pcs", "piece", "kom", "komad"]) {
+  assert(normalizeUnitCode(alias) === "H87", `${alias} must normalize to H87`);
+}
 
 const hrProfileFieldNames = invoiceProfileConfigs.hr.profileFields.map((field) => field.name);
 for (const fieldName of ["issueTime", "operatorOib", "operatorCode", "kpdCode"]) {
@@ -126,6 +133,7 @@ for (const fixtureName of fixtures) {
   assertNotIncludes(xml, "<D_1131>SI</D_1131>", `${fixtureName}: invalid country code emitted as ISO 6523 ICD scheme`);
   assertNotIncludes(xml, "<D_1131>VAT</D_1131>", `${fixtureName}: invalid VAT text emitted as ISO 6523 ICD scheme`);
   assertNotIncludes(xml, "<D_1131>TAX</D_1131>", `${fixtureName}: invalid TAX text emitted as ISO 6523 ICD scheme`);
+  assertNotIncludes(xml, "<D_1131>9934</D_1131>", `${fixtureName}: e-location scheme leaked into NAD identifier scheme`);
 
   if (existsSync(xsdPath)) {
     run("xmllint", ["--noout", "--schema", xsdPath, xmlPath]);
@@ -166,6 +174,40 @@ assertMatches(
   preparedStandard.xml,
   /<G_SG34>[\s\S]*?<D_5278>22\.00<\/D_5278>[\s\S]*?<D_5305>S<\/D_5305>[\s\S]*?<\/G_SG34>/,
   "BT-151 and BT-152 must be emitted for every standard-rated line"
+);
+
+const kosUnitInvoice = structuredClone(standardFixture);
+kosUnitInvoice.lines[0].unit = "KOS";
+kosUnitInvoice.seller.endpointSchemeId = "9934";
+kosUnitInvoice.buyer.endpointSchemeId = "9934";
+const kosUnitResult = prepareInvoiceForEslog(kosUnitInvoice);
+assert(kosUnitResult.validation.valid, "KOS unit alias must produce a valid invoice");
+assertMatches(
+  kosUnitResult.xml,
+  /<S_QTY>[\s\S]*?<D_6411>H87<\/D_6411>[\s\S]*?<\/S_QTY>/,
+  "KOS must map to H87 for BT-130 in QTY"
+);
+assertMatches(
+  kosUnitResult.xml,
+  /<G_SG29>[\s\S]*?<S_PRI>[\s\S]*?<D_6411>H87<\/D_6411>[\s\S]*?<\/G_SG29>/,
+  "KOS must map to H87 for BT-150 in PRI"
+);
+assertNotIncludes(
+  kosUnitResult.xml,
+  "<D_1131>9934</D_1131>",
+  "NAD C_C082 must not use the e-location scheme as BT-29-1 or BT-46-1"
+);
+const kosUnitXmlPath = join(tmpDir, "unit-kos-h87.xml");
+writeFileSync(kosUnitXmlPath, kosUnitResult.xml);
+if (existsSync(xsdPath)) run("xmllint", ["--noout", "--schema", xsdPath, kosUnitXmlPath]);
+
+const unknownUnitInvoice = structuredClone(standardFixture);
+unknownUnitInvoice.lines[0].unit = "NOT-A-UNIT";
+const unknownUnitResult = prepareInvoiceForEslog(unknownUnitInvoice);
+assert(unknownUnitResult.validation.valid, "Unknown unit code must remain a warning, not a blocking error");
+assert(
+  unknownUnitResult.validation.warnings.some((warning) => warning.includes("UN/ECE Rec 20/21")),
+  "Unknown unit code must produce a clear UN/ECE warning"
 );
 
 const referenceFixture = JSON.parse(
