@@ -4,9 +4,10 @@ import { ArrowRight, Download, Printer } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
+import { recipientStatusMeta } from "../../../lib/client/recipientEligibility";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import AppShell from "../../components/AppShell";
-import type { Invoice, Party } from "../../../types/invoice";
+import type { Invoice, Party, RecipientCheck } from "../../../types/invoice";
 
 type ActiveCompany = {
   name?: string;
@@ -229,6 +230,9 @@ export default function InvoicePreviewPage() {
                   {invoice.buyer.eAddress && (
                     <div className="text-slate-500">{invoice.buyer.eAddress}</div>
                   )}
+                  {invoice.recipientCheck && (
+                    <div className="mt-3"><RecipientStatus check={invoice.recipientCheck} /></div>
+                  )}
                 </div>
 
                 <div className="text-right">
@@ -357,6 +361,7 @@ export default function InvoicePreviewPage() {
                 </div>
                 <Check ok text="Podatki izdajatelja iz aktivnega podjetja" />
                 <Check ok text="Prejemnik izbran iz šifranta" />
+                {invoice.recipientCheck && <RecipientStatus check={invoice.recipientCheck} />}
                 <Check ok text="DDV izračun pripravljen" />
                 <Check ok={Boolean(invoice.payment?.reference || invoice.reference)} text="Referenca plačila vpisana" />
                 <Check ok={Boolean(invoice.eSlog?.documentType || invoice.documentType)} text="Tip dokumenta izbran" />
@@ -435,6 +440,16 @@ function Check({ ok, text }: { ok: boolean; text: string }) {
       }`}
     >
       {ok ? "✓" : "!"} {text}
+    </div>
+  );
+}
+
+function RecipientStatus({ check }: { check: RecipientCheck }) {
+  const meta = recipientStatusMeta(check.status);
+  return (
+    <div className={`text-sm font-medium ${meta.className}`} data-testid="recipient-check-status">
+      {meta.icon && <span className="mr-2" aria-hidden="true">{meta.icon}</span>}
+      {check.message}
     </div>
   );
 }

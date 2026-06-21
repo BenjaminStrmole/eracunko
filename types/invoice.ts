@@ -2,6 +2,21 @@ export type VatCategory = "S" | "Z" | "E" | "AE" | "K" | "G" | "O" | "IC";
 
 export type InvoiceStatus = "DRAFT" | "READY" | "SENT" | "ERROR";
 export type InvoiceProfile = "standard" | "hr" | "ujp" | "bank";
+export type RecipientCheckStatus =
+  | "unchecked"
+  | "checking"
+  | "enabled"
+  | "disabled"
+  | "unavailable";
+
+export type RecipientCheck = {
+  status: RecipientCheckStatus;
+  identifier?: string;
+  message: string;
+  checkedAt?: string;
+  eLocation?: string;
+  eAddress?: string;
+};
 
 export type Party = {
   name: string;
@@ -162,6 +177,7 @@ export type Invoice = {
   hrData?: HrInvoiceData;
   ujpData?: UjpInvoiceData;
   bankData?: BankInvoiceData;
+  recipientCheck?: RecipientCheck;
 
   seller?: Party;
   buyer: Party;

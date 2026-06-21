@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
@@ -22,6 +22,8 @@ execFileSync(
     "--esModuleInterop",
     "--skipLibCheck",
     "lib/onboarding/invoiceFieldRules.ts",
+    "lib/invoiceSmartDefaults.ts",
+    "lib/client/recipientEligibility.ts",
   ],
   { cwd: root, stdio: "inherit" }
 );
@@ -30,6 +32,17 @@ const requireFromTmp = createRequire(join(outDir, "index.js"));
 const { getInvoiceFieldIssues } = requireFromTmp(
   join(outDir, "lib/onboarding/invoiceFieldRules.js")
 );
+const {
+  applyELocationSuggestion,
+  suggestELocation,
+  suggestVatRate,
+  vatRateWarning,
+} = requireFromTmp(join(outDir, "lib/invoiceSmartDefaults.js"));
+const {
+  mapRecipientLookupResponse,
+  recipientLookupIdentifier,
+  recipientStatusMeta,
+} = requireFromTmp(join(outDir, "lib/client/recipientEligibility.js"));
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -169,6 +182,7 @@ assert(!issueCodes(ujp).includes("ujp.documentReference"), "One UJP reference mu
 
 const bank = validInvoice("bank");
 bank.references.orderReference = "NAR-1";
+bank.payment.paymentPurpose = "Plačilo računa";
 bank.bankData = { paymentModel: "SI00", payeeIban: bank.payment.iban, payeeBic: bank.payment.bic };
 assert(issueCodes(bank).length === 0, "Valid Bank invoice should have no field issues");
 bank.bankData.payeeIban = "bad";
@@ -187,7 +201,73 @@ hr.lines = [
 ];
 const hrCodes = issueCodes(hr);
 assert(hrCodes.includes("lines.20.kpdCode"), "HR must validate KPD per line");
-assert(hrCodes.includes("lines.20.hrVatCategoryCode"), "HR must validate VAT category per line");
+assert(!hrCodes.includes("lines.20.hrVatCategoryCode"), "HR standard VAT must not require a special category code");
 assert(!hrCodes.includes("lines.10.kpdCode"), "Valid HR line fields must be skipped");
+
+assert(
+  suggestVatRate({ profile: "standard", category: "S", currentRate: Number.NaN, manuallyChanged: false }) === 22,
+  "SI Standard profile must suggest 22% VAT"
+);
+assert(
+  suggestVatRate({ profile: "hr", category: "S", currentRate: Number.NaN, manuallyChanged: false }) === 25,
+  "HR profile must suggest 25% VAT"
+);
+for (const category of ["Z", "E", "AE"]) {
+  assert(
+    suggestVatRate({ profile: "standard", category, currentRate: Number.NaN, manuallyChanged: false }) === 0,
+    `${category} must suggest 0% VAT`
+  );
+}
+assert(
+  suggestVatRate({ profile: "hr", category: "S", currentRate: 13, manuallyChanged: true }) === 13,
+  "A manually entered VAT rate must never be overwritten"
+);
+assert(
+  vatRateWarning("hr", "S", 22).includes("25 %"),
+  "Unexpected HR standard VAT must show a 25% hint"
+);
+assert(
+  vatRateWarning("standard", "Z", 22).includes("0 %"),
+  "Unexpected zero-category VAT must show a 0% hint"
+);
+
+const siLocation = suggestELocation("SI12345678", "SI");
+assert(siLocation?.value === "SI12345678" && siLocation.schemeId === "9949", "SI VAT must suggest scheme 9949");
+const hrLocation = suggestELocation("HR12345678901", "HR");
+assert(hrLocation?.value === "12345678901" && hrLocation.schemeId === "9934", "HR OIB must suggest scheme 9934");
+assert(
+  applyELocationSuggestion("ROČNI-VNOS", siLocation) === "ROČNI-VNOS",
+  "An e-location suggestion must not overwrite manual input"
+);
+assert(
+  applyELocationSuggestion("ROČNI-VNOS", siLocation, true) === "SI12345678",
+  "A confirmed e-location suggestion may replace manual input"
+);
+
+assert(
+  recipientLookupIdentifier({ eLocation: "12345678901", country: "HR" }) === "HR12345678901",
+  "Recipient lookup must accept an HR e-location without a VAT prefix"
+);
+const enabledRecipient = mapRecipientLookupResponse(
+  { success: true, status: "READY", customer: { eLocation: "C:SI12345678" } },
+  "SI12345678"
+);
+assert(enabledRecipient.status === "enabled", "READY lookup must show recipient as enabled");
+assert(recipientStatusMeta(enabledRecipient.status).icon === "🟢", "Enabled recipient must have a green status");
+const disabledRecipient = mapRecipientLookupResponse(
+  { success: false, status: "NOT_REGISTERED" },
+  "SI12345678"
+);
+assert(disabledRecipient.status === "disabled", "Missing recipient registration must show a red status");
+assert(recipientStatusMeta(disabledRecipient.status).icon === "🔴", "Disabled recipient must have a red status");
+const unavailableRecipient = mapRecipientLookupResponse({ success: false }, "SI12345678");
+assert(unavailableRecipient.status === "unavailable", "Failed lookup must show an unavailable status");
+assert(recipientStatusMeta(unavailableRecipient.status).icon === "🟡", "Unavailable lookup must have a yellow status");
+
+const invoicePageSource = readFileSync(join(root, "app/invoices/new/page.tsx"), "utf8");
+assert(invoicePageSource.includes("Preveri prejemnika"), "Invoice wizard must render the recipient check button");
+assert(invoicePageSource.includes("RecipientStatus check={recipientCheck}"), "Invoice wizard must render the lookup status");
+const previewPageSource = readFileSync(join(root, "app/invoices/preview/page.tsx"), "utf8");
+assert(previewPageSource.includes("invoice.recipientCheck"), "Invoice preview must render the saved recipient status");
 
 console.log("Field wizard registry tests passed.");

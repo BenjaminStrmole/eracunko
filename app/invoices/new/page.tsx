@@ -10,6 +10,7 @@ import {
   Plus,
   ReceiptText,
   Save,
+  Search,
   Send,
   Trash2,
   UserRound,
@@ -19,7 +20,17 @@ import { useEffect, useMemo, useState } from "react";
 import { loadActiveCompanyWithFallback } from "../../../lib/client/activeCompany";
 import { loadCustomersWithFallback } from "../../../lib/client/customers";
 import { prependLocalDraft, saveDbDraft } from "../../../lib/client/invoiceDrafts";
+import {
+  checkRecipientEligibility,
+  recipientStatusMeta,
+} from "../../../lib/client/recipientEligibility";
 import { invoiceProfiles } from "../../../lib/eslog/invoiceProfiles";
+import {
+  applyELocationSuggestion,
+  suggestELocation,
+  suggestVatRate,
+  vatRateWarning,
+} from "../../../lib/invoiceSmartDefaults";
 import { normalizePartyAddress } from "../../../lib/eslog/normalizeInvoice";
 import { prepareInvoiceForEslog } from "../../../lib/eslog/prepareInvoiceForEslog";
 import {
@@ -31,6 +42,7 @@ import type {
   Invoice,
   InvoiceLine,
   InvoiceProfile,
+  RecipientCheck,
   VatCategory,
 } from "../../../types/invoice";
 import AppShell from "../../components/AppShell";
@@ -94,12 +106,14 @@ type BuyerForm = {
   city: string;
   country: string;
   eLocation: string;
+  endpointSchemeId: string;
   eAddress: string;
   registrationNumber: string;
 };
 
 type EditableLine = InvoiceLine & {
   vatCategory: VatCategory;
+  vatRateManuallySet?: boolean;
 };
 
 type StoredInvoice = {
@@ -201,20 +215,24 @@ function emptyBuyer(): BuyerForm {
     city: "",
     country: "SI",
     eLocation: "",
+    endpointSchemeId: "",
     eAddress: "",
     registrationNumber: "",
   };
 }
 
 function customerToBuyer(customer: Customer): BuyerForm {
+  const country = customer.country || taxCountry(customer.vatNumber);
+  const suggestion = suggestELocation(customer.vatNumber, country);
   return {
     name: customer.name || "",
     vat: customer.vatNumber || "",
     address: customer.address || "",
     postCode: customer.postCode || "",
     city: customer.city || "",
-    country: customer.country || taxCountry(customer.vatNumber),
+    country,
     eLocation: customer.eLocation || "",
+    endpointSchemeId: suggestion?.schemeId || "",
     eAddress: customer.eAddress || "",
     registrationNumber: customer.registrationNumber || "",
   };
@@ -256,6 +274,10 @@ export default function NewInvoicePage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerVat, setSelectedCustomerVat] = useState("");
   const [buyer, setBuyer] = useState<BuyerForm>(emptyBuyer);
+  const [recipientCheck, setRecipientCheck] = useState<RecipientCheck>({
+    status: "unchecked",
+    message: "Prejemnik še ni preverjen",
+  });
   const [invoiceId] = useState(() => Date.now());
   const [createdAt] = useState(() => new Date().toISOString());
 
@@ -370,6 +392,10 @@ export default function NewInvoicePage() {
   );
 
   const currentProfileData = profileData[profile] || {};
+  const eLocationSuggestion = useMemo(
+    () => suggestELocation(buyer.vat, buyer.country),
+    [buyer.country, buyer.vat]
+  );
   const lineProfileFields = selectedProfile.profileFields.filter(
     (field) => field.scope === "line"
   );
@@ -462,6 +488,11 @@ export default function NewInvoicePage() {
       paymentMeansCode
     );
 
+    const invoiceLines = lines.map(({ vatRateManuallySet, ...line }) => {
+      void vatRateManuallySet;
+      return line;
+    });
+
     return {
       id: invoiceId,
       profile,
@@ -512,8 +543,8 @@ export default function NewInvoicePage() {
         country: buyer.country,
         eLocation: buyer.eLocation,
         eAddress: buyer.eAddress,
-        endpointId: buyer.vat.replace(/\D/g, "").slice(0, 11) || buyer.vat,
-        endpointSchemeId: "9934",
+        endpointId: buyer.eLocation || buyer.vat,
+        endpointSchemeId: buyer.endpointSchemeId || eLocationSuggestion?.schemeId,
         registrationNumber: buyer.registrationNumber,
       },
       payment: {
@@ -556,7 +587,8 @@ export default function NewInvoicePage() {
         payerName: profileString(bankData, "payerName"),
         payeeName: profileString(bankData, "payeeName"),
       },
-      lines,
+      lines: invoiceLines,
+      recipientCheck,
       totals,
       eSlog: {
         specificationIdentifier,
@@ -582,10 +614,17 @@ export default function NewInvoicePage() {
       city: invoice.buyer?.city || "",
       country: invoice.buyer?.country || "SI",
       eLocation: invoice.buyer?.eLocation || "",
+      endpointSchemeId: invoice.buyer?.endpointSchemeId || "",
       eAddress: invoice.buyer?.eAddress || "",
       registrationNumber: invoice.buyer?.registrationNumber || "",
     });
     setSelectedCustomerVat(invoice.buyer?.vat || "");
+    setRecipientCheck(
+      invoice.recipientCheck || {
+        status: "unchecked",
+        message: "Prejemnik še ni preverjen",
+      }
+    );
     setInvoiceNumberNumericPart(
       invoice.invoiceNumberNumericPart || invoice.number?.split(/[-_/]/)[0] || ""
     );
@@ -616,6 +655,7 @@ export default function NewInvoicePage() {
       (invoice.lines || []).map((line) => ({
         ...line,
         vatCategory: line.vatCategory || "S",
+        vatRateManuallySet: true,
       }))
     );
     setProfileData((current) => ({
@@ -632,7 +672,7 @@ export default function NewInvoicePage() {
   const fieldAssistant = useInvoiceFieldAssistant({
     profile,
     profileConfirmed,
-    setProfile,
+    setProfile: changeProfile,
     setProfileConfirmed,
     setStep,
     getInvoice: buildInvoice,
@@ -646,12 +686,30 @@ export default function NewInvoicePage() {
         if (line.id !== id) return line;
 
         const next = { ...line, ...patch };
-        if (["Z", "E", "AE", "K", "O", "G", "IC"].includes(next.vatCategory)) {
-          next.vatRate = 0;
-        }
+        next.vatRate = suggestVatRate({
+          profile,
+          category: next.vatCategory,
+          currentRate: next.vatRate,
+          manuallyChanged: Boolean(next.vatRateManuallySet),
+        });
 
         return next;
       })
+    );
+  }
+
+  function changeProfile(nextProfile: InvoiceProfile) {
+    setProfile(nextProfile);
+    setLines((current) =>
+      current.map((line) => ({
+        ...line,
+        vatRate: suggestVatRate({
+          profile: nextProfile,
+          category: line.vatCategory,
+          currentRate: line.vatRate,
+          manuallyChanged: Boolean(line.vatRateManuallySet),
+        }),
+      }))
     );
   }
 
@@ -664,6 +722,7 @@ export default function NewInvoicePage() {
         quantity: 0,
         price: Number.NaN,
         vatRate: Number.NaN,
+        vatRateManuallySet: false,
         unit: "",
         vatCategory: "" as VatCategory,
         hrVatCategoryCode: "",
@@ -673,6 +732,31 @@ export default function NewInvoicePage() {
       },
     ]);
     fieldAssistant.onLineAdded();
+  }
+
+  function updateBuyerField(field: keyof BuyerForm, value: string) {
+    setBuyer((current) => ({ ...current, [field]: value }));
+    if (field === "vat" || field === "eLocation" || field === "country") {
+      setRecipientCheck({ status: "unchecked", message: "Prejemnik še ni preverjen" });
+    }
+  }
+
+  async function verifyRecipient() {
+    setRecipientCheck({ status: "checking", message: "Preverjam prejemnika ..." });
+    const result = await checkRecipientEligibility({
+      vatNumber: buyer.vat,
+      eLocation: buyer.eLocation,
+      country: buyer.country,
+    });
+    setRecipientCheck(result);
+
+    if (result.status === "enabled") {
+      setBuyer((current) => ({
+        ...current,
+        eLocation: current.eLocation || result.eLocation || "",
+        eAddress: current.eAddress || result.eAddress || "",
+      }));
+    }
   }
 
   function removeLine(id: number) {
@@ -853,7 +937,7 @@ export default function NewInvoicePage() {
                     <button
                       key={invoiceProfile.id}
                       onClick={() => {
-                        setProfile(invoiceProfile.id);
+                        changeProfile(invoiceProfile.id);
                         setProfileConfirmed(true);
                       }}
                       data-tour={`profile-${invoiceProfile.id}`}
@@ -882,6 +966,18 @@ export default function NewInvoicePage() {
                     const selected = customers.find((customer) => customer.vatNumber === event.target.value);
                     setSelectedCustomerVat(event.target.value);
                     setBuyer(selected ? customerToBuyer(selected) : emptyBuyer());
+                    setRecipientCheck(
+                      selected?.status === "READY"
+                        ? {
+                            status: "enabled",
+                            identifier: selected.vatNumber,
+                            message: "Prejemnik sprejema eRačune",
+                            checkedAt: new Date().toISOString(),
+                            eLocation: selected.eLocation,
+                            eAddress: selected.eAddress,
+                          }
+                        : { status: "unchecked", message: "Prejemnik še ni preverjen" }
+                    );
                   }}
                   className="field-input"
                 >
@@ -894,12 +990,48 @@ export default function NewInvoicePage() {
                 </select>
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   <BuyerField label="Naziv kupca" field="name" buyer={buyer} setBuyer={setBuyer} />
-                  <BuyerField label="Davcna stevilka / OIB" field="vat" buyer={buyer} setBuyer={setBuyer} />
+                  <BuyerField label="Davcna stevilka / OIB" field="vat" buyer={buyer} setBuyer={setBuyer} onChange={updateBuyerField} />
                   <BuyerField label="Naslov" field="address" buyer={buyer} setBuyer={setBuyer} />
                   <BuyerField label="Postna stevilka" field="postCode" buyer={buyer} setBuyer={setBuyer} />
                   <BuyerField label="Mesto" field="city" buyer={buyer} setBuyer={setBuyer} />
-                  <BuyerField label="Drzava" field="country" buyer={buyer} setBuyer={setBuyer} />
-                  <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} helper="Identifikator prejemnika v eSLOG/bizBox omrezju. Ce ga ne poznas, ga navadno vrne iskanje stranke." />
+                  <BuyerField label="Drzava" field="country" buyer={buyer} setBuyer={setBuyer} onChange={updateBuyerField} />
+                  <BuyerField label="eLokacija" field="eLocation" buyer={buyer} setBuyer={setBuyer} onChange={updateBuyerField} helper="Identifikator prejemnika v eSLOG/bizBox omrezju. Ce ga ne poznas, ga navadno vrne iskanje stranke." />
+                </div>
+                {eLocationSuggestion && (
+                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-soft)] p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="font-medium">Predlagana e-lokacija glede na davčno številko.</div>
+                      <div className="app-muted mt-1">{eLocationSuggestion.schemeId}:{eLocationSuggestion.value}</div>
+                    </div>
+                    {buyer.eLocation !== eLocationSuggestion.value && (
+                      <button
+                        type="button"
+                        className="secondary-button h-10 px-4"
+                        onClick={() => {
+                          setBuyer((current) => ({
+                            ...current,
+                            eLocation: applyELocationSuggestion(current.eLocation, eLocationSuggestion, true),
+                            endpointSchemeId: eLocationSuggestion.schemeId,
+                          }));
+                          setRecipientCheck({ status: "unchecked", message: "Prejemnik še ni preverjen" });
+                        }}
+                      >
+                        Uporabi predlog
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[var(--app-border)] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <RecipientStatus check={recipientCheck} />
+                  <button
+                    type="button"
+                    onClick={verifyRecipient}
+                    disabled={recipientCheck.status === "checking" || (!buyer.vat.trim() && !buyer.eLocation.trim())}
+                    className="secondary-button h-10 px-4 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Search className="h-4 w-4" aria-hidden="true" />
+                    {recipientCheck.status === "checking" ? "Preverjam ..." : "Preveri prejemnika"}
+                  </button>
                 </div>
                 <details className="mt-5 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
                   <summary className="cursor-pointer font-semibold">Dodatna polja kupca</summary>
@@ -1119,7 +1251,22 @@ export default function NewInvoicePage() {
                         </select>
                       </Field>
                       <Field label="DDV %" fieldId={`lines.${line.id}.vatRate`}>
-                        <input type="number" value={Number.isFinite(line.vatRate) ? line.vatRate : ""} onChange={(event) => updateLine(line.id, { vatRate: event.target.value === "" ? Number.NaN : Number(event.target.value) })} className="field-input" />
+                        <input
+                          type="number"
+                          value={Number.isFinite(line.vatRate) ? line.vatRate : ""}
+                          onChange={(event) =>
+                            updateLine(line.id, {
+                              vatRate: event.target.value === "" ? Number.NaN : Number(event.target.value),
+                              vatRateManuallySet: event.target.value !== "",
+                            })
+                          }
+                          className="field-input"
+                        />
+                        {vatRateWarning(profile, line.vatCategory, line.vatRate) && (
+                          <span className="mt-2 block text-xs text-amber-600">
+                            {vatRateWarning(profile, line.vatCategory, line.vatRate)}
+                          </span>
+                        )}
                       </Field>
                       {lineProfileFields.map((field) => (
                         <LineProfileField
@@ -1165,6 +1312,7 @@ export default function NewInvoicePage() {
                   <p className="font-semibold">{buyer.name || "-"}</p>
                   <p className="app-muted mt-1 text-sm">{buyer.vat || "Brez davcne stevilke"}</p>
                   <p className="app-muted mt-1 text-sm">{buildAddress(buyer) || "Naslov ni vnesen"}</p>
+                  <div className="mt-3"><RecipientStatus check={recipientCheck} /></div>
                 </ReviewBox>
                 <ReviewBox title="Racun">
                   <SummaryRow label="Stevilka" value={invoiceNumber} />
@@ -1517,24 +1665,37 @@ function BuyerField({
   field,
   buyer,
   setBuyer,
+  onChange,
   helper,
 }: {
   label: string;
   field: keyof BuyerForm;
   buyer: BuyerForm;
   setBuyer: React.Dispatch<React.SetStateAction<BuyerForm>>;
+  onChange?: (field: keyof BuyerForm, value: string) => void;
   helper?: string;
 }) {
   return (
     <Field label={label} helper={helper} fieldId={`buyer.${field}`}>
       <input
         value={buyer[field]}
-        onChange={(event) =>
-          setBuyer((current) => ({ ...current, [field]: event.target.value }))
-        }
+        onChange={(event) => {
+          if (onChange) onChange(field, event.target.value);
+          else setBuyer((current) => ({ ...current, [field]: event.target.value }));
+        }}
         className="field-input"
       />
     </Field>
+  );
+}
+
+function RecipientStatus({ check }: { check: RecipientCheck }) {
+  const meta = recipientStatusMeta(check.status);
+  return (
+    <div className={`text-sm font-medium ${meta.className}`} data-testid="recipient-check-status">
+      {meta.icon && <span className="mr-2" aria-hidden="true">{meta.icon}</span>}
+      {check.message}
+    </div>
   );
 }
 
